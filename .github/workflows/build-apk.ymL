@@ -3,6 +3,7 @@ name: Build APK
 on:
   push:
     branches: [ main, master ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -38,4 +39,3 @@ jobs:
         with:
           name: finance-app
           path: android/app/build/outputs/apk/debug/app-debug.apk
-          
