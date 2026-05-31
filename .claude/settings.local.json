@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"d:\\\\LSA 2025\\\\LAST\\\\PROJT\\\\finance app\\\\finance apps Ori\" -Force -Recurse)",
+      "Bash(Select-Object FullName, PSIsContainer)",
+      "Bash(Sort-Object FullName)",
+      "Bash(Select-Object Name)"
+    ]
+  }
+}

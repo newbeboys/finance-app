@@ -1,0 +1,92 @@
+:root {
+  --cream:        #EAE5D5;
+  --cream-soft:   #F0EBDC;
+  --ivory:        #F5F1E4;
+  --paper:        #FBF8EE;
+  --ink:          #2A2C20;
+  --ink-2:        #3D3F30;
+  --muted:        #6E6B58;
+  --muted-2:      #9A9580;
+  --line:         #D8D2BE;
+  --line-soft:    #E2DCC8;
+
+  --sage:         #5C6B4C;
+  --sage-soft:    #B9C2A6;
+  --terra:        #B26A4A;
+  --terra-soft:   #E5C2AE;
+  --gold:         #B68A3E;
+  --blush:        #C9886D;
+
+  --r-sm: 8px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-xl: 28px;
+
+  --shadow-card: 0 1px 0 rgba(42,44,32,.04), 0 8px 24px -16px rgba(42,44,32,.18);
+}
+
+html.dark {
+  --cream:        #14160F;
+  --cream-soft:   #1B1D15;
+  --ivory:        #1F211A;
+  --paper:        #24261E;
+  --ink:          #ECE7D4;
+  --ink-2:        #D6D1BE;
+  --muted:        #9A9580;
+  --muted-2:      #6E6B58;
+  --line:         #2E3026;
+  --line-soft:    #262820;
+
+  --sage:         #9DB088;
+  --sage-soft:    #3A4530;
+  --terra:        #D89071;
+  --terra-soft:   #4A3025;
+  --gold:         #D9B065;
+  --blush:        #D89977;
+
+  --shadow-card: 0 1px 0 rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.5);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  background: var(--cream);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'ss01', 'ss02', 'cv11';
+  font-variant-numeric: tabular-nums;
+  transition: background-color .35s ease, color .35s ease;
+}
+.serif { font-family: 'Instrument Serif', 'Times New Roman', serif; font-weight: 400; letter-spacing: -0.01em; }
+.mono  { font-family: 'Geist Mono', ui-monospace, monospace; }
+.tnum  { font-variant-numeric: tabular-nums; }
+
+.card {
+  background: var(--ivory);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+}
+.hairline { border-top: 1px solid var(--line-soft); }
+
+button { font: inherit; color: inherit; cursor: pointer; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: var(--line); border-radius: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+.app {
+  display: grid;
+  grid-template-columns: 232px 1fr;
+  min-height: 100vh;
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.rise { animation: rise .5s ease-out both; }
+
+@keyframes spin { to { transform: rotate(360deg); } }

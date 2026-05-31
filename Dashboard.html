@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=1440" />
+<title>FinanceApp — Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    /* Cream editorial palette extracted from the logo */
+    --cream:        #EAE5D5;
+    --cream-soft:   #F0EBDC;
+    --ivory:        #F5F1E4;
+    --paper:        #FBF8EE;
+    --ink:          #2A2C20;
+    --ink-2:        #3D3F30;
+    --muted:        #6E6B58;
+    --muted-2:      #9A9580;
+    --line:         #D8D2BE;
+    --line-soft:    #E2DCC8;
+
+    --sage:         #5C6B4C;  /* positive / income */
+    --sage-soft:    #B9C2A6;
+    --terra:        #B26A4A;  /* expense / alert */
+    --terra-soft:   #E5C2AE;
+    --gold:         #B68A3E;  /* savings highlights */
+    --blush:        #C9886D;
+
+    --r-sm: 8px;
+    --r-md: 14px;
+    --r-lg: 20px;
+    --r-xl: 28px;
+
+    --shadow-card: 0 1px 0 rgba(42,44,32,.04), 0 8px 24px -16px rgba(42,44,32,.18);
+  }
+
+  html.dark {
+    --cream:        #14160F;
+    --cream-soft:   #1B1D15;
+    --ivory:        #1F211A;
+    --paper:        #24261E;
+    --ink:          #ECE7D4;
+    --ink-2:        #D6D1BE;
+    --muted:        #9A9580;
+    --muted-2:      #6E6B58;
+    --line:         #2E3026;
+    --line-soft:    #262820;
+
+    --sage:         #9DB088;
+    --sage-soft:    #3A4530;
+    --terra:        #D89071;
+    --terra-soft:   #4A3025;
+    --gold:         #D9B065;
+    --blush:        #D89977;
+
+    --shadow-card: 0 1px 0 rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.5);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+    background: var(--cream);
+    color: var(--ink);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: 'ss01', 'ss02', 'cv11';
+    font-variant-numeric: tabular-nums;
+    transition: background-color .35s ease, color .35s ease;
+  }
+  .serif { font-family: 'Instrument Serif', 'Times New Roman', serif; font-weight: 400; letter-spacing: -0.01em; }
+  .mono  { font-family: 'Geist Mono', ui-monospace, monospace; }
+  .tnum  { font-variant-numeric: tabular-nums; }
+
+  /* utility — used across components */
+  .card {
+    background: var(--ivory);
+    border: 1px solid var(--line-soft);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-card);
+  }
+  .hairline { border-top: 1px solid var(--line-soft); }
+
+  button { font: inherit; color: inherit; cursor: pointer; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  /* Page grid */
+  .app {
+    display: grid;
+    grid-template-columns: 232px 1fr;
+    min-height: 100vh;
+  }
+
+  /* Subtle entrance for cards */
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .rise { animation: rise .5s ease-out both; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script>
+    // Defaults exposed to the host's persistence layer
+    window.__TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+      "theme": "dark",
+      "palette": "mist",
+      "density": "comfortable",
+      "showAI": true,
+      "sidebarVariant": "labeled",
+      "notifications": true
+    }/*EDITMODE-END*/;
+  </script>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="tweaks-panel.jsx"></script>
+  <script type="text/babel" src="src/icons.jsx"></script>
+  <script type="text/babel" src="src/data.jsx"></script>
+  <script type="text/babel" src="src/charts.jsx"></script>
+  <script type="text/babel" src="src/sidebar.jsx"></script>
+  <script type="text/babel" src="src/topbar.jsx"></script>
+  <script type="text/babel" src="src/widgets.jsx"></script>
+  <script type="text/babel" src="src/budgets-page.jsx"></script>
+  <script type="text/babel" src="src/wallets.jsx"></script>
+  <script type="text/babel" src="src/reports.jsx"></script>
+  <script type="text/babel" src="src/analytics.jsx"></script>
+  <script type="text/babel" src="src/savings-page.jsx"></script>
+  <script type="text/babel" src="src/transactions-page.jsx"></script>
+  <script type="text/babel" src="src/settings-page.jsx"></script>
+  <script type="text/babel" src="src/transactions.jsx"></script>
+  <script type="text/babel" src="src/app.jsx"></script>
+</body>
+</html>
