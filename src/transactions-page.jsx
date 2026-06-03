@@ -1,8 +1,10 @@
 import React from 'react';
 import { TRANSACTIONS, CATEGORIES, fmt, fmtShort } from './data';
 import { IconSearch, IconPlus, CatIcon } from './icons';
+import { useIsMobile } from './use-mobile';
 
 export function TransactionsPage({ accounts, onAdd }) {
+  const isMobile = useIsMobile();
   const [q, setQ] = React.useState("");
   const [type, setType] = React.useState("all");
   const [cat, setCat] = React.useState("all");
@@ -39,21 +41,23 @@ export function TransactionsPage({ accounts, onAdd }) {
   const active = q || type !== "all" || cat !== "all" || method !== "all";
 
   return (
-    <div style={{ padding: "16px 32px 48px", maxWidth: 1180, margin: "0 auto" }}>
+    <div className="page-wrap" style={{ padding: "16px 32px 48px", maxWidth: 1180, margin: "0 auto" }}>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 20 }}>
         <div>
           <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Transaksi · Mei 2026</div>
-          <h2 className="serif" style={{ fontSize: 34, margin: "4px 0 0", letterSpacing: "-0.015em" }}>Riwayat transaksi</h2>
-          <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 6, maxWidth: 540, lineHeight: 1.5 }}>
-            Semua transaksi yang sudah kamu lakukan, dikelompokkan per hari.
-          </div>
+          <h2 className="serif" style={{ fontSize: isMobile ? 26 : 34, margin: "4px 0 0", letterSpacing: "-0.015em" }}>Riwayat transaksi</h2>
+          {!isMobile && (
+            <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 6, maxWidth: 540, lineHeight: 1.5 }}>
+              Semua transaksi yang sudah kamu lakukan, dikelompokkan per hari.
+            </div>
+          )}
         </div>
         <button onClick={onAdd} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500 }}>
           <IconPlus size={15} /> Tambah transaksi
         </button>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: 16 }}>
+      <div className="stat-grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: 16 }}>
         {[
           { l: "Pemasukan", v: fmtShort(income), c: "var(--sage)", n: filtered.filter(t => t.amount > 0).length },
           { l: "Pengeluaran", v: fmtShort(expense), c: "var(--terra)", n: filtered.filter(t => t.amount < 0).length },
@@ -93,8 +97,9 @@ export function TransactionsPage({ accounts, onAdd }) {
         )}
       </div>
 
-      <div className="card" style={{ padding: "8px 22px 14px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(220px,1.6fr) 1fr 1fr 0.7fr 150px", padding: "14px 4px 10px", borderBottom: "1px solid var(--line-soft)", fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>
+      <div className="card" style={{ padding: isMobile ? "6px 14px 12px" : "8px 22px 14px" }}>
+        {/* Desktop table header */}
+        <div className="tx-header-desktop" style={{ display: "grid", gridTemplateColumns: "minmax(220px,1.6fr) 1fr 1fr 0.7fr 150px", padding: "14px 4px 10px", borderBottom: "1px solid var(--line-soft)", fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>
           <span>Merchant</span><span>Kategori</span><span>Metode</span><span>Waktu</span><span style={{ textAlign: "right" }}>Jumlah</span>
         </div>
 
@@ -108,7 +113,7 @@ export function TransactionsPage({ accounts, onAdd }) {
           const dayTotal = g.items.reduce((s, t) => s + t.amount, 0);
           return (
             <div key={g.date}>
-              <div style={{ padding: "14px 4px 6px", display: "flex", alignItems: "baseline", gap: 8 }}>
+              <div style={{ padding: "12px 4px 6px", display: "flex", alignItems: "baseline", gap: 8 }}>
                 <span className="serif" style={{ fontSize: 14, color: "var(--ink-2)", fontStyle: "italic" }}>{g.date}</span>
                 <span style={{ flex: 1, borderBottom: "1px dashed var(--line-soft)", marginBottom: 4 }} />
                 <span className="tnum" style={{ fontSize: 11.5, color: "var(--muted)" }}>
@@ -119,25 +124,45 @@ export function TransactionsPage({ accounts, onAdd }) {
                 const c = CATEGORIES.find(x => x.id === t.category);
                 const isIncome = t.amount > 0;
                 const color = c?.color || (isIncome ? "var(--sage)" : "var(--muted-2)");
+                const borderBottom = i < g.items.length - 1 ? "1px solid var(--line-soft)" : 0;
                 return (
-                  <div key={t.id} onMouseEnter={() => setHover(t.id)} onMouseLeave={() => setHover(null)}
-                    style={{ display: "grid", gridTemplateColumns: "minmax(220px,1.6fr) 1fr 1fr 0.7fr 150px", alignItems: "center", padding: "12px 4px", borderBottom: i < g.items.length - 1 ? "1px solid var(--line-soft)" : 0, background: hover === t.id ? "var(--paper)" : "transparent", transition: "background .15s ease", cursor: "pointer" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-                      <span style={{ width: 34, height: 34, borderRadius: 10, background: `color-mix(in oklch, ${color} 14%, var(--ivory))`, color, display: "grid", placeItems: "center", flexShrink: 0 }}>
-                        <CatIcon kind={t.category} size={15} />
+                  <React.Fragment key={t.id}>
+                    {/* ── Mobile compact row ── */}
+                    <div className="tx-row-mobile"
+                      style={{ alignItems: "center", gap: 12, padding: "12px 2px", borderBottom }}>
+                      <span style={{ width: 38, height: 38, borderRadius: 10, background: `color-mix(in oklch, ${color} 14%, var(--ivory))`, color, display: "grid", placeItems: "center", flexShrink: 0 }}>
+                        <CatIcon kind={t.category} size={16} />
                       </span>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.merchant}</div>
-                        <div style={{ fontSize: 11.5, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.note}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 500, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.merchant}</div>
+                        <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 1 }}>{c?.label || t.category} · {t.method} · {t.time}</div>
+                      </div>
+                      <div className="tnum" style={{ fontSize: 14.5, fontWeight: 600, color: isIncome ? "var(--sage)" : "var(--ink)", flexShrink: 0 }}>
+                        {isIncome ? "+" : "−"}{fmt(Math.abs(t.amount))}
                       </div>
                     </div>
-                    <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>{c?.label || t.category}</div>
-                    <div style={{ fontSize: 12.5, color: "var(--muted)" }}>{t.method}</div>
-                    <div className="tnum" style={{ fontSize: 12.5, color: "var(--muted)" }}>{t.time}</div>
-                    <div className="tnum" style={{ textAlign: "right", fontSize: 13.5, fontWeight: 500, color: isIncome ? "var(--sage)" : "var(--ink)", whiteSpace: "nowrap" }}>
-                      {isIncome ? "+" : "−"}{fmt(Math.abs(t.amount))}
+
+                    {/* ── Desktop 5-column row ── */}
+                    <div className="tx-row-desktop"
+                      onMouseEnter={() => setHover(t.id)} onMouseLeave={() => setHover(null)}
+                      style={{ display: "grid", gridTemplateColumns: "minmax(220px,1.6fr) 1fr 1fr 0.7fr 150px", alignItems: "center", padding: "12px 4px", borderBottom, background: hover === t.id ? "var(--paper)" : "transparent", transition: "background .15s ease", cursor: "pointer" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+                        <span style={{ width: 34, height: 34, borderRadius: 10, background: `color-mix(in oklch, ${color} 14%, var(--ivory))`, color, display: "grid", placeItems: "center", flexShrink: 0 }}>
+                          <CatIcon kind={t.category} size={15} />
+                        </span>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.merchant}</div>
+                          <div style={{ fontSize: 11.5, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.note}</div>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>{c?.label || t.category}</div>
+                      <div style={{ fontSize: 12.5, color: "var(--muted)" }}>{t.method}</div>
+                      <div className="tnum" style={{ fontSize: 12.5, color: "var(--muted)" }}>{t.time}</div>
+                      <div className="tnum" style={{ textAlign: "right", fontSize: 13.5, fontWeight: 500, color: isIncome ? "var(--sage)" : "var(--ink)", whiteSpace: "nowrap" }}>
+                        {isIncome ? "+" : "−"}{fmt(Math.abs(t.amount))}
+                      </div>
                     </div>
-                  </div>
+                  </React.Fragment>
                 );
               })}
             </div>
@@ -145,7 +170,7 @@ export function TransactionsPage({ accounts, onAdd }) {
         })}
 
         {grouped.length > 0 && (
-          <div style={{ padding: "16px 4px 4px", fontSize: 12, color: "var(--muted)" }}>
+          <div style={{ padding: "14px 4px 4px", fontSize: 12, color: "var(--muted)" }}>
             {filtered.length} transaksi ditampilkan
           </div>
         )}

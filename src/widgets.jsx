@@ -2,8 +2,10 @@ import React from 'react';
 import { KPI, CASHFLOW, CATEGORIES, BUDGETS, GOALS, AI_INSIGHTS, fmtShort, fmt } from './data';
 import { IconArrowUp, IconArrowDown, IconArrowRight, IconSpark, CatIcon } from './icons';
 import { CashflowChart, SpendingDonut, Spark, Ring } from './charts';
+import { useIsMobile } from './use-mobile';
 
 export function KpiCards({ balanceVisible, onToggleVisible, totalBalance, accountCount }) {
+  const isMobile = useIsMobile();
   const incomeSpark  = CASHFLOW.map(d => d.income);
   const expenseSpark = CASHFLOW.map(d => d.expense);
   const balanceSpark = CASHFLOW.map((d, i, a) => a.slice(0, i + 1).reduce((s, x) => s + (x.income - x.expense), 16000));
@@ -16,23 +18,23 @@ export function KpiCards({ balanceVisible, onToggleVisible, totalBalance, accoun
   ];
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 1fr", gap: 16 }}>
+    <div className="kpi-grid">
       {cards.map((c, i) => {
         const positive = c.deltaInverted ? c.delta < 0 : c.delta > 0;
         return (
-          <div key={i} className="card rise" style={{ padding: 18, animationDelay: `${i * 0.05}s`, display: "flex", flexDirection: "column", gap: 12, minHeight: 156 }}>
+          <div key={i} className="card rise" style={{ padding: isMobile ? 14 : 18, animationDelay: `${i * 0.05}s`, display: "flex", flexDirection: "column", gap: isMobile ? 8 : 12, minHeight: isMobile ? 120 : 156 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{c.label}</div>
+              <div style={{ fontSize: isMobile ? 10.5 : 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{c.label}</div>
               {c.hero ? (
-                <button onClick={onToggleVisible} style={{ fontSize: 10.5, letterSpacing: ".05em", color: "var(--muted)", background: "transparent", border: 0, padding: 0, textTransform: "uppercase" }}>{balanceVisible ? "Hide" : "Show"}</button>
+                <button onClick={onToggleVisible} style={{ fontSize: 10.5, letterSpacing: ".05em", color: "var(--muted)", background: "transparent", border: 0, padding: 0, textTransform: "uppercase", minHeight: "auto" }}>{balanceVisible ? "Hide" : "Show"}</button>
               ) : (
-                <Spark values={c.spark} color={c.color} />
+                !isMobile && <Spark values={c.spark} color={c.color} />
               )}
             </div>
 
             <div>
-              <div className="serif" style={{ fontSize: c.hero ? 38 : c.value >= 1_000_000 ? 26 : 30, lineHeight: 1, letterSpacing: "-0.02em", color: "var(--ink)", fontVariantNumeric: "tabular-nums" }}>
-                {c.hero && !balanceVisible ? "Rp • • • • • • • •" : (c.hero ? fmtShort(c.value) : fmt(c.value))}
+              <div className={c.hero ? "serif kpi-hero-val" : "serif"} style={{ fontSize: c.hero ? (isMobile ? 22 : 38) : (isMobile ? 18 : (c.value >= 1_000_000 ? 26 : 30)), lineHeight: 1, letterSpacing: "-0.02em", color: "var(--ink)", fontVariantNumeric: "tabular-nums" }}>
+                {c.hero && !balanceVisible ? "Rp ••••••" : (c.hero ? fmtShort(c.value) : fmt(c.value))}
               </div>
             </div>
 
@@ -63,7 +65,7 @@ export function CashflowCard() {
   const ranges = ["3M", "6M", "1Y"];
 
   return (
-    <div className="card rise" style={{ padding: 22, gridColumn: "span 2" }}>
+    <div className="card rise span-2" style={{ padding: 22 }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8 }}>
         <div>
           <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Arus kas</div>

@@ -261,13 +261,13 @@ export function ReportsPage() {
   const years = [2026, 2025];
 
   return (
-    <div style={{ padding: "16px 32px 48px", maxWidth: 1180, margin: "0 auto" }}>
+    <div className="page-wrap" style={{ padding: "16px 32px 48px", maxWidth: 1180, margin: "0 auto" }}>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 22 }}>
         <div>
           <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Laporan</div>
           <h2 className="serif" style={{ fontSize: 34, margin: "4px 0 0", letterSpacing: "-0.015em" }}>Laporan keuangan</h2>
           <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 6, maxWidth: 540, lineHeight: 1.5 }}>
-            Setiap bulan dan tahun dirangkum otomatis menjadi dokumen rapi yang bisa kamu pratinjau, unduh, atau simpan sebagai PDF — gratis.
+            Setiap bulan dirangkum otomatis — pratinjau, unduh PDF, gratis.
           </div>
         </div>
         <div style={{ display: "flex", padding: 3, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10 }}>
@@ -284,7 +284,7 @@ export function ReportsPage() {
       </div>
 
       {scope === "month" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+        <div className="report-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
           {monthlyCards.map((m, i) => (
             <ReportCard key={m.idx} eyebrow={`${m.full} ${m.year}`} income={m.income} expense={m.expense} net={m.net}
               latest={i === 0} delay={i * 0.03}
@@ -295,7 +295,7 @@ export function ReportsPage() {
       )}
 
       {scope === "year" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16 }}>
+        <div className="report-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16 }}>
           {years.map((y, i) => {
             const p = reportPayload("year", y);
             return (
@@ -331,18 +331,18 @@ function ReportCard({ eyebrow, sub, income, expense, net, latest, big, delay, on
           </span>
         </div>
 
-        <div style={{ display: "flex", gap: 18, marginTop: 18 }}>
-          <div>
+        <div style={{ display: "flex", gap: 14, marginTop: 16, flexWrap: "wrap" }}>
+          <div style={{ minWidth: 60 }}>
             <div style={{ fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--muted)" }}>Masuk</div>
-            <div className="tnum" style={{ fontSize: 14, fontWeight: 500, color: "var(--sage)" }}>{fmtShort(income)}</div>
+            <div className="tnum" style={{ fontSize: 13.5, fontWeight: 500, color: "var(--sage)" }}>{fmtShort(income)}</div>
           </div>
-          <div>
+          <div style={{ minWidth: 60 }}>
             <div style={{ fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--muted)" }}>Keluar</div>
-            <div className="tnum" style={{ fontSize: 14, fontWeight: 500, color: "var(--terra)" }}>{fmtShort(expense)}</div>
+            <div className="tnum" style={{ fontSize: 13.5, fontWeight: 500, color: "var(--terra)" }}>{fmtShort(expense)}</div>
           </div>
-          <div style={{ marginLeft: "auto", textAlign: "right" }}>
+          <div style={{ minWidth: 60 }}>
             <div style={{ fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--muted)" }}>Bersih · {rate}%</div>
-            <div className="tnum serif" style={{ fontSize: 18, letterSpacing: "-0.01em" }}>{fmtShort(net)}</div>
+            <div className="tnum serif" style={{ fontSize: 16, letterSpacing: "-0.01em" }}>{fmtShort(net)}</div>
           </div>
         </div>
       </div>

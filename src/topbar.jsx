@@ -1,10 +1,45 @@
 import React from 'react';
 import { IconSearch, IconBell, IconSun, IconMoon, IconPlus } from './icons';
 import { AccountSwitcher } from './wallets';
+import { useIsMobile } from './use-mobile';
 
 export function TopBar({ theme, onTheme, onAdd, accounts, selectedAcct, onSelectAcct, onAddAcct, notifEnabled }) {
   const [q, setQ] = React.useState("");
   const [bell, setBell] = React.useState(false);
+  const isMobile = useIsMobile();
+
+  if (isMobile) {
+    return (
+      <header style={{ display: "flex", alignItems: "center", gap: 10, padding: "16px 16px 10px", position: "relative" }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 11, color: "var(--muted)", letterSpacing: ".05em", textTransform: "uppercase" }}>
+            Rabu, 27 Mei
+          </div>
+          <h1 className="serif" style={{ fontSize: 22, margin: "2px 0 0", letterSpacing: "-0.015em", lineHeight: 1.15 }}>
+            Selamat pagi, Adelia.
+          </h1>
+        </div>
+
+        <button onClick={() => setBell(b => !b)} aria-label="Notifications" style={{ ...iconBtnMobile }}>
+          <IconBell size={19} />
+          {notifEnabled !== false && (
+            <span style={{ position: "absolute", top: 9, right: 9, width: 7, height: 7, borderRadius: "50%", background: "var(--terra)", boxShadow: "0 0 0 2px var(--cream)" }} />
+          )}
+        </button>
+
+        <button onClick={onTheme} aria-label="Toggle tema" style={iconBtnMobile}>
+          {theme === "dark" ? <IconSun size={19} /> : <IconMoon size={19} />}
+        </button>
+
+        <button onClick={onAdd} aria-label="Tambah transaksi"
+          style={{ width: 44, height: 44, display: "grid", placeItems: "center", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, flexShrink: 0 }}>
+          <IconPlus size={18} />
+        </button>
+
+        {bell && <Notifications onClose={() => setBell(false)} enabled={notifEnabled !== false} mobile />}
+      </header>
+    );
+  }
 
   return (
     <header style={{ display: "flex", alignItems: "center", gap: 16, padding: "20px 32px 8px" }}>
@@ -61,7 +96,14 @@ const iconBtn = {
   borderRadius: 12, color: "var(--ink)",
 };
 
-function Notifications({ onClose, enabled = true }) {
+const iconBtnMobile = {
+  position: "relative",
+  width: 44, height: 44, display: "grid", placeItems: "center",
+  background: "var(--ivory)", border: "1px solid var(--line-soft)",
+  borderRadius: 12, color: "var(--ink)", flexShrink: 0,
+};
+
+function Notifications({ onClose, enabled = true, mobile = false }) {
   const items = [
     { tone: "warn", text: "Anggaran belanja terlampaui Rp 540.000.", time: "2j" },
     { tone: "good", text: "Gaji diterima — Rp 22.800.000.",          time: "5h" },
@@ -70,7 +112,15 @@ function Notifications({ onClose, enabled = true }) {
   return (
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 30 }} />
-      <div className="card rise" style={{ position: "absolute", top: 76, right: 188, width: 320, zIndex: 31, padding: 12 }}>
+      <div className="card rise" style={{
+        position: mobile ? "fixed" : "absolute",
+        top: mobile ? undefined : 76,
+        bottom: mobile ? 70 : undefined,
+        right: mobile ? 12 : 188,
+        left: mobile ? 12 : undefined,
+        width: mobile ? undefined : 320,
+        zIndex: 31, padding: 12,
+      }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "4px 6px 10px" }}>
           <div style={{ fontSize: 13, fontWeight: 500 }}>Notifikasi</div>
           <div style={{ fontSize: 11.5, color: "var(--muted)" }}>{enabled ? "3 baru" : "Nonaktif"}</div>
@@ -80,8 +130,8 @@ function Notifications({ onClose, enabled = true }) {
             {items.map((n, i) => (
               <div key={i} style={{ display: "flex", gap: 10, padding: "10px 8px", borderRadius: 10, alignItems: "flex-start" }}>
                 <span style={{ marginTop: 6, width: 7, height: 7, borderRadius: "50%", background: n.tone === "warn" ? "var(--terra)" : n.tone === "good" ? "var(--sage)" : "var(--gold)", flexShrink: 0 }} />
-                <div style={{ fontSize: 12.5, lineHeight: 1.4, flex: 1 }}>{n.text}</div>
-                <div style={{ fontSize: 11, color: "var(--muted)", flexShrink: 0 }}>{n.time}</div>
+                <div style={{ fontSize: 13, lineHeight: 1.4, flex: 1 }}>{n.text}</div>
+                <div style={{ fontSize: 11.5, color: "var(--muted)", flexShrink: 0 }}>{n.time}</div>
               </div>
             ))}
           </div>
@@ -90,8 +140,8 @@ function Notifications({ onClose, enabled = true }) {
             <span style={{ width: 38, height: 38, display: "grid", placeItems: "center", borderRadius: "50%", background: "var(--paper)", border: "1px solid var(--line-soft)", color: "var(--muted)" }}>
               <IconBell size={17} />
             </span>
-            <div style={{ fontSize: 12.5, fontWeight: 500 }}>Notifikasi dimatikan</div>
-            <div style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.45, maxWidth: 220 }}>
+            <div style={{ fontSize: 13, fontWeight: 500 }}>Notifikasi dimatikan</div>
+            <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.45, maxWidth: 220 }}>
               Aktifkan notifikasi di Pengaturan untuk menerima pemberitahuan.
             </div>
           </div>

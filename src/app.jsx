@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTweaks, TweaksPanel, TweakSection, TweakRadio, TweakSelect, TweakToggle } from './tweaks-panel';
-import { Sidebar } from './sidebar';
+import { BottomNav } from './components/BottomNav';
 import { TopBar } from './topbar';
 import { KpiCards, CashflowCard, SpendingCard, InsightsCard, SavingsCard, BudgetsCard } from './widgets';
 import { WalletsPage, AddAccountModal } from './wallets';
@@ -16,7 +16,6 @@ import { ACCOUNTS, GOALS } from './data';
 const TWEAK_DEFAULTS = {
   theme: "light",
   palette: "cream",
-  sidebarVariant: "labeled",
   showAI: true,
   notifications: true,
 };
@@ -54,6 +53,15 @@ export default function App() {
   }, [t.palette, t.theme]);
 
   const [active, setActive] = React.useState("dashboard");
+
+  React.useEffect(() => {
+    window.scrollTo(0, 0);
+    document.body.style.width = '100%';
+    document.body.style.maxWidth = '100%';
+    document.body.style.overflowX = 'hidden';
+    document.body.style.overflowY = 'auto';
+  }, [active]);
+
   const [balanceVisible, setBalanceVisible] = React.useState(true);
   const [modal, setModal] = React.useState(false);
 
@@ -80,9 +88,9 @@ export default function App() {
 
   return (
     <div className="app" data-screen-label="Dashboard">
-      <Sidebar active={active} onNav={setActive} variant={t.sidebarVariant} />
+      <BottomNav active={active} onNav={setActive} />
 
-      <main style={{ minWidth: 0 }}>
+      <main className="main-content">
         <TopBar
           theme={t.theme}
           onTheme={() => setTweak("theme", t.theme === "dark" ? "light" : "dark")}
@@ -95,13 +103,8 @@ export default function App() {
         />
 
         {active === "dashboard" && (
-          <div style={{
-            padding: "16px 32px 40px",
-            display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
-            gap: 16,
-          }}>
-            <div style={{ gridColumn: "span 4" }}>
+          <div className="dash-grid">
+            <div className="span-4">
               <KpiCards balanceVisible={balanceVisible} onToggleVisible={() => setBalanceVisible(v => !v)} totalBalance={totalBalance} accountCount={accounts.length} />
             </div>
 
@@ -159,11 +162,6 @@ export default function App() {
             ]} />
         </TweakSection>
         <TweakSection label="Layout">
-          <TweakRadio label="Sidebar" value={t.sidebarVariant} onChange={v => setTweak("sidebarVariant", v)}
-            options={[
-              { label: "Berlabel", value: "labeled" },
-              { label: "Ringkas",  value: "compact" },
-            ]} />
           <TweakToggle label="Tampilkan wawasan AI" value={t.showAI} onChange={v => setTweak("showAI", v)} />
         </TweakSection>
       </TweaksPanel>

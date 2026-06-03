@@ -2,6 +2,7 @@ import React from 'react';
 import { fmtShort } from './data';
 import { IconPlus, IconClose } from './icons';
 import { Ring } from './charts';
+import { useIsMobile } from './use-mobile';
 
 const GOAL_ICONS = {
   emergency: <><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z" /><path d="m9 12 2 2 4-4" /></>,
@@ -36,43 +37,46 @@ function GoalGlyph({ icon, size = 18 }) {
 const GOAL_COLORS = ["#5C6B4C", "#B68A3E", "#C9886D", "#2A6FDB", "#1FA8A0", "#9A6BD9", "#B26A4A", "#7A8A6E"];
 
 export function SavingsPage({ goals, onAdd, onDeposit, onDelete }) {
+  const isMobile = useIsMobile();
   const totalSaved = goals.reduce((s, g) => s + g.current, 0);
   const totalTarget = goals.reduce((s, g) => s + g.target, 0);
   const completed = goals.filter(g => g.current >= g.target).length;
 
   return (
-    <div style={{ padding: "16px 32px 48px", maxWidth: 1180, margin: "0 auto" }}>
+    <div className="page-wrap" style={{ padding: "16px 32px 48px", maxWidth: 1180, margin: "0 auto" }}>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 22 }}>
         <div>
           <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Tabungan · {goals.length} goal</div>
-          <h2 className="serif" style={{ fontSize: 34, margin: "4px 0 0", letterSpacing: "-0.015em" }}>Yang sedang kamu kejar</h2>
-          <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 6, maxWidth: 540, lineHeight: 1.5 }}>
-            Buat target tabungan apa pun — beri nama sendiri, pilih ikon kategori, tetapkan jumlah & tenggat.
-          </div>
+          <h2 className="serif" style={{ fontSize: isMobile ? 26 : 34, margin: "4px 0 0", letterSpacing: "-0.015em" }}>Yang sedang kamu kejar</h2>
+          {!isMobile && (
+            <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 6, maxWidth: 540, lineHeight: 1.5 }}>
+              Buat target tabungan apa pun — beri nama sendiri, pilih ikon kategori, tetapkan jumlah & tenggat.
+            </div>
+          )}
         </div>
         <button onClick={onAdd} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500 }}>
           <IconPlus size={15} /> Buat goal baru
         </button>
       </div>
 
-      <div className="card rise" style={{ padding: 24, marginBottom: 20, display: "flex", gap: 28, alignItems: "center", flexWrap: "wrap" }}>
-        <div style={{ flex: "0 0 auto" }}>
-          <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Total terkumpul</div>
-          <div className="serif tnum" style={{ fontSize: 40, letterSpacing: "-0.02em", marginTop: 6 }}>{fmtShort(totalSaved)}</div>
-          <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 2 }}>dari target {fmtShort(totalTarget)}</div>
+      <div className="card rise" style={{ padding: isMobile ? 18 : 24, marginBottom: 20 }}>
+        <div style={{ display: "flex", gap: isMobile ? 16 : 28, alignItems: "center", flexWrap: "wrap", marginBottom: 14 }}>
+          <div style={{ flex: "0 0 auto" }}>
+            <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Total terkumpul</div>
+            <div className="serif tnum" style={{ fontSize: isMobile ? 28 : 40, letterSpacing: "-0.02em", marginTop: 4 }}>{fmtShort(totalSaved)}</div>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>dari target {fmtShort(totalTarget)}</div>
+          </div>
+          <div style={{ fontSize: 12, color: "var(--muted)" }}>{completed} goal tercapai</div>
         </div>
-        <div style={{ flex: 1, minWidth: 220 }}>
-          <div style={{ height: 10, background: "var(--line-soft)", borderRadius: 99, overflow: "hidden" }}>
-            <div style={{ height: "100%", width: `${totalTarget ? Math.min(totalSaved / totalTarget, 1) * 100 : 0}%`, background: "var(--sage)", borderRadius: 99, transition: "width .5s ease" }} />
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, fontSize: 12, color: "var(--muted)" }}>
-            <span>{totalTarget ? Math.round((totalSaved / totalTarget) * 100) : 0}% dari semua target</span>
-            <span>{completed} goal tercapai</span>
-          </div>
+        <div style={{ height: 8, background: "var(--line-soft)", borderRadius: 99, overflow: "hidden" }}>
+          <div style={{ height: "100%", width: `${totalTarget ? Math.min(totalSaved / totalTarget, 1) * 100 : 0}%`, background: "var(--sage)", borderRadius: 99, transition: "width .5s ease" }} />
+        </div>
+        <div style={{ marginTop: 6, fontSize: 12, color: "var(--muted)" }}>
+          {totalTarget ? Math.round((totalSaved / totalTarget) * 100) : 0}% dari semua target
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+      <div className="goals-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
         {goals.map((g, i) => {
           const pct = Math.min(g.current / g.target, 1);
           const done = g.current >= g.target;
@@ -89,8 +93,8 @@ export function SavingsPage({ goals, onAdd, onDeposit, onDelete }) {
                     </span>
                   </div>
                   <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ fontSize: 14.5, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{g.label}</div>
-                    <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>{done ? "Tercapai 🎉" : `Tenggat ${g.deadline}`}</div>
+                    <div style={{ fontSize: 14.5, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</div>
+                    <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>{done ? "Tercapai 🎉" : `Tenggat ${g.deadline}`}</div>
                   </div>
                 </div>
                 <div style={{ marginTop: 16 }}>

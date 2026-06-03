@@ -20,12 +20,12 @@ function Switch({ on, onClick, color = "var(--sage)" }) {
 
 function SettingRow({ title, desc, children, last }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 20, padding: "16px 0", borderBottom: last ? 0 : "1px solid var(--line-soft)" }}>
+    <div className="setting-row" style={{ display: "flex", alignItems: "center", gap: 20, padding: "16px 0", borderBottom: last ? 0 : "1px solid var(--line-soft)" }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink)" }}>{title}</div>
         {desc && <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 3, lineHeight: 1.45 }}>{desc}</div>}
       </div>
-      <div style={{ flexShrink: 0 }}>{children}</div>
+      <div className="setting-widget" style={{ flexShrink: 0 }}>{children}</div>
     </div>
   );
 }
@@ -86,10 +86,10 @@ export function SettingsPage({ t, setTweak }) {
   const toggleSub = (k) => setSubs(s => ({ ...s, [k]: !s[k] }));
 
   return (
-    <div style={{ padding: "16px 32px 48px", maxWidth: 760, margin: "0 auto" }}>
+    <div className="page-wrap" style={{ padding: "16px 32px 48px", maxWidth: 760, margin: "0 auto" }}>
       <div style={{ marginBottom: 22 }}>
         <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Pengaturan</div>
-        <h2 className="serif" style={{ fontSize: 34, margin: "4px 0 0", letterSpacing: "-0.015em" }}>Sesuaikan FinanceApp</h2>
+        <h2 className="serif settings-h2" style={{ fontSize: 34, margin: "4px 0 0", letterSpacing: "-0.015em" }}>Sesuaikan FinanceApp</h2>
         <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 6, lineHeight: 1.5 }}>
           Atur tampilan, warna latar, layout, notifikasi, dan wawasan AI. Perubahan langsung diterapkan.
         </div>
@@ -99,21 +99,21 @@ export function SettingsPage({ t, setTweak }) {
         {/* Appearance */}
         <SettingCard eyebrow="Tampilan" title="Tema & warna">
           <SettingRow title="Mode tampilan" desc="Pilih tema terang atau gelap untuk seluruh aplikasi.">
-            <div style={{ display: "flex", gap: 10, width: 240 }}>
+            <div className="theme-preview-wrap" style={{ display: "flex", gap: 10, width: 240 }}>
               <ThemePreview mode="light" active={t.theme !== "dark"} onClick={() => setTweak("theme", "light")} />
               <ThemePreview mode="dark"  active={t.theme === "dark"} onClick={() => setTweak("theme", "dark")} />
             </div>
           </SettingRow>
           <SettingRow title="Warna latar" desc="Nuansa kanvas aplikasi. Hanya berlaku pada mode terang." last>
-            <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ display: "flex", gap: 14, flexWrap: "nowrap" }}>
               {PALETTE_SWATCHES.map(p => {
                 const active = (t.palette || "cream") === p.id;
                 return (
                   <button key={p.id} onClick={() => setTweak("palette", p.id)} title={p.hint} style={{
-                    display: "flex", flexDirection: "column", alignItems: "center", gap: 6, background: "transparent", border: 0, cursor: "pointer",
+                    display: "flex", flexDirection: "column", alignItems: "center", gap: 6, background: "transparent", border: 0, cursor: "pointer", padding: 0,
                   }}>
-                    <span style={{ width: 38, height: 38, borderRadius: 10, background: p.c, border: "1px solid var(--line)", outline: active ? "2px solid var(--ink)" : "2px solid transparent", outlineOffset: 2 }} />
-                    <span style={{ fontSize: 10.5, color: active ? "var(--ink)" : "var(--muted)", fontWeight: active ? 500 : 400 }}>{p.label}</span>
+                    <span style={{ width: 44, height: 44, borderRadius: 12, background: p.c, border: "1px solid var(--line)", outline: active ? "2px solid var(--ink)" : "2px solid transparent", outlineOffset: 2, display: "block", flexShrink: 0 }} />
+                    <span style={{ fontSize: 11, color: active ? "var(--ink)" : "var(--muted)", fontWeight: active ? 500 : 400 }}>{p.label}</span>
                   </button>
                 );
               })}
@@ -127,7 +127,7 @@ export function SettingsPage({ t, setTweak }) {
             <div style={{ display: "flex", padding: 3, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10 }}>
               {[{ id: "labeled", label: "Berlabel" }, { id: "compact", label: "Ringkas" }].map(o => (
                 <button key={o.id} onClick={() => setTweak("sidebarVariant", o.id)} style={{
-                  padding: "8px 16px", fontSize: 12.5,
+                  padding: "10px 20px", fontSize: 13,
                   background: (t.sidebarVariant || "labeled") === o.id ? "var(--ivory)" : "transparent",
                   border: (t.sidebarVariant || "labeled") === o.id ? "1px solid var(--line-soft)" : "1px solid transparent",
                   borderRadius: 8, color: (t.sidebarVariant || "labeled") === o.id ? "var(--ink)" : "var(--muted)",

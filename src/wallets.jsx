@@ -112,7 +112,7 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete }) {
   })).filter(t => t.count > 0);
 
   return (
-    <div style={{ padding: "16px 32px 48px", maxWidth: 1180, margin: "0 auto" }}>
+    <div className="page-wrap" style={{ padding: "16px 32px 48px", maxWidth: 1180, margin: "0 auto" }}>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 22 }}>
         <div>
           <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>
@@ -145,7 +145,7 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete }) {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+      <div className="stat-grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
         {accounts.map((a, i) => (
           <div key={a.id} className="card rise" style={{ padding: 0, overflow: "hidden", animationDelay: `${i * 0.04}s`, display: "flex", flexDirection: "column" }}>
             <div style={{ height: 6, background: a.color }} />

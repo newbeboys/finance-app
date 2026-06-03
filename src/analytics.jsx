@@ -83,7 +83,7 @@ export function AnalyticsPage() {
   ];
 
   return (
-    <div style={{ padding: "16px 32px 48px", maxWidth: 1180, margin: "0 auto" }}>
+    <div className="page-wrap" style={{ padding: "16px 32px 48px", maxWidth: 1180, margin: "0 auto" }}>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 22 }}>
         <div>
           <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Analitik</div>
@@ -113,7 +113,7 @@ export function AnalyticsPage() {
       </div>
 
       {/* Stat strip */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16, marginBottom: 16 }}>
+      <div className="stat-grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16, marginBottom: 16 }}>
         {stats.map((s, i) => (
           <div key={i} className="card rise" style={{ padding: 16, animationDelay: `${i * 0.03}s` }}>
             <div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{s.l}</div>
@@ -138,7 +138,8 @@ export function AnalyticsPage() {
       </div>
 
       {/* Donut + table */}
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(300px, 0.9fr) 1.4fr", gap: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(300px, 0.9fr) 1.4fr", gap: 16, flexWrap: "wrap" }}
+        className="analytics-chart-grid">
         <div className="card rise" style={{ padding: 22 }}>
           <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Diagram lingkaran</div>
           <div className="serif" style={{ fontSize: 24, letterSpacing: "-0.01em", marginTop: 2, marginBottom: 6 }}>Komposisi pengeluaran</div>
