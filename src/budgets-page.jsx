@@ -1,6 +1,6 @@
 import React from 'react';
 import { TRANSACTIONS, CATEGORIES, BUDGETS, fmt, fmtShort } from './data';
-import { IconPlus, IconSpark, CatIcon } from './icons';
+import { IconPlus, IconSpark, IconClose, CatIcon } from './icons';
 import { useIsMobile } from './use-mobile';
 
 export function BudgetsPage() {
@@ -21,6 +21,7 @@ export function BudgetsPage() {
   const [rows, setRows] = React.useState(seed);
   const [editing, setEditing] = React.useState(null);
   const [period, setPeriod] = React.useState("monthly");
+  const [showAddModal, setShowAddModal] = React.useState(false);
 
   const setLimit = (id, limit) => setRows(rs => rs.map(r => r.id === id ? { ...r, limit: Math.max(0, limit) } : r));
   const toggle   = (id)        => setRows(rs => rs.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r));
@@ -237,7 +238,7 @@ export function BudgetsPage() {
 
         {/* Footer buttons */}
         <div style={{ paddingTop: 18, display: "flex", flexDirection: isMobile ? "column" : "row", justifyContent: isMobile ? "stretch" : "space-between", alignItems: isMobile ? "stretch" : "center", gap: isMobile ? 10 : 0 }}>
-          <button style={{ display: "inline-flex", alignItems: "center", justifyContent: isMobile ? "center" : "flex-start", gap: 8, padding: isMobile ? "13px 14px" : "9px 14px", background: "var(--paper)", border: "1px dashed var(--line)", borderRadius: 10, fontSize: isMobile ? 14 : 12.5, color: "var(--ink-2)" }}>
+          <button onClick={() => setShowAddModal(true)} style={{ display: "inline-flex", alignItems: "center", justifyContent: isMobile ? "center" : "flex-start", gap: 8, padding: isMobile ? "13px 14px" : "9px 14px", background: "var(--paper)", border: "1px dashed var(--line)", borderRadius: 10, fontSize: isMobile ? 14 : 12.5, color: "var(--ink-2)" }}>
             <IconPlus size={14} /> Tambah kategori anggaran
           </button>
           <button style={{ padding: isMobile ? "14px 18px" : "10px 18px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 10, fontSize: isMobile ? 14 : 13, fontWeight: 500 }}>Simpan anggaran</button>
@@ -250,6 +251,80 @@ export function BudgetsPage() {
         <span>
           <strong style={{ color: "var(--ink-2)", fontWeight: 500 }}>Tips:</strong> aktifkan reminder agar FinanceApp memberi tahu saat sebuah kategori mencapai 80% dari batasnya. Semua fitur ini gratis.
         </span>
+      </div>
+
+      {showAddModal && (
+        <AddBudgetModal
+          onClose={() => setShowAddModal(false)}
+          onAdd={row => { setRows(rs => [...rs, row]); setShowAddModal(false); }}
+        />
+      )}
+    </div>
+  );
+}
+
+const PRESET_COLORS = ["var(--sage)", "var(--terra)", "var(--gold)", "var(--blush)", "var(--muted)"];
+
+function AddBudgetModal({ onClose, onAdd }) {
+  const [name, setName] = React.useState("");
+  const [limit, setLimit] = React.useState("");
+  const [color, setColor] = React.useState(PRESET_COLORS[0]);
+  const valid = name.trim().length > 0 && +limit > 0;
+
+  const submit = () => {
+    if (!valid) return;
+    onAdd({ id: `custom-${Date.now()}`, label: name.trim(), color, spent: 0, limit: +limit, enabled: true });
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}
+      style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(42,44,32,.32)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 16, animation: "rise .25s ease-out" }}>
+      <div className="card modal-sheet" onClick={e => e.stopPropagation()}
+        style={{ width: "min(480px, 100%)", padding: 24, animation: "rise .3s ease-out", boxShadow: "0 30px 80px -20px rgba(42,44,32,.4)" }}>
+
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+          <div>
+            <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Anggaran baru</div>
+            <div className="serif" style={{ fontSize: 24, marginTop: 4, letterSpacing: "-0.01em" }}>Tambah kategori</div>
+          </div>
+          <button onClick={onClose} style={{ width: 36, height: 36, borderRadius: 10, border: "1px solid var(--line-soft)", background: "var(--paper)", display: "grid", placeItems: "center", color: "var(--ink-2)" }}>
+            <IconClose size={14} />
+          </button>
+        </div>
+
+        <div style={{ display: "grid", gap: 14 }}>
+          <label style={{ display: "block" }}>
+            <span style={{ display: "block", fontSize: 11, color: "var(--muted)", letterSpacing: ".05em", textTransform: "uppercase", marginBottom: 6 }}>Nama kategori</span>
+            <input autoFocus value={name} onChange={e => setName(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && submit()}
+              placeholder="contoh: Belanja Online"
+              style={{ width: "100%", padding: "11px 12px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10, color: "var(--ink)", fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
+          </label>
+          <label style={{ display: "block" }}>
+            <span style={{ display: "block", fontSize: 11, color: "var(--muted)", letterSpacing: ".05em", textTransform: "uppercase", marginBottom: 6 }}>Batas anggaran (Rp)</span>
+            <input value={limit} onChange={e => setLimit(e.target.value.replace(/[^\d]/g, ""))}
+              onKeyDown={e => e.key === "Enter" && submit()}
+              placeholder="500000"
+              style={{ width: "100%", padding: "11px 12px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10, color: "var(--ink)", fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
+          </label>
+          <div>
+            <span style={{ display: "block", fontSize: 11, color: "var(--muted)", letterSpacing: ".05em", textTransform: "uppercase", marginBottom: 8 }}>Warna</span>
+            <div style={{ display: "flex", gap: 8 }}>
+              {PRESET_COLORS.map(c => (
+                <button key={c} onClick={() => setColor(c)}
+                  style={{ width: 28, height: 28, borderRadius: "50%", border: color === c ? "2px solid var(--ink)" : "2px solid transparent", background: c, cursor: "pointer", outline: color === c ? "2px solid var(--ivory)" : "none", outlineOffset: "-4px" }} />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 10, marginTop: 22 }}>
+          <button onClick={onClose} style={{ flex: 1, padding: "13px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 12, fontSize: 14, color: "var(--ink-2)" }}>Batal</button>
+          <button onClick={submit} disabled={!valid}
+            style={{ flex: 2, padding: "13px", background: valid ? "var(--ink)" : "var(--line-soft)", color: valid ? "var(--cream)" : "var(--muted-2)", border: 0, borderRadius: 12, fontSize: 14, fontWeight: 500, cursor: valid ? "pointer" : "default" }}>
+            Tambah kategori
+          </button>
+        </div>
       </div>
     </div>
   );

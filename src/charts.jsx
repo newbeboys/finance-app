@@ -51,7 +51,7 @@ export function CashflowChart({ data, range }) {
   };
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+    <svg className="cashflow-chart-svg" viewBox={`0 0 ${W} ${H}`} width="100%" height={H} onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
       <defs>
         <linearGradient id="incomeFill" x1="0" x2="0" y1="0" y2="1">
           <stop offset="0%"  stopColor="var(--sage)" stopOpacity="0.32" />

@@ -158,66 +158,68 @@ export function AddGoalModal({ open, onClose, onCreate }) {
   };
 
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(42,44,32,.32)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 20, animation: "rise .25s ease-out" }}>
-      <div className="card" onClick={e => e.stopPropagation()} style={{ width: 520, padding: 28, animation: "rise .3s ease-out", boxShadow: "0 30px 80px -20px rgba(42,44,32,.4)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <div>
-            <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Target baru</div>
-            <div className="serif" style={{ fontSize: 28, marginTop: 4, letterSpacing: "-0.01em" }}>Buat goal tabungan</div>
-          </div>
-          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 10, border: "1px solid var(--line-soft)", background: "var(--paper)", display: "grid", placeItems: "center", color: "var(--ink-2)" }}>
-            <IconClose size={14} />
-          </button>
-        </div>
-
-        <label style={{ display: "block", marginTop: 20 }}>
-          <span style={goalFieldLabel}>Nama goal (custom)</span>
-          <input value={label} onChange={e => setLabel(e.target.value)} placeholder="contoh: Liburan ke Bali, DP rumah, Laptop baru…" style={goalInput} />
-        </label>
-
-        <div style={{ marginTop: 16 }}>
-          <span style={goalFieldLabel}>Kategori / ikon</span>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8 }}>
-            {GOAL_ICON_LIST.map(it => (
-              <button key={it.id} onClick={() => setIcon(it.id)} title={it.label} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "10px 4px", borderRadius: 12, background: icon === it.id ? "var(--ivory)" : "var(--paper)", border: "1px solid " + (icon === it.id ? "var(--ink)" : "var(--line-soft)"), color: icon === it.id ? color : "var(--ink-2)" }}>
-                <GoalGlyph icon={it.id} size={18} />
-                <span style={{ fontSize: 9.5, color: "var(--muted)", textAlign: "center", lineHeight: 1.1 }}>{it.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 16 }}>
-          <label>
-            <span style={goalFieldLabel}>Target jumlah</span>
-            <div style={goalMoneyWrap}>
-              <span style={{ color: "var(--muted)", fontSize: 13 }}>Rp</span>
-              <input value={target ? num(target).toLocaleString("id-ID") : ""} onChange={e => setTarget(e.target.value)} placeholder="0" style={goalMoneyInput} />
+    <div className="modal-backdrop" onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(42,44,32,.32)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 20, animation: "rise .25s ease-out" }}>
+      <div className="card modal-sheet goal-modal" onClick={e => e.stopPropagation()} style={{ width: 520, padding: 28, animation: "rise .3s ease-out", boxShadow: "0 30px 80px -20px rgba(42,44,32,.4)" }}>
+        <div className="goal-modal-body">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Target baru</div>
+              <div className="serif" style={{ fontSize: 28, marginTop: 4, letterSpacing: "-0.01em" }}>Buat goal tabungan</div>
             </div>
-          </label>
-          <label>
-            <span style={goalFieldLabel}>Sudah terkumpul (opsional)</span>
-            <div style={goalMoneyWrap}>
-              <span style={{ color: "var(--muted)", fontSize: 13 }}>Rp</span>
-              <input value={current ? num(current).toLocaleString("id-ID") : ""} onChange={e => setCurrent(e.target.value)} placeholder="0" style={goalMoneyInput} />
-            </div>
-          </label>
-          <label style={{ gridColumn: "span 2" }}>
-            <span style={goalFieldLabel}>Tenggat (opsional)</span>
-            <input value={deadline} onChange={e => setDeadline(e.target.value)} placeholder="contoh: Des 2026" style={goalInput} />
-          </label>
-        </div>
+            <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 10, border: "1px solid var(--line-soft)", background: "var(--paper)", display: "grid", placeItems: "center", color: "var(--ink-2)" }}>
+              <IconClose size={14} />
+            </button>
+          </div>
 
-        <div style={{ marginTop: 16 }}>
-          <span style={goalFieldLabel}>Warna</span>
-          <div style={{ display: "flex", gap: 8 }}>
-            {GOAL_COLORS.map(c => (
-              <button key={c} onClick={() => setColor(c)} style={{ width: 28, height: 28, borderRadius: 8, background: c, border: 0, outline: color === c ? "2px solid var(--ink)" : "2px solid transparent", outlineOffset: 2, cursor: "pointer" }} />
-            ))}
+          <label style={{ display: "block", marginTop: 20 }}>
+            <span style={goalFieldLabel}>Nama goal (custom)</span>
+            <input value={label} onChange={e => setLabel(e.target.value)} placeholder="contoh: Liburan ke Bali, DP rumah, Laptop baru…" style={goalInput} />
+          </label>
+
+          <div style={{ marginTop: 16 }}>
+            <span style={goalFieldLabel}>Kategori / ikon</span>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8 }}>
+              {GOAL_ICON_LIST.map(it => (
+                <button key={it.id} onClick={() => setIcon(it.id)} title={it.label} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "10px 4px", borderRadius: 12, background: icon === it.id ? "var(--ivory)" : "var(--paper)", border: "1px solid " + (icon === it.id ? "var(--ink)" : "var(--line-soft)"), color: icon === it.id ? color : "var(--ink-2)" }}>
+                  <GoalGlyph icon={it.id} size={18} />
+                  <span style={{ fontSize: 9.5, color: "var(--muted)", textAlign: "center", lineHeight: 1.1 }}>{it.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 16 }}>
+            <label>
+              <span style={goalFieldLabel}>Target jumlah</span>
+              <div style={goalMoneyWrap}>
+                <span style={{ color: "var(--muted)", fontSize: 13 }}>Rp</span>
+                <input value={target ? num(target).toLocaleString("id-ID") : ""} onChange={e => setTarget(e.target.value)} placeholder="0" style={goalMoneyInput} />
+              </div>
+            </label>
+            <label>
+              <span style={goalFieldLabel}>Sudah terkumpul (opsional)</span>
+              <div style={goalMoneyWrap}>
+                <span style={{ color: "var(--muted)", fontSize: 13 }}>Rp</span>
+                <input value={current ? num(current).toLocaleString("id-ID") : ""} onChange={e => setCurrent(e.target.value)} placeholder="0" style={goalMoneyInput} />
+              </div>
+            </label>
+            <label style={{ gridColumn: "span 2" }}>
+              <span style={goalFieldLabel}>Tenggat (opsional)</span>
+              <input value={deadline} onChange={e => setDeadline(e.target.value)} placeholder="contoh: Des 2026" style={goalInput} />
+            </label>
+          </div>
+
+          <div style={{ marginTop: 16 }}>
+            <span style={goalFieldLabel}>Warna</span>
+            <div style={{ display: "flex", gap: 8 }}>
+              {GOAL_COLORS.map(c => (
+                <button key={c} onClick={() => setColor(c)} style={{ width: 28, height: 28, borderRadius: 8, background: c, border: 0, outline: color === c ? "2px solid var(--ink)" : "2px solid transparent", outlineOffset: 2, cursor: "pointer" }} />
+              ))}
+            </div>
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
+        <div className="goal-modal-actions">
           <button onClick={onClose} style={{ flex: 1, padding: "11px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 12, fontSize: 13.5, color: "var(--ink-2)" }}>Batal</button>
           <button onClick={submit} disabled={!valid} style={{ flex: 2, padding: "11px", background: valid ? "var(--ink)" : "var(--line)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, cursor: valid ? "pointer" : "default" }}>Buat goal</button>
         </div>
@@ -235,8 +237,8 @@ export function DepositModal({ goal, onClose, onConfirm }) {
   const confirm = () => { if (num(amount) > 0) { onConfirm(goal.id, num(amount)); onClose(); } };
 
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 51, background: "rgba(42,44,32,.32)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 20, animation: "rise .25s ease-out" }}>
-      <div className="card" onClick={e => e.stopPropagation()} style={{ width: 420, padding: 26, animation: "rise .3s ease-out", boxShadow: "0 30px 80px -20px rgba(42,44,32,.4)" }}>
+    <div className="modal-backdrop" onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 51, background: "rgba(42,44,32,.32)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 20, animation: "rise .25s ease-out" }}>
+      <div className="card modal-sheet" onClick={e => e.stopPropagation()} style={{ width: 420, padding: 26, animation: "rise .3s ease-out", boxShadow: "0 30px 80px -20px rgba(42,44,32,.4)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <span style={{ width: 40, height: 40, borderRadius: 11, background: `color-mix(in oklch, ${goal.color} 16%, var(--ivory))`, color: goal.color, display: "grid", placeItems: "center" }}>
             <GoalGlyph icon={goal.icon} size={18} />

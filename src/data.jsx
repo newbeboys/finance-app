@@ -67,6 +67,20 @@ export const CATEGORIES = [
   { id: "cigarette",     label: "Rokok",              amount: 540_000,   color: "#9A6B55" },
 ];
 
+// Kategori khusus pemasukan (sesuai PRD)
+export const INCOME_CATEGORIES = [
+  { id: "salary",     label: "Gaji",                  color: "var(--sage)"  },
+  { id: "freelance",  label: "Freelance",             color: "var(--gold)"  },
+  { id: "investment", label: "Investasi",             color: "#9A6BD9"      },
+  { id: "side",       label: "Pendapatan Sampingan",  color: "var(--blush)" },
+  { id: "business",   label: "Bisnis",                color: "var(--terra)" },
+  { id: "bonus",      label: "Bonus / THR",           color: "#7A8A6E"      },
+  { id: "other_in",   label: "Pemasukan Lain",        color: "#6E8A8C"      },
+];
+
+// Gabungan untuk lookup display (TransactionsCard, TransactionsPage)
+export const ALL_CATEGORIES = [...CATEGORIES, ...INCOME_CATEGORIES];
+
 export const TRANSACTIONS = [
   { id: "t01", date: "27 Mei", time: "09:14", merchant: "Kopi Tetangga",         category: "food",          amount: -42_000,     note: "Kopi susu & pastry pagi",      method: "BCA •• 4421" },
   { id: "t02", date: "26 Mei", time: "18:02", merchant: "Stripe — Payout",       category: "freelance",     amount:  9_600_000,  note: "Invoice #1041 — retainer Mar", method: "Bank transfer", income: true },

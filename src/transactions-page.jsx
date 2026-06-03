@@ -1,9 +1,10 @@
 import React from 'react';
-import { TRANSACTIONS, CATEGORIES, fmt, fmtShort } from './data';
+import { TRANSACTIONS, CATEGORIES, ALL_CATEGORIES, fmt, fmtShort } from './data';
 import { IconSearch, IconPlus, CatIcon } from './icons';
 import { useIsMobile } from './use-mobile';
 
-export function TransactionsPage({ accounts, onAdd }) {
+export function TransactionsPage({ accounts, onAdd, transactions: txProp }) {
+  const transactions = txProp ?? TRANSACTIONS;
   const isMobile = useIsMobile();
   const [q, setQ] = React.useState("");
   const [type, setType] = React.useState("all");
@@ -11,16 +12,16 @@ export function TransactionsPage({ accounts, onAdd }) {
   const [method, setMethod] = React.useState("all");
   const [hover, setHover] = React.useState(null);
 
-  const methods = React.useMemo(() => Array.from(new Set(TRANSACTIONS.map(t => t.method))), []);
+  const methods = React.useMemo(() => Array.from(new Set(transactions.map(t => t.method))), [transactions]);
 
-  const filtered = TRANSACTIONS.filter(t => {
+  const filtered = transactions.filter(t => {
     if (type === "expense" && t.amount >= 0) return false;
     if (type === "income"  && t.amount <= 0) return false;
     if (cat !== "all" && t.category !== cat) return false;
     if (method !== "all" && t.method !== method) return false;
     if (q.trim()) {
       const s = q.toLowerCase();
-      const catLabel = (CATEGORIES.find(c => c.id === t.category) || {}).label || t.category;
+      const catLabel = (ALL_CATEGORIES.find(c => c.id === t.category) || {}).label || t.category;
       if (!(`${t.merchant} ${t.note} ${catLabel} ${t.method}`.toLowerCase().includes(s))) return false;
     }
     return true;
@@ -36,7 +37,7 @@ export function TransactionsPage({ accounts, onAdd }) {
     g.items.push(t);
   });
 
-  const catsUsed = CATEGORIES.filter(c => TRANSACTIONS.some(t => t.category === c.id));
+  const catsUsed = ALL_CATEGORIES.filter(c => transactions.some(t => t.category === c.id));
   const reset = () => { setQ(""); setType("all"); setCat("all"); setMethod("all"); };
   const active = q || type !== "all" || cat !== "all" || method !== "all";
 
@@ -57,18 +58,16 @@ export function TransactionsPage({ accounts, onAdd }) {
         </button>
       </div>
 
-      <div className="stat-grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: 16 }}>
+      <div className="tx-stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: 16 }}>
         {[
-          { l: "Pemasukan", v: fmtShort(income), c: "var(--sage)", n: filtered.filter(t => t.amount > 0).length },
-          { l: "Pengeluaran", v: fmtShort(expense), c: "var(--terra)", n: filtered.filter(t => t.amount < 0).length },
-          { l: "Selisih", v: fmtShort(income - expense), c: "var(--ink)", n: filtered.length },
+          { l: "Pemasukan",   v: fmtShort(income),           c: "var(--sage)",  n: filtered.filter(t => t.amount > 0).length },
+          { l: "Pengeluaran", v: fmtShort(expense),          c: "var(--terra)", n: filtered.filter(t => t.amount < 0).length },
+          { l: "Selisih",     v: fmtShort(income - expense), c: "var(--ink)",   n: filtered.length },
         ].map((s, i) => (
-          <div key={i} className="card rise" style={{ padding: 16, animationDelay: `${i * 0.03}s` }}>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{s.l}</span>
-              <span style={{ fontSize: 11, color: "var(--muted)" }}>{s.n} transaksi</span>
-            </div>
-            <div className="serif tnum" style={{ fontSize: 26, letterSpacing: "-0.01em", marginTop: 6, color: s.c }}>{s.v}</div>
+          <div key={i} className={`card rise tx-stat-card${i === 2 ? " tx-stat-selisih" : ""}`} style={{ padding: 16, animationDelay: `${i * 0.03}s` }}>
+            <div style={{ fontSize: 10.5, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", fontWeight: 500 }}>{s.l}</div>
+            <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 3 }}>{s.n} transaksi</div>
+            <div className="serif tnum" style={{ fontSize: 26, letterSpacing: "-0.01em", marginTop: 8, color: s.c }}>{s.v}</div>
           </div>
         ))}
       </div>
@@ -121,7 +120,7 @@ export function TransactionsPage({ accounts, onAdd }) {
                 </span>
               </div>
               {g.items.map((t, i) => {
-                const c = CATEGORIES.find(x => x.id === t.category);
+                const c = ALL_CATEGORIES.find(x => x.id === t.category);
                 const isIncome = t.amount > 0;
                 const color = c?.color || (isIncome ? "var(--sage)" : "var(--muted-2)");
                 const borderBottom = i < g.items.length - 1 ? "1px solid var(--line-soft)" : 0;

@@ -191,9 +191,35 @@ button { font: inherit; color: inherit; cursor: pointer; }
     gap: 10px;
   }
 
-  /* KPI card font size adjustments */
+  /* ── KPI cards ── */
   .kpi-hero-val {
-    font-size: 26px !important;
+    font-size: 22px !important;
+    white-space: nowrap !important;
+  }
+  .kpi-value {
+    font-size: 18px !important;
+    white-space: nowrap !important;
+  }
+  .kpi-label {
+    font-size: 10px !important;
+    letter-spacing: 0.5px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    flex: 1 !important;
+    min-width: 0 !important;
+  }
+  .kpi-hide-btn {
+    font-size: 9px !important;
+    padding: 2px 6px !important;
+    background: var(--paper) !important;
+    border: 1px solid var(--line-soft) !important;
+    border-radius: 4px !important;
+    min-height: auto !important;
+    flex-shrink: 0 !important;
+  }
+  .kpi-sub {
+    font-size: 10px !important;
   }
 
   /* Larger touch targets for all buttons */
@@ -257,6 +283,119 @@ button { font: inherit; color: inherit; cursor: pointer; }
   /* Settings header font */
   .settings-h2 {
     font-size: 26px !important;
+  }
+
+  /* ── CashFlow card (Arus Kas) ── */
+  .cashflow-label {
+    font-size: 11px !important;
+    letter-spacing: 0.5px !important;
+  }
+  .cashflow-title {
+    font-size: 18px !important;
+  }
+  .cashflow-range-btn {
+    padding: 4px 10px !important;
+    font-size: 12px !important;
+    border-radius: 6px !important;
+    height: auto !important;
+  }
+  /* Tombol filter pindah ke bawah judul pada mobile */
+  .cashflow-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+  }
+  .cashflow-range-group {
+    margin-top: 8px !important;
+    align-self: flex-start !important;
+  }
+  /* Pastikan chart tidak mengecil */
+  .cashflow-chart-svg {
+    min-height: 200px !important;
+  }
+
+  /* ── Modal → Bottom Sheet ── */
+  .modal-backdrop {
+    display: flex !important;
+    align-items: flex-end !important;
+    padding: 0 !important;
+  }
+  .modal-sheet {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 85vh !important;
+    overflow-y: auto !important;
+    border-radius: 16px 16px 0 0 !important;
+    padding: 20px 16px 80px !important;
+    box-sizing: border-box !important;
+  }
+
+  /* ── Transaction stats cards ── */
+  .tx-stats-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px !important;
+  }
+  /* Selisih: full width row below Pemasukan + Pengeluaran */
+  .tx-stat-selisih {
+    grid-column: 1 / -1 !important;
+  }
+  .tx-stat-card .serif.tnum {
+    font-size: 20px !important;
+    margin-top: 4px !important;
+  }
+
+  /* ── Report preview modal ── */
+  .report-preview-backdrop {
+    padding: 0 !important;
+  }
+  .report-preview-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    border-radius: 0 !important;
+  }
+  .report-preview-header {
+    padding: 10px 14px !important;
+  }
+  .report-preview-btn-print {
+    display: none !important;
+  }
+
+  /* ── Wallet cards (Dompet) ── */
+  .wallet-cards-grid {
+    gap: 10px !important;
+  }
+  .wallet-card-body {
+    padding: 12px !important;
+  }
+  .wallet-balance-val {
+    font-size: 19px !important;
+  }
+  .wallet-card-delete-wrap {
+    display: none !important;
+  }
+
+  /* ── Goal modal: scroll body + sticky actions ── */
+  .goal-modal {
+    display: flex !important;
+    flex-direction: column !important;
+    overflow-y: hidden !important;
+    /* 64px clears the fixed bottom nav so actions aren't hidden behind it */
+    padding: 0 0 64px !important;
+  }
+  .goal-modal-body {
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+    padding: 20px 16px 8px;
+  }
+  .goal-modal-actions {
+    display: flex;
+    gap: 10px;
+    flex-shrink: 0;
+    padding: 12px 16px;
+    background: var(--ivory);
+    border-top: 1px solid var(--line-soft);
   }
 }
 

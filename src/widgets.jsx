@@ -10,11 +10,12 @@ export function KpiCards({ balanceVisible, onToggleVisible, totalBalance, accoun
   const expenseSpark = CASHFLOW.map(d => d.expense);
   const balanceSpark = CASHFLOW.map((d, i, a) => a.slice(0, i + 1).reduce((s, x) => s + (x.income - x.expense), 16000));
 
+  const savingsPct = Math.round((KPI.savings / KPI.savingsTarget) * 100);
   const cards = [
-    { label: "Total saldo", value: totalBalance != null ? totalBalance : KPI.balance, delta: KPI.balanceDelta, hero: true, spark: balanceSpark, color: "var(--ink)", sub: `dari ${accountCount != null ? accountCount : 3} akun` },
-    { label: "Pemasukan (Mei)", value: KPI.income, delta: KPI.incomeDelta, spark: incomeSpark, color: "var(--sage)", sub: "gaji + freelance" },
-    { label: "Pengeluaran (Mei)", value: KPI.expenses, delta: KPI.expensesDelta, deltaInverted: true, spark: expenseSpark, color: "var(--terra)", sub: "9 kategori" },
-    { label: "Tabungan bulan ini", value: KPI.savings, delta: KPI.savingsDelta, spark: balanceSpark.slice(-8).map(v => v * 0.07), color: "var(--gold)", sub: `${Math.round((KPI.savings / KPI.savingsTarget) * 100)}% dari target ${fmtShort(KPI.savingsTarget)}`, progress: KPI.savings / KPI.savingsTarget },
+    { label: "Total saldo",                       value: totalBalance != null ? totalBalance : KPI.balance, delta: KPI.balanceDelta, hero: true,  spark: balanceSpark,                          color: "var(--ink)",   sub: `dari ${accountCount != null ? accountCount : 3} akun` },
+    { label: isMobile ? "Pemasukan"  : "Pemasukan (Mei)",  value: KPI.income,   delta: KPI.incomeDelta,                         spark: incomeSpark,                           color: "var(--sage)",  sub: "gaji + freelance" },
+    { label: isMobile ? "Pengeluaran": "Pengeluaran (Mei)", value: KPI.expenses, delta: KPI.expensesDelta, deltaInverted: true,  spark: expenseSpark,                          color: "var(--terra)", sub: "9 kategori" },
+    { label: isMobile ? "Tabungan"   : "Tabungan bulan ini", value: KPI.savings, delta: KPI.savingsDelta,                        spark: balanceSpark.slice(-8).map(v => v * 0.07), color: "var(--gold)", sub: isMobile ? `${savingsPct}% • ${fmtShort(KPI.savingsTarget)}` : `${savingsPct}% dari target ${fmtShort(KPI.savingsTarget)}`, progress: KPI.savings / KPI.savingsTarget },
   ];
 
   return (
@@ -22,28 +23,28 @@ export function KpiCards({ balanceVisible, onToggleVisible, totalBalance, accoun
       {cards.map((c, i) => {
         const positive = c.deltaInverted ? c.delta < 0 : c.delta > 0;
         return (
-          <div key={i} className="card rise" style={{ padding: isMobile ? 14 : 18, animationDelay: `${i * 0.05}s`, display: "flex", flexDirection: "column", gap: isMobile ? 8 : 12, minHeight: isMobile ? 120 : 156 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <div style={{ fontSize: isMobile ? 10.5 : 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{c.label}</div>
+          <div key={i} className="card rise kpi-card" style={{ padding: isMobile ? 14 : 18, animationDelay: `${i * 0.05}s`, display: "flex", flexDirection: "column", gap: isMobile ? 8 : 12, minHeight: isMobile ? 120 : 156 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 4 }}>
+              <div className="kpi-label" style={{ fontSize: isMobile ? 10.5 : 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{c.label}</div>
               {c.hero ? (
-                <button onClick={onToggleVisible} style={{ fontSize: 10.5, letterSpacing: ".05em", color: "var(--muted)", background: "transparent", border: 0, padding: 0, textTransform: "uppercase", minHeight: "auto" }}>{balanceVisible ? "Hide" : "Show"}</button>
+                <button className="kpi-hide-btn" onClick={onToggleVisible} style={{ fontSize: 10.5, letterSpacing: ".05em", color: "var(--muted)", background: "transparent", border: 0, padding: 0, textTransform: "uppercase", minHeight: "auto", flexShrink: 0 }}>{balanceVisible ? "Hide" : "Show"}</button>
               ) : (
                 !isMobile && <Spark values={c.spark} color={c.color} />
               )}
             </div>
 
             <div>
-              <div className={c.hero ? "serif kpi-hero-val" : "serif"} style={{ fontSize: c.hero ? (isMobile ? 22 : 38) : (isMobile ? 18 : (c.value >= 1_000_000 ? 26 : 30)), lineHeight: 1, letterSpacing: "-0.02em", color: "var(--ink)", fontVariantNumeric: "tabular-nums" }}>
+              <div className={c.hero ? "serif kpi-hero-val" : "serif kpi-value"} style={{ fontSize: c.hero ? (isMobile ? 22 : 38) : (isMobile ? 18 : (c.value >= 1_000_000 ? 26 : 30)), lineHeight: 1, letterSpacing: "-0.02em", color: "var(--ink)", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
                 {c.hero && !balanceVisible ? "Rp ••••••" : (c.hero ? fmtShort(c.value) : fmt(c.value))}
               </div>
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: "auto" }}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 8px", borderRadius: 999, background: positive ? "rgba(92,107,76,.12)" : "rgba(178,106,74,.12)", color: positive ? "var(--sage)" : "var(--terra)", fontSize: 11, fontWeight: 500 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: "auto", minWidth: 0 }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 8px", borderRadius: 999, background: positive ? "rgba(92,107,76,.12)" : "rgba(178,106,74,.12)", color: positive ? "var(--sage)" : "var(--terra)", fontSize: 11, fontWeight: 500, flexShrink: 0 }}>
                 {c.delta > 0 ? <IconArrowUp size={11} /> : <IconArrowDown size={11} />}
                 {Math.abs(c.delta).toFixed(1)}%
               </span>
-              <span style={{ fontSize: 11.5, color: "var(--muted)" }}>{c.sub}</span>
+              <span className="kpi-sub" style={{ fontSize: 11.5, color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{c.sub}</span>
             </div>
 
             {c.progress != null && (
@@ -66,18 +67,18 @@ export function CashflowCard() {
 
   return (
     <div className="card rise span-2" style={{ padding: 22 }}>
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8 }}>
+      <div className="cashflow-header" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8 }}>
         <div>
-          <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Arus kas</div>
-          <div className="serif" style={{ fontSize: 26, marginTop: 2, letterSpacing: "-0.01em" }}>Pemasukan vs. pengeluaran</div>
+          <div className="cashflow-label" style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Arus kas</div>
+          <div className="serif cashflow-title" style={{ fontSize: 26, marginTop: 2, letterSpacing: "-0.01em" }}>Pemasukan vs. pengeluaran</div>
           <div style={{ display: "flex", gap: 16, marginTop: 8, fontSize: 12, color: "var(--muted)" }}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 2, background: "var(--sage)", display: "inline-block" }} /> Pemasukan</span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 2, background: "var(--terra)", display: "inline-block" }} /> Pengeluaran</span>
           </div>
         </div>
-        <div style={{ display: "flex", padding: 3, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10 }}>
+        <div className="cashflow-range-group" style={{ display: "flex", padding: 3, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10 }}>
           {ranges.map(r => (
-            <button key={r} onClick={() => setRange(r)} style={{ padding: "5px 12px", fontSize: 12, background: range === r ? "var(--ivory)" : "transparent", border: range === r ? "1px solid var(--line-soft)" : "1px solid transparent", borderRadius: 8, color: range === r ? "var(--ink)" : "var(--muted)", fontWeight: range === r ? 500 : 400 }}>{r}</button>
+            <button key={r} onClick={() => setRange(r)} className="cashflow-range-btn" style={{ padding: "5px 12px", fontSize: 12, background: range === r ? "var(--ivory)" : "transparent", border: range === r ? "1px solid var(--line-soft)" : "1px solid transparent", borderRadius: 8, color: range === r ? "var(--ink)" : "var(--muted)", fontWeight: range === r ? 500 : 400 }}>{r}</button>
           ))}
         </div>
       </div>
@@ -86,37 +87,92 @@ export function CashflowCard() {
   );
 }
 
+// Month metadata aligned with CASHFLOW array order
+const ID_LABEL = { Jun:"Jun", Jul:"Jul", Aug:"Agu", Sep:"Sep", Oct:"Okt", Nov:"Nov", Dec:"Des", Jan:"Jan", Feb:"Feb", Mar:"Mar", Apr:"Apr", May:"Mei" };
+const YEAR_OF  = { Jun:2025, Jul:2025, Aug:2025, Sep:2025, Oct:2025, Nov:2025, Dec:2025, Jan:2026, Feb:2026, Mar:2026, Apr:2026, May:2026 };
+const SPENDING_MONTHS = CASHFLOW.map((c, i) => ({ idx: i, abbr: c.m, label: ID_LABEL[c.m], year: YEAR_OF[c.m], expense: c.expense }));
+
+function catsForExpense(monthExpense) {
+  const refTotal = CATEGORIES.reduce((s, c) => s + c.amount, 0);
+  const k = monthExpense / refTotal;
+  return CATEGORIES.map(c => ({ ...c, amount: Math.round(c.amount * k / 1000) * 1000 }))
+    .sort((a, b) => b.amount - a.amount);
+}
+
 export function SpendingCard() {
   const [hover, setHover] = React.useState(null);
-  const total = CATEGORIES.reduce((s, c) => s + c.amount, 0);
+  const [selectedIdx, setSelectedIdx] = React.useState(SPENDING_MONTHS.length - 1); // default: bulan terakhir (Mei)
+  const [sheetOpen, setSheetOpen] = React.useState(false);
+
+  const selected = SPENDING_MONTHS[selectedIdx];
+  const monthCats = catsForExpense(selected.expense);
+  const total = monthCats.reduce((s, c) => s + c.amount, 0);
+
+  const years = [2026, 2025]; // tampil 2026 dulu, lalu 2025
 
   return (
-    <div className="card rise" style={{ padding: 22 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Rincian pengeluaran</div>
-          <div className="serif" style={{ fontSize: 26, marginTop: 2, letterSpacing: "-0.01em" }}>Per kategori</div>
-        </div>
-        <button style={ghostBtn}>Mei ▾</button>
-      </div>
-
-      <SpendingDonut data={CATEGORIES} active={hover} onHover={setHover} />
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
-        {CATEGORIES.slice(0, 5).map((c, i) => (
-          <div key={c.id} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}
-            style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 4px", borderRadius: 8, background: hover === i ? "var(--paper)" : "transparent" }}>
-            <span style={{ width: 9, height: 9, borderRadius: 3, background: c.color, flexShrink: 0 }} />
-            <span style={{ fontSize: 12.5, color: "var(--ink-2)", flex: 1 }}>{c.label}</span>
-            <span className="tnum" style={{ fontSize: 12.5, color: "var(--muted)" }}>{Math.round((c.amount / total) * 100)}%</span>
-            <span className="tnum" style={{ fontSize: 12, color: "var(--ink)", minWidth: 92, textAlign: "right" }}>{fmtShort(c.amount)}</span>
+    <>
+      <div className="card rise" style={{ padding: 22 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div>
+            <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Rincian pengeluaran</div>
+            <div className="serif" style={{ fontSize: 26, marginTop: 2, letterSpacing: "-0.01em" }}>Per kategori</div>
           </div>
-        ))}
-        <button style={{ ...ghostBtn, marginTop: 4, width: "fit-content", padding: "4px 0", border: 0, background: "transparent", color: "var(--muted)" }}>
-          + {CATEGORIES.length - 5} kategori lagi
-        </button>
+          <button onClick={() => setSheetOpen(true)} style={ghostBtn}>{selected.label} {selected.year !== 2026 ? selected.year : ""} ▾</button>
+        </div>
+
+        <SpendingDonut data={monthCats} active={hover} onHover={setHover} />
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+          {monthCats.slice(0, 5).map((c, i) => (
+            <div key={c.id} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}
+              style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 4px", borderRadius: 8, background: hover === i ? "var(--paper)" : "transparent" }}>
+              <span style={{ width: 9, height: 9, borderRadius: 3, background: c.color, flexShrink: 0 }} />
+              <span style={{ fontSize: 12.5, color: "var(--ink-2)", flex: 1 }}>{c.label}</span>
+              <span className="tnum" style={{ fontSize: 12.5, color: "var(--muted)" }}>{Math.round((c.amount / total) * 100)}%</span>
+              <span className="tnum" style={{ fontSize: 12, color: "var(--ink)", minWidth: 92, textAlign: "right" }}>{fmtShort(c.amount)}</span>
+            </div>
+          ))}
+          <button style={{ ...ghostBtn, marginTop: 4, width: "fit-content", padding: "4px 0", border: 0, background: "transparent", color: "var(--muted)" }}>
+            + {monthCats.length - 5} kategori lagi
+          </button>
+        </div>
       </div>
-    </div>
+
+      {/* Overlay + Bottom Sheet */}
+      {sheetOpen && (
+        <>
+          <div onClick={() => setSheetOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(42,44,32,.45)", zIndex: 150, animation: "rise .2s ease-out" }} />
+          <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "var(--ivory)", borderRadius: "16px 16px 0 0", padding: "20px 16px 80px", zIndex: 200, maxHeight: "50vh", overflowY: "auto", boxShadow: "0 -8px 32px -8px rgba(42,44,32,.2)", animation: "rise .25s ease-out" }}>
+            {/* Handle */}
+            <div style={{ width: 36, height: 4, borderRadius: 99, background: "var(--line)", margin: "-8px auto 16px" }} />
+            <div style={{ fontSize: 11, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 14 }}>Pilih bulan</div>
+
+            {years.map(year => {
+              const yearMonths = SPENDING_MONTHS.filter(m => m.year === year);
+              if (!yearMonths.length) return null;
+              return (
+                <div key={year} style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 10 }}>{year}</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+                    {yearMonths.map(m => {
+                      const active = m.idx === selectedIdx;
+                      return (
+                        <button key={m.idx}
+                          onClick={() => { setSelectedIdx(m.idx); setSheetOpen(false); }}
+                          style={{ padding: "10px 0", borderRadius: 10, border: active ? 0 : "1px solid var(--line-soft)", background: active ? "var(--ink)" : "var(--paper)", color: active ? "var(--cream)" : "var(--ink)", fontSize: 13.5, fontWeight: active ? 600 : 400, fontFamily: "inherit", cursor: "pointer" }}>
+                          {m.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </>
   );
 }
 

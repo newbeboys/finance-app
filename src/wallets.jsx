@@ -1,6 +1,6 @@
 import React from 'react';
-import { ACCOUNT_TYPES, fmtShort, fmt } from './data';
-import { IconBudget, IconPlus, IconChev, IconClose } from './icons';
+import { ACCOUNT_TYPES, ALL_CATEGORIES, fmtShort, fmt } from './data';
+import { IconBudget, IconPlus, IconChev, IconClose, CatIcon } from './icons';
 
 const WALLET_GLYPH = {
   bank:       <><rect x="3" y="6" width="18" height="13" rx="2" /><path d="M3 10h18" /><path d="M7 15h4" /></>,
@@ -104,7 +104,18 @@ const switcherRow = (active) => ({
   background: active ? "var(--paper)" : "transparent", cursor: "pointer",
 });
 
-export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete }) {
+function txForAccount(account, transactions) {
+  return transactions.filter(t => {
+    if (account.last4 !== "—") return t.method.includes(account.last4);
+    if (account.type === "cash") return t.method === "Tunai";
+    if (account.type === "ewallet") return t.method.toLowerCase().includes(account.name.toLowerCase());
+    if (account.type === "investment") return t.merchant.toLowerCase().includes(account.institution.toLowerCase());
+    return false;
+  });
+}
+
+export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transactions = [] }) {
+  const [txSheet, setTxSheet] = React.useState(null); // account object or null
   const total = accounts.reduce((s, a) => s + a.balance, 0);
   const byType = ACCOUNT_TYPES.map(t => ({
     ...t, sum: accounts.filter(a => a.type === t.id).reduce((s, a) => s + a.balance, 0),
@@ -112,6 +123,7 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete }) {
   })).filter(t => t.count > 0);
 
   return (
+    <>
     <div className="page-wrap" style={{ padding: "16px 32px 48px", maxWidth: 1180, margin: "0 auto" }}>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 22 }}>
         <div>
@@ -145,11 +157,11 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete }) {
         </div>
       </div>
 
-      <div className="stat-grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+      <div className="stat-grid-4 wallet-cards-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
         {accounts.map((a, i) => (
           <div key={a.id} className="card rise" style={{ padding: 0, overflow: "hidden", animationDelay: `${i * 0.04}s`, display: "flex", flexDirection: "column" }}>
             <div style={{ height: 6, background: a.color }} />
-            <div style={{ padding: 18, flex: 1, display: "flex", flexDirection: "column" }}>
+            <div className="wallet-card-body" style={{ padding: 18, flex: 1, display: "flex", flexDirection: "column" }}>
               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
                 <span style={{ width: 40, height: 40, borderRadius: 11, background: `color-mix(in oklch, ${a.color} 16%, var(--ivory))`, color: a.color, display: "grid", placeItems: "center" }}>
                   <WalletGlyph type={a.type} size={19} />
@@ -166,20 +178,18 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete }) {
               </div>
               <div style={{ marginTop: "auto", paddingTop: 18 }}>
                 <div style={{ fontSize: 10.5, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--muted)" }}>Saldo</div>
-                <div className="serif tnum" style={{ fontSize: 26, letterSpacing: "-0.01em", marginTop: 2 }}>{fmt(a.balance)}</div>
+                <div className="serif tnum wallet-balance-val" style={{ fontSize: 26, letterSpacing: "-0.01em", marginTop: 2 }}>{fmt(a.balance)}</div>
               </div>
             </div>
             <div className="hairline" style={{ display: "flex" }}>
-              <button style={cardFootBtn}>Transaksi</button>
-              <div style={{ width: 1, background: "var(--line-soft)" }} />
-              <button style={cardFootBtn}>Transfer</button>
+              <button onClick={() => setTxSheet(a)} style={{ ...cardFootBtn, flex: 1 }}>Transaksi</button>
               {!a.primary && accounts.length > 1 && (
-                <>
+                <div className="wallet-card-delete-wrap" style={{ display: "flex", flexShrink: 0 }}>
                   <div style={{ width: 1, background: "var(--line-soft)" }} />
-                  <button onClick={() => onDelete(a.id)} style={{ ...cardFootBtn, color: "var(--terra)", flex: "0 0 46px" }} title="Hapus akun">
+                  <button onClick={() => onDelete(a.id)} style={{ ...cardFootBtn, color: "var(--terra)", flex: "none", width: 46 }} title="Hapus akun">
                     <IconClose size={14} />
                   </button>
-                </>
+                </div>
               )}
             </div>
           </div>
@@ -194,6 +204,65 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete }) {
         </button>
       </div>
     </div>
+
+    {/* Transaction bottom sheet */}
+    {txSheet && (
+      <AccountTxSheet
+        account={txSheet}
+        transactions={txForAccount(txSheet, transactions)}
+        onClose={() => setTxSheet(null)}
+      />
+    )}
+    </>
+  );
+}
+
+function AccountTxSheet({ account, transactions, onClose }) {
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(42,44,32,.45)", zIndex: 150 }} />
+      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, maxHeight: "70vh", overflowY: "auto", borderRadius: "16px 16px 0 0", background: "var(--ivory)", padding: "0 0 80px", zIndex: 200, boxShadow: "0 -8px 32px -8px rgba(42,44,32,.2)" }}>
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 18px 14px", borderBottom: "1px solid var(--line-soft)", position: "sticky", top: 0, background: "var(--ivory)", zIndex: 1 }}>
+          <div>
+            <div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Riwayat</div>
+            <div className="serif" style={{ fontSize: 20, letterSpacing: "-0.01em", marginTop: 2 }}>Transaksi · {account.name}</div>
+          </div>
+          <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: 10, border: "1px solid var(--line-soft)", background: "var(--paper)", display: "grid", placeItems: "center", color: "var(--ink-2)", flexShrink: 0 }}>
+            <IconClose size={14} />
+          </button>
+        </div>
+
+        {/* List */}
+        <div style={{ padding: "8px 16px" }}>
+          {transactions.length === 0 ? (
+            <div style={{ padding: "40px 0", textAlign: "center", color: "var(--muted)", fontSize: 14 }}>
+              Belum ada transaksi untuk akun ini.
+            </div>
+          ) : (
+            transactions.map((t, i) => {
+              const cat = ALL_CATEGORIES.find(c => c.id === t.category);
+              const isIncome = t.amount > 0;
+              const color = cat?.color || (isIncome ? "var(--sage)" : "var(--muted-2)");
+              return (
+                <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: i < transactions.length - 1 ? "1px solid var(--line-soft)" : 0 }}>
+                  <span style={{ width: 38, height: 38, borderRadius: 10, background: `color-mix(in oklch, ${color} 14%, var(--ivory))`, color, display: "grid", placeItems: "center", flexShrink: 0 }}>
+                    <CatIcon kind={t.category} size={15} />
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.merchant}</div>
+                    <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 1 }}>{cat?.label || t.category} · {t.date} {t.time}</div>
+                  </div>
+                  <div className="tnum" style={{ fontSize: 14, fontWeight: 600, color: isIncome ? "var(--sage)" : "var(--ink)", flexShrink: 0 }}>
+                    {isIncome ? "+" : "−"}{fmt(Math.abs(t.amount))}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -232,8 +301,8 @@ export function AddAccountModal({ open, onClose, onCreate }) {
   };
 
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(42,44,32,.32)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 20, animation: "rise .25s ease-out" }}>
-      <div className="card" onClick={e => e.stopPropagation()} style={{ width: 500, padding: 28, animation: "rise .3s ease-out", boxShadow: "0 30px 80px -20px rgba(42,44,32,.4)" }}>
+    <div className="modal-backdrop" onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(42,44,32,.32)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 20, animation: "rise .25s ease-out" }}>
+      <div className="card modal-sheet" onClick={e => e.stopPropagation()} style={{ width: 500, padding: 28, animation: "rise .3s ease-out", boxShadow: "0 30px 80px -20px rgba(42,44,32,.4)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
             <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Dompet baru</div>

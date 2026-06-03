@@ -1,15 +1,17 @@
 import React from 'react';
-import { TRANSACTIONS, CATEGORIES, fmt } from './data';
+import { TRANSACTIONS, CATEGORIES, INCOME_CATEGORIES, ALL_CATEGORIES, fmt } from './data';
+
 import { IconFilter, IconPlus, IconArrowRight, IconClose, CatIcon } from './icons';
 import { ghostBtn } from './widgets';
 import { useIsMobile } from './use-mobile';
 
-export function TransactionsCard({ onAdd, limit, onSeeAll }) {
+export function TransactionsCard({ onAdd, limit, onSeeAll, transactions: txProp }) {
+  const transactions = txProp ?? TRANSACTIONS;
   const isMobile = useIsMobile();
   const [filter, setFilter] = React.useState("all");
   const [hover, setHover] = React.useState(null);
 
-  const filteredAll = TRANSACTIONS.filter(t => {
+  const filteredAll = transactions.filter(t => {
     if (filter === "expense") return t.amount < 0;
     if (filter === "income")  return t.amount > 0;
     return true;
@@ -17,9 +19,9 @@ export function TransactionsCard({ onAdd, limit, onSeeAll }) {
   const filtered = limit ? filteredAll.slice(0, limit) : filteredAll;
 
   const tabs = [
-    { id: "all",     label: "Semua",   count: TRANSACTIONS.length },
-    { id: "expense", label: "Keluar",  count: TRANSACTIONS.filter(t => t.amount < 0).length },
-    { id: "income",  label: "Masuk",   count: TRANSACTIONS.filter(t => t.amount > 0).length },
+    { id: "all",     label: "Semua",   count: transactions.length },
+    { id: "expense", label: "Keluar",  count: transactions.filter(t => t.amount < 0).length },
+    { id: "income",  label: "Masuk",   count: transactions.filter(t => t.amount > 0).length },
   ];
 
   const grouped = filtered.reduce((acc, t) => {
@@ -72,7 +74,7 @@ export function TransactionsCard({ onAdd, limit, onSeeAll }) {
           </div>
 
           {items.map((t, i) => {
-            const cat = CATEGORIES.find(c => c.id === t.category);
+            const cat = ALL_CATEGORIES.find(c => c.id === t.category);
             const isIncome = t.amount > 0;
             const color = cat?.color || (isIncome ? "var(--sage)" : "var(--muted-2)");
             const borderBottom = i < items.length - 1 ? "1px solid var(--line-soft)" : 0;
@@ -132,7 +134,7 @@ export function TransactionsCard({ onAdd, limit, onSeeAll }) {
   );
 }
 
-export function AddTransactionModal({ open, onClose }) {
+export function AddTransactionModal({ open, onClose, onSave }) {
   const [type, setType] = React.useState("expense");
   const [amount, setAmount] = React.useState("");
   const [cat, setCat] = React.useState("food");
@@ -142,9 +144,37 @@ export function AddTransactionModal({ open, onClose }) {
 
   if (!open) return null;
 
+  const activeCats = type === "income" ? INCOME_CATEGORIES : CATEGORIES;
+
+  const switchType = (newType) => {
+    setType(newType);
+    // Reset ke default kategori sesuai jenis baru
+    if (newType === "income") setCat(INCOME_CATEGORIES[0].id);
+    else setCat(CATEGORIES[0].id);
+  };
+
+  const submit = () => {
+    const now = new Date();
+    const months = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
+    const date = `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
+    const time = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
+    const tx = {
+      id: "tx-" + Date.now(),
+      date,
+      time,
+      merchant: merchant.trim() || "—",
+      note: note.trim(),
+      category: cat,
+      method: "Tunai",
+      amount: type === "expense" ? -(+amount || 0) : (+amount || 0),
+    };
+    onSave?.(tx);
+    onClose();
+  };
+
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(42,44,32,.32)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 16, animation: "rise .25s ease-out" }} onClick={onClose}>
-      <div className="card" onClick={e => e.stopPropagation()} style={{ width: "min(480px, 100%)", padding: 24, animation: "rise .3s ease-out", boxShadow: "0 30px 80px -20px rgba(42,44,32,.4)" }}>
+    <div className="modal-backdrop" style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(42,44,32,.32)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 16, animation: "rise .25s ease-out" }} onClick={onClose}>
+      <div className="card modal-sheet" onClick={e => e.stopPropagation()} style={{ width: "min(480px, 100%)", padding: 24, animation: "rise .3s ease-out", boxShadow: "0 30px 80px -20px rgba(42,44,32,.4)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
             <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Entri baru</div>
@@ -157,7 +187,7 @@ export function AddTransactionModal({ open, onClose }) {
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, padding: 3, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 12, marginTop: 18 }}>
           {[{ id: "expense", label: "Pengeluaran" }, { id: "income", label: "Pemasukan" }].map(opt => (
-            <button key={opt.id} onClick={() => setType(opt.id)} style={{ padding: "10px 10px", fontSize: 13, background: type === opt.id ? "var(--ivory)" : "transparent", border: type === opt.id ? "1px solid var(--line-soft)" : "1px solid transparent", borderRadius: 9, color: type === opt.id ? "var(--ink)" : "var(--muted)", fontWeight: type === opt.id ? 500 : 400 }}>{opt.label}</button>
+            <button key={opt.id} onClick={() => switchType(opt.id)} style={{ padding: "10px 10px", fontSize: 13, background: type === opt.id ? "var(--ivory)" : "transparent", border: type === opt.id ? "1px solid var(--line-soft)" : "1px solid transparent", borderRadius: 9, color: type === opt.id ? "var(--ink)" : "var(--muted)", fontWeight: type === opt.id ? 500 : 400 }}>{opt.label}</button>
           ))}
         </div>
 
@@ -175,9 +205,7 @@ export function AddTransactionModal({ open, onClose }) {
             <input value={merchant} onChange={e => setMerchant(e.target.value)} placeholder="contoh: Kopi Tetangga" style={inputStyle} />
           </Field>
           <Field label="Kategori">
-            <select value={cat} onChange={e => setCat(e.target.value)} style={{ ...inputStyle, cursor: "pointer" }}>
-              {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-            </select>
+            <CategorySelect value={cat} onChange={setCat} categories={activeCats} />
           </Field>
           <Field label="Catatan (opsional)">
             <input value={note} onChange={e => setNote(e.target.value)} placeholder="Untuk apa?" style={inputStyle} />
@@ -190,7 +218,7 @@ export function AddTransactionModal({ open, onClose }) {
 
         <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
           <button onClick={onClose} style={{ flex: 1, padding: "13px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 12, fontSize: 14, color: "var(--ink-2)" }}>Batal</button>
-          <button onClick={onClose} style={{ flex: 2, padding: "13px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 14, fontWeight: 500 }}>Simpan transaksi</button>
+          <button onClick={submit} style={{ flex: 2, padding: "13px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 14, fontWeight: 500 }}>Simpan transaksi</button>
         </div>
       </div>
     </div>
@@ -205,5 +233,96 @@ function Field({ label, children }) {
       <span style={{ display: "block", fontSize: 11, color: "var(--muted)", letterSpacing: ".05em", textTransform: "uppercase", marginBottom: 6 }}>{label}</span>
       {children}
     </label>
+  );
+}
+
+function CategorySelect({ value, onChange, categories = CATEGORIES }) {
+  const [open, setOpen] = React.useState(false);
+  const [pos, setPos] = React.useState(null);
+  const wrapRef = React.useRef(null);
+  const selected = categories.find(c => c.id === value);
+
+  const toggle = () => {
+    if (!open && wrapRef.current) {
+      const r = wrapRef.current.getBoundingClientRect();
+      setPos({ top: r.bottom + 4, left: r.left, width: r.width });
+    }
+    setOpen(o => !o);
+  };
+
+  React.useEffect(() => {
+    if (!open) return;
+    const close = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("touchstart", close);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("touchstart", close);
+    };
+  }, [open]);
+
+  return (
+    <div ref={wrapRef}>
+      <button type="button" onClick={toggle}
+        style={{ ...inputStyle, display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          {selected && (
+            <span style={{ width: 10, height: 10, borderRadius: 3, background: selected.color, flexShrink: 0 }} />
+          )}
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {selected?.label || "Pilih kategori"}
+          </span>
+        </span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--muted)", flexShrink: 0, marginLeft: 6, transform: open ? "rotate(180deg)" : "none", transition: "transform .15s ease" }}>
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+
+      {open && pos && (
+        <div style={{
+          position: "fixed",
+          top: pos.top,
+          left: pos.left,
+          width: pos.width,
+          maxHeight: 200,
+          overflowY: "auto",
+          background: "var(--paper)",
+          border: "1px solid var(--line-soft)",
+          borderRadius: 10,
+          boxShadow: "0 8px 28px -8px rgba(42,44,32,.3)",
+          zIndex: 9999,
+        }}>
+          {categories.map((c, i) => (
+            <button key={c.id} type="button"
+              onClick={() => { onChange(c.id); setOpen(false); }}
+              style={{
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "10px 14px",
+                background: c.id === value ? "var(--ivory)" : "transparent",
+                border: 0,
+                borderBottom: i < categories.length - 1 ? "1px solid var(--line-soft)" : 0,
+                fontSize: 14,
+                color: "var(--ink)",
+                cursor: "pointer",
+                textAlign: "left",
+                fontFamily: "inherit",
+              }}>
+              <span style={{ width: 10, height: 10, borderRadius: 3, background: c.color, flexShrink: 0 }} />
+              {c.label}
+              {c.id === value && (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: "auto", color: "var(--sage)" }}>
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

@@ -11,7 +11,7 @@ import { TransactionsPage } from './transactions-page';
 import { TransactionsCard, AddTransactionModal } from './transactions';
 import { SettingsPage } from './settings-page';
 import { BudgetsPage } from './budgets-page';
-import { ACCOUNTS, GOALS } from './data';
+import { ACCOUNTS, GOALS, TRANSACTIONS } from './data';
 
 const TWEAK_DEFAULTS = {
   theme: "light",
@@ -78,6 +78,10 @@ export default function App() {
     setSelectedAcct(sel => sel === id ? "all" : sel);
   };
 
+  // Transactions state — new entries prepended so they appear at top.
+  const [transactions, setTransactions] = React.useState(TRANSACTIONS);
+  const createTransaction = (tx) => setTransactions(list => [tx, ...list]);
+
   // Savings goals state — create custom goals, deposit, delete.
   const [goals, setGoals] = React.useState(GOALS);
   const [addGoal, setAddGoal] = React.useState(false);
@@ -113,7 +117,7 @@ export default function App() {
 
             {t.showAI && <InsightsCard />}
 
-            <TransactionsCard onAdd={() => setModal(true)} limit={8} onSeeAll={() => setActive("transactions")} />
+            <TransactionsCard onAdd={() => setModal(true)} limit={8} onSeeAll={() => setActive("transactions")} transactions={transactions} />
             <SavingsCard goals={goals} onManage={() => setActive("savings")} />
             <BudgetsCard onManage={() => setActive("budgets")} />
           </div>
@@ -122,7 +126,7 @@ export default function App() {
         {active === "budgets" && <BudgetsPage />}
 
         {active === "wallets" && (
-          <WalletsPage accounts={accounts} onAdd={() => setAddAcct(true)} onSetPrimary={setPrimary} onDelete={deleteAccount} />
+          <WalletsPage accounts={accounts} onAdd={() => setAddAcct(true)} onSetPrimary={setPrimary} onDelete={deleteAccount} transactions={transactions} />
         )}
 
         {active === "reports" && <ReportsPage />}
@@ -134,7 +138,7 @@ export default function App() {
         )}
 
         {active === "transactions" && (
-          <TransactionsPage accounts={accounts} onAdd={() => setModal(true)} />
+          <TransactionsPage accounts={accounts} onAdd={() => setModal(true)} transactions={transactions} />
         )}
 
         {active === "settings" && <SettingsPage t={t} setTweak={setTweak} />}
@@ -142,7 +146,7 @@ export default function App() {
         {active !== "dashboard" && active !== "budgets" && active !== "wallets" && active !== "reports" && active !== "analytics" && active !== "savings" && active !== "transactions" && active !== "settings" && <Placeholder section={active} />}
       </main>
 
-      <AddTransactionModal open={modal} onClose={() => setModal(false)} />
+      <AddTransactionModal open={modal} onClose={() => setModal(false)} onSave={createTransaction} />
       <AddAccountModal open={addAcct} onClose={() => setAddAcct(false)} onCreate={createAccount} />
       <AddGoalModal open={addGoal} onClose={() => setAddGoal(false)} onCreate={createGoal} />
       <DepositModal goal={depositGoal} onClose={() => setDepositGoal(null)} onConfirm={depositToGoal} />

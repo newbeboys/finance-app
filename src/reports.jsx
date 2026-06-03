@@ -85,7 +85,7 @@ function buildReportDoc({ title, periodLabel, income, expense, net, cats, months
     `<tr><td>${m.full} ${m.year}</td><td class="num pos">${rupiah(m.income)}</td><td class="num neg">${rupiah(m.expense)}</td><td class="num">${rupiah(m.net)}</td></tr>`
   ).join("");
 
-  return `<!doctype html><html lang="id"><head><meta charset="utf-8"/>
+  return `<!doctype html><html lang="id"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>${title} — FinanceApp</title>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <style>
@@ -134,6 +134,16 @@ function buildReportDoc({ title, periodLabel, income, expense, net, cats, months
   .foot{margin-top:36px;padding-top:18px;border-top:1px solid var(--line);font-size:10.5px;color:var(--muted);display:flex;justify-content:space-between;}
   .badge{display:inline-block;font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--sage);background:rgba(92,107,76,.14);padding:3px 9px;border-radius:999px;}
   @media print{body{background:#fff;padding:0;}.page{box-shadow:none;max-width:none;padding:40px;}@page{margin:14mm;}}
+  @media(max-width:600px){
+    body{padding:0;background:var(--paper);}
+    .page{max-width:100%;padding:20px 16px 28px;box-shadow:none;}
+    .top{flex-direction:column;gap:10px;}.meta{text-align:left;}
+    .kpis{grid-template-columns:1fr 1fr;gap:8px;}.kpi .v{font-size:20px;}
+    h2.sec{font-size:16px;word-break:break-word;white-space:normal;}
+    .chart-row{flex-direction:column;align-items:flex-start;gap:12px;}.legend{grid-template-columns:1fr;}
+    .hlabel{width:90px;flex:0 0 90px;font-size:11px;}
+    .hval{width:32px;}
+  }
 </style></head><body>
 <div class="page">
   <div class="top">
@@ -226,21 +236,21 @@ function ReportPreview({ open, kind, rkey, onClose }) {
   if (!open) return null;
   const p = reportPayload(kind, rkey);
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(42,44,32,.4)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 24, animation: "rise .25s ease-out" }}>
-      <div onClick={e => e.stopPropagation()} style={{ width: 820, maxWidth: "100%", height: "88vh", display: "flex", flexDirection: "column", background: "var(--ivory)", borderRadius: 16, overflow: "hidden", boxShadow: "0 30px 80px -20px rgba(42,44,32,.5)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", borderBottom: "1px solid var(--line-soft)" }}>
-          <div>
+    <div className="report-preview-backdrop" onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(42,44,32,.4)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 24, animation: "rise .25s ease-out" }}>
+      <div className="report-preview-container" onClick={e => e.stopPropagation()} style={{ width: 820, maxWidth: "100%", height: "88vh", display: "flex", flexDirection: "column", background: "var(--ivory)", borderRadius: 16, overflow: "hidden", boxShadow: "0 30px 80px -20px rgba(42,44,32,.5)" }}>
+        <div className="report-preview-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", borderBottom: "1px solid var(--line-soft)", gap: 10, flexWrap: "wrap" }}>
+          <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{p.title}</div>
-            <div className="serif" style={{ fontSize: 22, letterSpacing: "-0.01em" }}>{p.periodLabel}</div>
+            <div className="serif" style={{ fontSize: 22, letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.periodLabel}</div>
           </div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <button onClick={() => printReport(kind, rkey)} style={{ padding: "9px 14px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10, fontSize: 12.5, display: "inline-flex", gap: 7, alignItems: "center" }}>
+          <div className="report-preview-actions" style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+            <button className="report-preview-btn-print" onClick={() => printReport(kind, rkey)} style={{ padding: "9px 14px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10, fontSize: 12.5, display: "inline-flex", gap: 7, alignItems: "center" }}>
               <IconReport size={14} /> Cetak / PDF
             </button>
             <button onClick={() => downloadReport(kind, rkey)} style={{ padding: "9px 14px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 10, fontSize: 12.5, display: "inline-flex", gap: 7, alignItems: "center" }}>
-              <IconArrowDown size={14} /> Unduh dokumen
+              <IconArrowDown size={14} /> <span className="report-preview-btn-label">Unduh</span>
             </button>
-            <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: 10, border: "1px solid var(--line-soft)", background: "var(--paper)", display: "grid", placeItems: "center", color: "var(--ink-2)" }}>
+            <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: 10, border: "1px solid var(--line-soft)", background: "var(--paper)", display: "grid", placeItems: "center", color: "var(--ink-2)", flexShrink: 0 }}>
               <IconClose size={15} />
             </button>
           </div>
