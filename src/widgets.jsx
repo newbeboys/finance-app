@@ -50,9 +50,9 @@ export function KpiCards({ balanceVisible, onToggleVisible, totalBalance, accoun
       {cards.map((c, i) => {
         const positive = c.deltaInverted ? c.delta < 0 : c.delta > 0;
         return (
-          <div key={i} className="card rise kpi-card" style={{ padding: isMobile ? 14 : 18, animationDelay: `${i * 0.05}s`, display: "flex", flexDirection: "column", gap: isMobile ? 8 : 12, minHeight: isMobile ? 120 : 156 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 4 }}>
-              <div className="kpi-label" style={{ fontSize: isMobile ? 10.5 : 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{c.label}</div>
+          <div key={i} className="card rise kpi-card" style={{ padding: isMobile ? 12 : 18, animationDelay: `${i * 0.05}s`, display: "flex", flexDirection: "column", gap: isMobile ? 6 : 12, minHeight: isMobile ? 0 : 156, overflow: "hidden", minWidth: 0, boxSizing: "border-box" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 4, minWidth: 0 }}>
+              <div className="kpi-label" style={{ fontSize: isMobile ? 10 : 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1 }}>{c.label}</div>
               {c.hero ? (
                 <button className="kpi-hide-btn" onClick={onToggleVisible} style={{ fontSize: 10.5, letterSpacing: ".05em", color: "var(--muted)", background: "transparent", border: 0, padding: 0, textTransform: "uppercase", minHeight: "auto", flexShrink: 0 }}>{balanceVisible ? "Hide" : "Show"}</button>
               ) : (
@@ -60,18 +60,20 @@ export function KpiCards({ balanceVisible, onToggleVisible, totalBalance, accoun
               )}
             </div>
 
-            <div>
-              <div className={c.hero ? "serif kpi-hero-val" : "serif kpi-value"} style={{ fontSize: c.hero ? (isMobile ? 22 : 38) : (isMobile ? 18 : 26), lineHeight: 1, letterSpacing: "-0.02em", color: "var(--ink)", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>
+            <div style={{ minWidth: 0, overflow: "hidden" }}>
+              <div className={c.hero ? "serif kpi-hero-val" : "serif kpi-value"} style={{ fontSize: c.hero ? (isMobile ? 20 : 38) : (isMobile ? 18 : 26), lineHeight: 1, letterSpacing: "-0.02em", color: "var(--ink)", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>
                 {c.hero && !balanceVisible ? "Rp ••••••" : fmtShort(c.value)}
               </div>
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: "auto", minWidth: 0 }}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 8px", borderRadius: 999, background: positive ? "rgba(92,107,76,.12)" : "rgba(178,106,74,.12)", color: positive ? "var(--sage)" : "var(--terra)", fontSize: 11, fontWeight: 500, flexShrink: 0 }}>
-                {c.delta > 0 ? <IconArrowUp size={11} /> : <IconArrowDown size={11} />}
-                {Math.abs(c.delta).toFixed(1)}%
-              </span>
-              <span className="kpi-sub" style={{ fontSize: 11.5, color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{c.sub}</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: "auto", minWidth: 0, overflow: "hidden" }}>
+              {c.delta !== 0 && (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 8px", borderRadius: 999, background: positive ? "rgba(92,107,76,.12)" : "rgba(178,106,74,.12)", color: positive ? "var(--sage)" : "var(--terra)", fontSize: 11, fontWeight: 500, flexShrink: 0 }}>
+                  {c.delta > 0 ? <IconArrowUp size={11} /> : <IconArrowDown size={11} />}
+                  {Math.abs(c.delta).toFixed(1)}%
+                </span>
+              )}
+              <span className="kpi-sub" style={{ fontSize: isMobile ? 10 : 11.5, color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{c.sub}</span>
             </div>
 
             {c.progress != null && (
