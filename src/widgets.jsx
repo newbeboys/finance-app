@@ -61,37 +61,148 @@ export function KpiCards({ balanceVisible, onToggleVisible, totalBalance, accoun
   );
 }
 
-export function CashflowCard() {
-  const [range, setRange] = React.useState("1Y");
-  const ranges = ["3M", "6M", "1Y"];
+const CF_MONTHS = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
+
+function computeCashflow(transactions, range, pickedMonth) {
+  if (!transactions || transactions.length === 0) return [];
+  const now = new Date();
+
+  if (pickedMonth || range === "1M") {
+    const yr  = pickedMonth ? pickedMonth.year  : now.getFullYear();
+    const mo  = pickedMonth ? pickedMonth.month : now.getMonth();
+    const days = new Date(yr, mo + 1, 0).getDate();
+    const pfx  = `${yr}-${String(mo + 1).padStart(2, "0")}-`;
+    return Array.from({ length: days }, (_, i) => {
+      const day = i + 1;
+      const iso = pfx + String(day).padStart(2, "0");
+      const txs = transactions.filter(t => t.dateRaw === iso);
+      const income  = txs.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+      const expense = txs.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+      return { m: String(day), income, expense, year: yr, month: mo };
+    });
+  }
+
+  const n = range === "1Y" ? 12 : 6;
+  return Array.from({ length: n }, (_, i) => {
+    const d  = new Date(now.getFullYear(), now.getMonth() - (n - 1 - i), 1);
+    const yr = d.getFullYear();
+    const mo = d.getMonth();
+    const pfx = `${yr}-${String(mo + 1).padStart(2, "0")}`;
+    const txs = transactions.filter(t => t.dateRaw && t.dateRaw.startsWith(pfx));
+    const income  = txs.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+    const expense = txs.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+    return { m: CF_MONTHS[mo], income, expense, year: yr, month: mo };
+  });
+}
+
+export function CashflowCard({ transactions = [] }) {
+  const [range, setRange] = React.useState("6M");
+  const [pickedMonth, setPickedMonth] = React.useState(null); // { year, month }
+  const [sheetOpen, setSheetOpen] = React.useState(false);
+
+  const cashflowData = React.useMemo(
+    () => computeCashflow(transactions, range, pickedMonth),
+    [transactions, range, pickedMonth]
+  );
+
+  const hasData = cashflowData.some(d => d.income > 0 || d.expense > 0);
+
+  // Daftar 24 bulan terakhir untuk Pilih Bulan sheet
+  const pickerMonths = React.useMemo(() => {
+    const now = new Date();
+    const list = [];
+    for (let i = 23; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      list.push({ year: d.getFullYear(), month: d.getMonth() });
+    }
+    // Kelompokkan per tahun, terbaru di atas
+    const byYear = {};
+    list.forEach(m => { (byYear[m.year] ||= []).push(m); });
+    return Object.entries(byYear).sort((a, b) => b[0] - a[0]);
+  }, []);
+
+  const pickedLabel = pickedMonth
+    ? `${CF_MONTHS[pickedMonth.month]} ${pickedMonth.year}`
+    : null;
+
+  const isPicked = pickedMonth !== null;
 
   return (
-    <div className="card rise span-2" style={{ padding: 22 }}>
-      <div className="cashflow-header" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8 }}>
-        <div>
-          <div className="cashflow-label" style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Arus kas</div>
-          <div className="serif cashflow-title" style={{ fontSize: 26, marginTop: 2, letterSpacing: "-0.01em" }}>Pemasukan vs. pengeluaran</div>
-          <div style={{ display: "flex", gap: 16, marginTop: 8, fontSize: 12, color: "var(--muted)" }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 2, background: "var(--sage)", display: "inline-block" }} /> Pemasukan</span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 2, background: "var(--terra)", display: "inline-block" }} /> Pengeluaran</span>
+    <>
+      <div className="card rise span-2" style={{ padding: 22 }}>
+        <div className="cashflow-header" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8, gap: 12, flexWrap: "wrap" }}>
+          <div>
+            <div className="cashflow-label" style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Arus kas</div>
+            <div className="serif cashflow-title" style={{ fontSize: 26, marginTop: 2, letterSpacing: "-0.01em" }}>Pemasukan vs. pengeluaran</div>
+            <div style={{ display: "flex", gap: 16, marginTop: 8, fontSize: 12, color: "var(--muted)" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 2, background: "var(--sage)", display: "inline-block" }} /> Pemasukan</span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 2, background: "var(--terra)", display: "inline-block", borderTop: "2px dashed var(--terra)" }} /> Pengeluaran</span>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+            {/* Range filter */}
+            <div className="cashflow-range-group" style={{ display: "flex", padding: 3, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10 }}>
+              {["1M", "6M", "1Y"].map(r => {
+                const active = !isPicked && range === r;
+                return (
+                  <button key={r} onClick={() => { setRange(r); setPickedMonth(null); }} className="cashflow-range-btn"
+                    style={{ padding: "5px 12px", fontSize: 12, background: active ? "var(--ivory)" : "transparent", border: active ? "1px solid var(--line-soft)" : "1px solid transparent", borderRadius: 8, color: active ? "var(--ink)" : "var(--muted)", fontWeight: active ? 500 : 400 }}>
+                    {r}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Pilih Bulan */}
+            <button onClick={() => setSheetOpen(true)}
+              style={{ padding: "5px 12px", fontSize: 12, background: isPicked ? "var(--ink)" : "var(--paper)", color: isPicked ? "var(--cream)" : "var(--ink-2)", border: "1px solid var(--line-soft)", borderRadius: 8, display: "inline-flex", alignItems: "center", gap: 6 }}>
+              {isPicked ? `${pickedLabel} ▾` : "Pilih Bulan ▾"}
+            </button>
           </div>
         </div>
-        <div className="cashflow-range-group" style={{ display: "flex", padding: 3, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10 }}>
-          {ranges.map(r => (
-            <button key={r} onClick={() => setRange(r)} className="cashflow-range-btn" style={{ padding: "5px 12px", fontSize: 12, background: range === r ? "var(--ivory)" : "transparent", border: range === r ? "1px solid var(--line-soft)" : "1px solid transparent", borderRadius: 8, color: range === r ? "var(--ink)" : "var(--muted)", fontWeight: range === r ? 500 : 400 }}>{r}</button>
-          ))}
-        </div>
+
+        {!hasData ? (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, height: 160, color: "var(--muted)" }}>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--line)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>
+            <div style={{ fontSize: 13 }}>Belum ada data arus kas</div>
+            <div style={{ fontSize: 12, opacity: 0.7 }}>Data akan muncul setelah kamu menambahkan transaksi</div>
+          </div>
+        ) : (
+          <CashflowChart data={cashflowData} />
+        )}
       </div>
-      {CASHFLOW.length === 0 ? (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, height: 160, color: "var(--muted)" }}>
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--line)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>
-          <div style={{ fontSize: 13, color: "var(--muted)" }}>Belum ada data arus kas</div>
-          <div style={{ fontSize: 12, color: "var(--muted)", opacity: 0.7 }}>Data akan muncul setelah kamu menambahkan transaksi</div>
-        </div>
-      ) : (
-        <CashflowChart data={CASHFLOW} range={range} />
+
+      {/* Bottom Sheet — Pilih Bulan */}
+      {sheetOpen && (
+        <>
+          <div onClick={() => setSheetOpen(false)}
+            style={{ position: "fixed", inset: 0, background: "rgba(42,44,32,.45)", zIndex: 150, animation: "rise .2s ease-out" }} />
+          <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "var(--ivory)", borderRadius: "16px 16px 0 0", padding: "20px 16px 80px", zIndex: 200, maxHeight: "55vh", overflowY: "auto", boxShadow: "0 -8px 32px -8px rgba(42,44,32,.2)", animation: "rise .25s ease-out" }}>
+            <div style={{ width: 36, height: 4, borderRadius: 99, background: "var(--line)", margin: "-8px auto 16px" }} />
+            <div style={{ fontSize: 11, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 14 }}>Pilih bulan</div>
+
+            {pickerMonths.map(([year, months]) => (
+              <div key={year} style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 10 }}>{year}</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+                  {months.map(m => {
+                    const active = pickedMonth?.year === m.year && pickedMonth?.month === m.month;
+                    return (
+                      <button key={`${m.year}-${m.month}`}
+                        onClick={() => { setPickedMonth(m); setSheetOpen(false); }}
+                        style={{ padding: "10px 0", borderRadius: 10, border: active ? 0 : "1px solid var(--line-soft)", background: active ? "var(--ink)" : "var(--paper)", color: active ? "var(--cream)" : "var(--ink)", fontSize: 13.5, fontWeight: active ? 600 : 400, fontFamily: "inherit", cursor: "pointer" }}>
+                        {CF_MONTHS[m.month]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
-    </div>
+    </>
   );
 }
 

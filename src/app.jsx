@@ -139,7 +139,7 @@ function AuthenticatedApp({ session }) {
               <KpiCards balanceVisible={balanceVisible} onToggleVisible={() => setBalanceVisible(v => !v)} totalBalance={totalBalance} accountCount={accounts.length} />
             </div>
 
-            <CashflowCard />
+            <CashflowCard transactions={transactions} />
             <SpendingCard />
 
             {t.showAI && <InsightsCard />}

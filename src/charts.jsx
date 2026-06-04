@@ -1,14 +1,18 @@
 import React from 'react';
 import { CASHFLOW, CATEGORIES, fmtShort } from './data';
 
-export function CashflowChart({ data, range }) {
-  const slice = range === "1Y" ? data : range === "6M" ? data.slice(-6) : data.slice(-3);
+export function CashflowChart({ data }) {
+  const slice = data; // filtering dilakukan di CashflowCard sebelum di-pass ke sini
 
   const W = 720, H = 240, P = { t: 20, r: 16, b: 28, l: 40 };
   const innerW = W - P.l - P.r;
   const innerH = H - P.t - P.b;
 
-  const max = Math.ceil(Math.max(...slice.map(d => Math.max(d.income, d.expense))) / 5_000_000) * 5_000_000 + 5_000_000;
+  const rawMax = Math.max(...slice.map(d => Math.max(d.income, d.expense)));
+  const base   = rawMax < 1_000_000 ? 500_000 : 5_000_000;
+  const max    = Math.ceil((rawMax || base) / base) * base + base;
+  const fmtY   = (v) => v >= 1_000_000 ? `${(v/1_000_000).toFixed(0)}jt` : `${(v/1_000).toFixed(0)}rb`;
+
   const x = (i) => P.l + (slice.length === 1 ? innerW/2 : (i * innerW) / (slice.length - 1));
   const y = (v) => P.t + innerH - (v / max) * innerH;
 
@@ -69,7 +73,7 @@ export function CashflowChart({ data, range }) {
                 stroke="var(--line-soft)" strokeDasharray="2 4" />
           <text x={P.l - 10} y={y(v)} dy="4" textAnchor="end"
                 fontSize="10.5" fill="var(--muted)" fontFamily="Geist, sans-serif">
-            {(v / 1_000_000).toFixed(0)}jt
+            {fmtY(v)}
           </text>
         </g>
       ))}
@@ -80,12 +84,15 @@ export function CashflowChart({ data, range }) {
       <path d={areaPath(expensePts)} fill="url(#expenseFill)" />
       <path d={smoothPath(expensePts)} fill="none" stroke="var(--terra)" strokeWidth="1.8" strokeDasharray="3 3" />
 
-      {slice.map((d, i) => (
-        <text key={i} x={x(i)} y={H - 8} textAnchor="middle" fontSize="10.5"
-              fill={hover === i ? "var(--ink)" : "var(--muted)"} fontFamily="Geist, sans-serif">
-          {d.m}
-        </text>
-      ))}
+      {slice.map((d, i) => {
+        const showLabel = slice.length <= 12 || i % 5 === 0 || i === slice.length - 1;
+        return showLabel ? (
+          <text key={i} x={x(i)} y={H - 8} textAnchor="middle" fontSize="10.5"
+                fill={hover === i ? "var(--ink)" : "var(--muted)"} fontFamily="Geist, sans-serif">
+            {d.m}
+          </text>
+        ) : null;
+      })}
 
       {hover !== null && (
         <g>
@@ -98,7 +105,9 @@ export function CashflowChart({ data, range }) {
             return (
               <g transform={`translate(${tx}, ${P.t + 6})`}>
                 <rect width="152" height="56" rx="8" fill="var(--paper)" stroke="var(--line-soft)" />
-                <text x="10" y="16" fontSize="10.5" fill="var(--muted)" fontFamily="Geist, sans-serif">{slice[hover].m} 2026</text>
+                <text x="10" y="16" fontSize="10.5" fill="var(--muted)" fontFamily="Geist, sans-serif">
+                  {slice[hover].m}{slice[hover].year ? ` ${slice[hover].year}` : ""}
+                </text>
                 <circle cx="14" cy="30" r="3" fill="var(--sage)" />
                 <text x="22" y="33" fontSize="11" fill="var(--ink)" fontFamily="Geist, sans-serif">
                   Masuk <tspan fontWeight="600">{fmtShort(slice[hover].income)}</tspan>

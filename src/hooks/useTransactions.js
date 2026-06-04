@@ -9,6 +9,7 @@ function toAppTx(row) {
   return {
     id:       row.id,
     date:     `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`,
+    dateRaw:  row.date,   // ISO: "2026-06-04" — dipakai untuk grouping cashflow
     time:     row.time     || '00:00',
     merchant: row.merchant || '—',
     note:     row.note     || '',
