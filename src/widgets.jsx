@@ -61,8 +61,8 @@ export function KpiCards({ balanceVisible, onToggleVisible, totalBalance, accoun
             </div>
 
             <div>
-              <div className={c.hero ? "serif kpi-hero-val" : "serif kpi-value"} style={{ fontSize: c.hero ? (isMobile ? 22 : 38) : (isMobile ? 18 : (c.value >= 1_000_000 ? 26 : 30)), lineHeight: 1, letterSpacing: "-0.02em", color: "var(--ink)", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
-                {c.hero && !balanceVisible ? "Rp ••••••" : (c.hero ? fmtShort(c.value) : fmt(c.value))}
+              <div className={c.hero ? "serif kpi-hero-val" : "serif kpi-value"} style={{ fontSize: c.hero ? (isMobile ? 22 : 38) : (isMobile ? 18 : 26), lineHeight: 1, letterSpacing: "-0.02em", color: "var(--ink)", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>
+                {c.hero && !balanceVisible ? "Rp ••••••" : fmtShort(c.value)}
               </div>
             </div>
 
