@@ -1,5 +1,11 @@
 {
   "appId": "com.Financeapp.app",
   "appName": "FinanceApp",
-  "webDir": "dist"
+  "webDir": "dist",
+  "plugins": {
+    "StatusBar": {
+      "style": "DEFAULT",
+      "backgroundColor": "#EAE5D5"
+    }
+  }
 }

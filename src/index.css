@@ -17,6 +17,9 @@
   --gold:         #B68A3E;
   --blush:        #C9886D;
 
+  --safe-area-top:    env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+
   --r-sm: 8px;
   --r-md: 14px;
   --r-lg: 20px;
@@ -50,6 +53,7 @@ html.dark {
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; overflow-x: hidden; }
 body {
+  padding-top: env(safe-area-inset-top, 0px);
   font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
   background: var(--cream);
   color: var(--ink);
