@@ -158,7 +158,7 @@ function AuthenticatedApp({ session }) {
 
         {active === "reports" && <ReportsPage />}
 
-        {active === "analytics" && <AnalyticsPage />}
+        {active === "analytics" && <AnalyticsPage transactions={transactions} />}
 
         {active === "savings" && (
           <SavingsPage goals={goals} onAdd={() => setAddGoal(true)} onDeposit={setDepositGoal} onDelete={deleteGoal} />
