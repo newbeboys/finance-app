@@ -451,7 +451,16 @@ export function BudgetsCard({ onManage, transactions = [] }) {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {budgets.slice(0, 4).map(b => {
-            const computedSpent = spentByCategory[b.categoryId] ?? b.spent ?? 0;
+            const bl = (b.label || '').toLowerCase().trim();
+            const matchedCat = !b.categoryId && CATEGORIES.find(c => {
+              const cl = c.label.toLowerCase();
+              return cl === bl || cl.startsWith(bl) || bl.startsWith(cl.split(' ')[0]);
+            });
+            const computedSpent = b.categoryId
+              ? (spentByCategory[b.categoryId] || 0)
+              : matchedCat
+                ? (spentByCategory[matchedCat.id] || 0)
+                : (b.spent ?? 0);
             const pct = Math.min(computedSpent / b.limit, 1.15);
             const over = computedSpent > b.limit;
             return (

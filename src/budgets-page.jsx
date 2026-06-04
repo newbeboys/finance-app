@@ -39,7 +39,18 @@ export function BudgetsPage({ transactions = [] }) {
     return map;
   }, [transactions]);
 
-  const getSpent = (r) => spentByCategory[r.categoryId] ?? r.spent ?? 0;
+  // 1. Match langsung via categoryId (budget baru)
+  // 2. Fuzzy match via label case-insensitive (budget lama tanpa categoryId)
+  // 3. Fallback ke nilai stored r.spent
+  const getSpent = (r) => {
+    if (r.categoryId) return spentByCategory[r.categoryId] || 0;
+    const bl = (r.label || '').toLowerCase().trim();
+    const match = CATEGORIES.find(c => {
+      const cl = c.label.toLowerCase();
+      return cl === bl || cl.startsWith(bl) || bl.startsWith(cl.split(' ')[0]);
+    });
+    return (match ? spentByCategory[match.id] : undefined) ?? r.spent ?? 0;
+  };
 
   const setLimit  = (id, limit) => setRows(rs => rs.map(r => r.id === id ? { ...r, limit: Math.max(0, limit) } : r));
   const toggle    = (id)        => setRows(rs => rs.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r));
