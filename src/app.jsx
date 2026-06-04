@@ -146,11 +146,11 @@ function AuthenticatedApp({ session }) {
 
             <TransactionsCard onAdd={() => setModal(true)} limit={8} onSeeAll={() => setActive("transactions")} transactions={transactions} loading={txLoading} />
             <SavingsCard goals={goals} onManage={() => setActive("savings")} />
-            <BudgetsCard onManage={() => setActive("budgets")} />
+            <BudgetsCard onManage={() => setActive("budgets")} transactions={transactions} />
           </div>
         )}
 
-        {active === "budgets" && <BudgetsPage />}
+        {active === "budgets" && <BudgetsPage transactions={transactions} />}
 
         {active === "wallets" && (
           <WalletsPage accounts={accounts} onAdd={() => setAddAcct(true)} onSetPrimary={setPrimary} onDelete={deleteAccount} transactions={transactions} />

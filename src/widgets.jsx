@@ -402,7 +402,7 @@ export function SavingsCard({ goals = GOALS, onManage }) {
   );
 }
 
-export function BudgetsCard({ onManage }) {
+export function BudgetsCard({ onManage, transactions = [] }) {
   const [budgets, setBudgets] = React.useState(() => {
     try { return JSON.parse(localStorage.getItem('finance_budgets') || '[]').filter(b => b.enabled); }
     catch { return []; }
@@ -417,11 +417,26 @@ export function BudgetsCard({ onManage }) {
     return () => window.removeEventListener('storage', refresh);
   }, []);
 
+  // Hitung pengeluaran aktual per category dari transaksi bulan ini
+  const spentByCategory = React.useMemo(() => {
+    const now = new Date();
+    const pfx = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const map = {};
+    transactions.forEach(tx => {
+      if (tx.amount < 0 && tx.dateRaw && tx.dateRaw.startsWith(pfx)) {
+        map[tx.category] = (map[tx.category] || 0) + Math.abs(tx.amount);
+      }
+    });
+    return map;
+  }, [transactions]);
+
   return (
     <div className="card rise" style={{ padding: 22 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 16 }}>
         <div>
-          <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Anggaran · Mei</div>
+          <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>
+            Anggaran · {new Date().toLocaleDateString('id-ID', { month: 'long' })}
+          </div>
           <div className="serif" style={{ fontSize: 22, marginTop: 2, letterSpacing: "-0.01em" }}>Posisi kamu sekarang</div>
         </div>
         <button style={ghostBtn} onClick={onManage}>Atur</button>
@@ -436,16 +451,17 @@ export function BudgetsCard({ onManage }) {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {budgets.slice(0, 4).map(b => {
-            const pct = Math.min(b.spent / b.limit, 1.15);
-            const over = b.spent > b.limit;
+            const computedSpent = spentByCategory[b.categoryId] ?? b.spent ?? 0;
+            const pct = Math.min(computedSpent / b.limit, 1.15);
+            const over = computedSpent > b.limit;
             return (
               <div key={b.id}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13 }}>
-                    <CatIcon kind={b.id} size={14} /> {b.label}
+                    <CatIcon kind={b.categoryId || b.id} size={14} /> {b.label}
                   </span>
                   <span className="tnum" style={{ fontSize: 12.5, color: over ? "var(--terra)" : "var(--muted)" }}>
-                    <span style={{ color: "var(--ink)", fontWeight: 500 }}>{fmtShort(b.spent)}</span>{" / "}{fmtShort(b.limit)}
+                    <span style={{ color: "var(--ink)", fontWeight: 500 }}>{fmtShort(computedSpent)}</span>{" / "}{fmtShort(b.limit)}
                   </span>
                 </div>
                 <div style={{ height: 6, background: "var(--line-soft)", borderRadius: 99, overflow: "hidden", position: "relative" }}>

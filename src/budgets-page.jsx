@@ -1,5 +1,5 @@
 import React from 'react';
-import { fmt, fmtShort } from './data';
+import { fmt, fmtShort, CATEGORIES } from './data';
 import { IconPlus, IconSpark, IconClose, CatIcon } from './icons';
 import { useIsMobile } from './use-mobile';
 
@@ -14,7 +14,7 @@ function loadBudgets() {
   }
 }
 
-export function BudgetsPage() {
+export function BudgetsPage({ transactions = [] }) {
   const isMobile = useIsMobile();
 
   const [rows, setRows] = React.useState(loadBudgets);
@@ -26,6 +26,21 @@ export function BudgetsPage() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(rows)); } catch {}
   }, [rows]);
 
+  // Hitung pengeluaran aktual per category dari transaksi bulan ini
+  const spentByCategory = React.useMemo(() => {
+    const now = new Date();
+    const pfx = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const map = {};
+    transactions.forEach(tx => {
+      if (tx.amount < 0 && tx.dateRaw && tx.dateRaw.startsWith(pfx)) {
+        map[tx.category] = (map[tx.category] || 0) + Math.abs(tx.amount);
+      }
+    });
+    return map;
+  }, [transactions]);
+
+  const getSpent = (r) => spentByCategory[r.categoryId] ?? r.spent ?? 0;
+
   const setLimit  = (id, limit) => setRows(rs => rs.map(r => r.id === id ? { ...r, limit: Math.max(0, limit) } : r));
   const toggle    = (id)        => setRows(rs => rs.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r));
   const deleteRow = (id)        => setRows(rs => rs.filter(r => r.id !== id));
@@ -34,9 +49,12 @@ export function BudgetsPage() {
   const visibleRows = rows.filter(r => (r.periode || "monthly") === period);
   const active      = visibleRows.filter(r => r.enabled);
   const totalLimit  = active.reduce((s, r) => s + r.limit, 0);
-  const totalSpent  = active.reduce((s, r) => s + r.spent, 0);
+  const totalSpent  = active.reduce((s, r) => s + getSpent(r), 0);
   const totalPct    = totalLimit ? totalSpent / totalLimit : 0;
-  const overCount   = active.filter(r => r.spent > r.limit).length;
+  const overCount   = active.filter(r => getSpent(r) > r.limit).length;
+
+  // Tanggal otomatis
+  const monthLabel = new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }).toUpperCase();
 
   return (
     <div className="page-wrap" style={{ padding: "16px 32px 48px", display: "grid", gridTemplateColumns: "1fr", gap: 20, maxWidth: 1180, margin: "0 auto" }}>
@@ -44,7 +62,7 @@ export function BudgetsPage() {
       {/* ── Page header ── */}
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div>
-          <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Anggaran · Mei 2026</div>
+          <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Anggaran · {monthLabel}</div>
           <h2 className="serif" style={{ fontSize: isMobile ? 26 : 34, margin: "4px 0 0", letterSpacing: "-0.015em" }}>Atur anggaran bulanan</h2>
           {!isMobile && (
             <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 6, maxWidth: 520, lineHeight: 1.5 }}>
@@ -166,8 +184,9 @@ export function BudgetsPage() {
             )}
 
             {visibleRows.map((r, i) => {
-              const pct = r.limit ? r.spent / r.limit : 0;
-              const over = r.spent > r.limit;
+              const computedSpent = getSpent(r);
+              const pct = r.limit ? computedSpent / r.limit : 0;
+              const over = computedSpent > r.limit;
               const isEditing = editing === r.id;
 
               if (isMobile) {
@@ -175,12 +194,12 @@ export function BudgetsPage() {
                   <div key={r.id} style={{ padding: "16px 0", borderBottom: i < visibleRows.length - 1 ? "1px solid var(--line-soft)" : 0, opacity: r.enabled ? 1 : 0.5, transition: "opacity .2s ease" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
                       <span style={{ width: 38, height: 38, borderRadius: 10, flexShrink: 0, background: `color-mix(in oklch, ${r.color} 16%, var(--ivory))`, color: r.color, display: "grid", placeItems: "center" }}>
-                        <CatIcon kind={r.id} size={17} />
+                        <CatIcon kind={r.categoryId || r.id} size={17} />
                       </span>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 14, fontWeight: 500 }}>{r.label}</div>
                         <div className="tnum" style={{ fontSize: 12, color: over ? "var(--terra)" : "var(--muted)", marginTop: 1 }}>
-                          {fmtShort(r.spent)} <span style={{ color: "var(--muted-2)" }}>dari</span> {fmtShort(r.limit)}
+                          {fmtShort(computedSpent)} <span style={{ color: "var(--muted-2)" }}>dari</span> {fmtShort(r.limit)}
                           {over && <span style={{ marginLeft: 6, color: "var(--terra)" }}>• over!</span>}
                         </div>
                       </div>
@@ -197,7 +216,7 @@ export function BudgetsPage() {
                     </div>
                     {r.enabled && (
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <input type="range" min="0" max={Math.max(r.spent * 2, 2_000_000)} step="50000"
+                        <input type="range" min="0" max={Math.max(computedSpent * 2, 2_000_000)} step="50000"
                           value={r.limit} onChange={e => setLimit(r.id, +e.target.value)}
                           style={{ flex: 1, accentColor: r.color, cursor: "pointer", height: 20 }} />
                         {isEditing ? (
@@ -222,11 +241,11 @@ export function BudgetsPage() {
                 <div key={r.id} style={{ display: "grid", gridTemplateColumns: "minmax(200px,1.4fr) 1.6fr 150px 90px 48px", alignItems: "center", gap: 16, padding: "16px 0", borderBottom: i < visibleRows.length - 1 ? "1px solid var(--line-soft)" : 0, opacity: r.enabled ? 1 : 0.5, transition: "opacity .2s ease" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
                     <span style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: `color-mix(in oklch, ${r.color} 16%, var(--ivory))`, color: r.color, display: "grid", placeItems: "center" }}>
-                      <CatIcon kind={r.id} size={16} />
+                      <CatIcon kind={r.categoryId || r.id} size={16} />
                     </span>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 13.5, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.label}</div>
-                      <div className="tnum" style={{ fontSize: 11.5, color: over ? "var(--terra)" : "var(--muted)" }}>Terpakai {fmtShort(r.spent)}</div>
+                      <div className="tnum" style={{ fontSize: 11.5, color: over ? "var(--terra)" : "var(--muted)" }}>Terpakai {fmtShort(computedSpent)}</div>
                     </div>
                   </div>
 
@@ -235,7 +254,7 @@ export function BudgetsPage() {
                       <div style={{ height: "100%", width: `${Math.min(pct, 1) * 100}%`, background: over ? "var(--terra)" : r.color, borderRadius: 99, transition: "width .35s ease" }} />
                     </div>
                     {r.enabled && (
-                      <input type="range" min="0" max={Math.max(r.spent * 2, 2_000_000)} step="50000"
+                      <input type="range" min="0" max={Math.max(computedSpent * 2, 2_000_000)} step="50000"
                         value={r.limit} onChange={e => setLimit(r.id, +e.target.value)}
                         style={{ width: "100%", marginTop: 8, accentColor: r.color, cursor: "pointer" }} />
                     )}
@@ -289,6 +308,7 @@ export function BudgetsPage() {
       {showAddModal && (
         <AddBudgetModal
           defaultPeriod={period}
+          existingCategoryIds={rows.map(r => r.categoryId).filter(Boolean)}
           onClose={() => setShowAddModal(false)}
           onAdd={row => { setRows(rs => [...rs, row]); setShowAddModal(false); }}
         />
@@ -299,16 +319,34 @@ export function BudgetsPage() {
 
 const PRESET_COLORS = ["var(--sage)", "var(--terra)", "var(--gold)", "var(--blush)", "var(--muted)"];
 
-function AddBudgetModal({ onClose, onAdd, defaultPeriod = "monthly" }) {
-  const [name, setName] = React.useState("");
-  const [limit, setLimit] = React.useState("");
-  const [color, setColor] = React.useState(PRESET_COLORS[0]);
-  const [periode, setPeriode] = React.useState(defaultPeriod);
-  const valid = name.trim().length > 0 && +limit > 0;
+function AddBudgetModal({ onClose, onAdd, defaultPeriod = "monthly", existingCategoryIds = [] }) {
+  const [selectedCatId, setSelectedCatId] = React.useState("");
+  const [customName, setCustomName]       = React.useState("");
+  const [limit, setLimit]                 = React.useState("");
+  const [periode, setPeriode]             = React.useState(defaultPeriod);
+  const [customColor, setCustomColor]     = React.useState(PRESET_COLORS[0]);
+
+  const isCustom    = selectedCatId === "__custom__";
+  const selectedCat = CATEGORIES.find(c => c.id === selectedCatId);
+  const label       = isCustom ? customName.trim() : (selectedCat?.label || "");
+  const color       = isCustom ? customColor : (selectedCat?.color || "var(--sage)");
+  const categoryId  = isCustom ? null : selectedCatId || null;
+
+  const availableCats = CATEGORIES.filter(c => !existingCategoryIds.includes(c.id));
+  const valid = label.length > 0 && +limit > 0 && selectedCatId !== "";
 
   const submit = () => {
     if (!valid) return;
-    onAdd({ id: `custom-${Date.now()}`, label: name.trim(), color, spent: 0, limit: +limit, enabled: true, periode });
+    onAdd({
+      id: `cat-${Date.now()}`,
+      categoryId,
+      label,
+      color,
+      spent: 0,
+      limit: +limit,
+      enabled: true,
+      periode,
+    });
   };
 
   return (
@@ -328,13 +366,31 @@ function AddBudgetModal({ onClose, onAdd, defaultPeriod = "monthly" }) {
         </div>
 
         <div style={{ display: "grid", gap: 14 }}>
+          {/* Category selector */}
           <label style={{ display: "block" }}>
-            <span style={{ display: "block", fontSize: 11, color: "var(--muted)", letterSpacing: ".05em", textTransform: "uppercase", marginBottom: 6 }}>Nama kategori</span>
-            <input autoFocus value={name} onChange={e => setName(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && submit()}
-              placeholder="contoh: Makanan, Transportasi, Hiburan…"
-              style={{ width: "100%", padding: "11px 12px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10, color: "var(--ink)", fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
+            <span style={{ display: "block", fontSize: 11, color: "var(--muted)", letterSpacing: ".05em", textTransform: "uppercase", marginBottom: 6 }}>Kategori</span>
+            <select autoFocus value={selectedCatId} onChange={e => setSelectedCatId(e.target.value)}
+              style={{ width: "100%", padding: "11px 12px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10, color: selectedCatId ? "var(--ink)" : "var(--muted)", fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box", cursor: "pointer" }}>
+              <option value="">Pilih kategori…</option>
+              {availableCats.map(c => (
+                <option key={c.id} value={c.id}>{c.label}</option>
+              ))}
+              <option value="__custom__">Kustom (nama bebas)</option>
+            </select>
           </label>
+
+          {/* Custom name input — hanya muncul jika pilih Kustom */}
+          {isCustom && (
+            <label style={{ display: "block" }}>
+              <span style={{ display: "block", fontSize: 11, color: "var(--muted)", letterSpacing: ".05em", textTransform: "uppercase", marginBottom: 6 }}>Nama kategori kustom</span>
+              <input autoFocus value={customName} onChange={e => setCustomName(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && submit()}
+                placeholder="Contoh: Rokok, Laundry, Investasi…"
+                style={{ width: "100%", padding: "11px 12px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10, color: "var(--ink)", fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
+            </label>
+          )}
+
+          {/* Limit */}
           <label style={{ display: "block" }}>
             <span style={{ display: "block", fontSize: 11, color: "var(--muted)", letterSpacing: ".05em", textTransform: "uppercase", marginBottom: 6 }}>Batas anggaran (Rp)</span>
             <input value={limit} onChange={e => setLimit(e.target.value.replace(/[^\d]/g, ""))}
@@ -342,6 +398,8 @@ function AddBudgetModal({ onClose, onAdd, defaultPeriod = "monthly" }) {
               placeholder="500000"
               style={{ width: "100%", padding: "11px 12px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10, color: "var(--ink)", fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
           </label>
+
+          {/* Periode */}
           <div>
             <span style={{ display: "block", fontSize: 11, color: "var(--muted)", letterSpacing: ".05em", textTransform: "uppercase", marginBottom: 8 }}>Periode</span>
             <div style={{ display: "flex", padding: 3, background: "var(--ivory)", border: "1px solid var(--line-soft)", borderRadius: 10 }}>
@@ -353,15 +411,19 @@ function AddBudgetModal({ onClose, onAdd, defaultPeriod = "monthly" }) {
               ))}
             </div>
           </div>
-          <div>
-            <span style={{ display: "block", fontSize: 11, color: "var(--muted)", letterSpacing: ".05em", textTransform: "uppercase", marginBottom: 8 }}>Warna</span>
-            <div style={{ display: "flex", gap: 8 }}>
-              {PRESET_COLORS.map(c => (
-                <button key={c} onClick={() => setColor(c)}
-                  style={{ width: 28, height: 28, borderRadius: "50%", border: color === c ? "2px solid var(--ink)" : "2px solid transparent", background: c, cursor: "pointer", outline: color === c ? "2px solid var(--ivory)" : "none", outlineOffset: "-4px" }} />
-              ))}
+
+          {/* Warna kustom — hanya untuk kategori kustom */}
+          {isCustom && (
+            <div>
+              <span style={{ display: "block", fontSize: 11, color: "var(--muted)", letterSpacing: ".05em", textTransform: "uppercase", marginBottom: 8 }}>Warna</span>
+              <div style={{ display: "flex", gap: 8 }}>
+                {PRESET_COLORS.map(c => (
+                  <button key={c} onClick={() => setCustomColor(c)}
+                    style={{ width: 28, height: 28, borderRadius: "50%", border: customColor === c ? "2px solid var(--ink)" : "2px solid transparent", background: c, cursor: "pointer", outline: customColor === c ? "2px solid var(--ivory)" : "none", outlineOffset: "-4px" }} />
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <div style={{ display: "flex", gap: 10, marginTop: 22 }}>
