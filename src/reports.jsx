@@ -148,7 +148,7 @@ function buildReportDoc({ title, periodLabel, income, expense, net, cats, months
 <div class="page">
   <div class="top">
     <div class="brand"><div class="mark">F</div><div><h1>FinanceApp</h1><div class="tag">Less spending · More living</div></div></div>
-    <div class="meta">Dibuat ${new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}<br/>Adelia N. · adelia@studio.co<br/><span class="badge">Gratis untuk semua</span></div>
+    <div class="meta">Dibuat ${new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}<br/>FinanceApp<br/><span class="badge">Gratis untuk semua</span></div>
   </div>
   <div class="eyebrow">${title}</div>
   <div class="serif title">Laporan Keuangan</div>

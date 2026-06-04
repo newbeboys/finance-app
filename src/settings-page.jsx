@@ -1,5 +1,6 @@
 import React from 'react';
 import { IconCheck } from './icons';
+import { supabase } from './supabase';
 
 // ── Halaman Pengaturan (Settings) ──────────────────────────────────
 // Reads & writes the same tweak state (theme, palette, sidebar, showAI,
@@ -79,11 +80,18 @@ const PALETTE_SWATCHES = [
   { id: "bone",  label: "Bone",  hint: "Netral", c: "#EFEBDF" },
 ];
 
-export function SettingsPage({ t, setTweak }) {
+export function SettingsPage({ t, setTweak, user }) {
   const notifOn = t.notifications !== false;
-  // sub-preferences kept locally for realism
   const [subs, setSubs] = React.useState({ budget: true, income: true, weekly: true, bills: false });
   const toggleSub = (k) => setSubs(s => ({ ...s, [k]: !s[k] }));
+  const [loggingOut, setLoggingOut] = React.useState(false);
+
+  const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Pengguna';
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    await supabase.auth.signOut();
+  }
 
   return (
     <div className="page-wrap" style={{ padding: "16px 32px 48px", maxWidth: 760, margin: "0 auto" }}>
@@ -96,6 +104,25 @@ export function SettingsPage({ t, setTweak }) {
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {/* Account */}
+        <SettingCard eyebrow="Akun" title="Profil & sesi">
+          <SettingRow title="Nama" desc={displayName}>
+            <span style={{ fontSize: 13, color: "var(--muted)" }} />
+          </SettingRow>
+          <SettingRow title="Email" desc={user?.email || '—'}>
+            <span style={{ fontSize: 13, color: "var(--muted)" }} />
+          </SettingRow>
+          <SettingRow title="Keluar dari akun" desc="Kamu akan diarahkan ke halaman login." last>
+            <button
+              onClick={handleLogout}
+              disabled={loggingOut}
+              style={{ padding: "9px 18px", fontSize: 13, fontWeight: 500, background: "color-mix(in oklch, var(--terra) 12%, transparent)", color: "var(--terra)", border: "1px solid color-mix(in oklch, var(--terra) 28%, transparent)", borderRadius: 10, cursor: loggingOut ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: loggingOut ? 0.6 : 1 }}
+            >
+              {loggingOut ? "Keluar…" : "Logout"}
+            </button>
+          </SettingRow>
+        </SettingCard>
+
         {/* Appearance */}
         <SettingCard eyebrow="Tampilan" title="Tema & warna">
           <SettingRow title="Mode tampilan" desc="Pilih tema terang atau gelap untuk seluruh aplikasi.">

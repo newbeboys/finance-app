@@ -5,7 +5,7 @@ import { IconFilter, IconPlus, IconArrowRight, IconClose, CatIcon } from './icon
 import { ghostBtn } from './widgets';
 import { useIsMobile } from './use-mobile';
 
-export function TransactionsCard({ onAdd, limit, onSeeAll, transactions: txProp }) {
+export function TransactionsCard({ onAdd, limit, onSeeAll, transactions: txProp, loading = false }) {
   const transactions = txProp ?? TRANSACTIONS;
   const isMobile = useIsMobile();
   const [filter, setFilter] = React.useState("all");
@@ -61,6 +61,23 @@ export function TransactionsCard({ onAdd, limit, onSeeAll, transactions: txProp 
 
       {/* Mobile: simple divider */}
       {isMobile && <div style={{ borderBottom: "1px solid var(--line-soft)", marginBottom: 2 }} />}
+
+      {loading && transactions.length === 0 && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "32px 16px", color: "var(--muted)", fontSize: 13 }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ animation: "spin 1s linear infinite" }}>
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+          </svg>
+          Memuat transaksi…
+        </div>
+      )}
+
+      {!loading && filtered.length === 0 && (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "32px 16px", textAlign: "center" }}>
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--line)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" /><rect x="9" y="3" width="6" height="4" rx="1" /><path d="M9 12h6M9 16h4" /></svg>
+          <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink-2)" }}>Belum ada transaksi</div>
+          <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.5 }}>Mulai tambahkan transaksi pertamamu</div>
+        </div>
+      )}
 
       {Object.entries(grouped).map(([date, items]) => (
         <div key={date}>
@@ -124,7 +141,7 @@ export function TransactionsCard({ onAdd, limit, onSeeAll, transactions: txProp 
 
       <div style={{ padding: "14px 4px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ fontSize: 12, color: "var(--muted)" }}>
-          {isMobile ? `${filtered.length} transaksi` : `Menampilkan ${filtered.length} dari ${TRANSACTIONS.length} transaksi`}
+          {isMobile ? `${filtered.length} transaksi` : `Menampilkan ${filtered.length} dari ${transactions.length} transaksi`}
         </div>
         <button onClick={onSeeAll} style={{ ...ghostBtn, padding: "8px 14px", display: "inline-flex", alignItems: "center", gap: 6 }}>
           Lihat semua <IconArrowRight size={12} />
@@ -202,7 +219,7 @@ export function AddTransactionModal({ open, onClose, onSave }) {
 
         <div style={{ display: "grid", gap: 12, marginTop: 20 }}>
           <Field label="Merchant">
-            <input value={merchant} onChange={e => setMerchant(e.target.value)} placeholder="contoh: Kopi Tetangga" style={inputStyle} />
+            <input value={merchant} onChange={e => setMerchant(e.target.value)} placeholder="nama merchant" style={inputStyle} />
           </Field>
           <Field label="Kategori">
             <CategorySelect value={cat} onChange={setCat} categories={activeCats} />

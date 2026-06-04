@@ -3,28 +3,31 @@ import { IconSearch, IconBell, IconSun, IconMoon, IconPlus } from './icons';
 import { AccountSwitcher } from './wallets';
 import { useIsMobile } from './use-mobile';
 
-export function TopBar({ theme, onTheme, onAdd, accounts, selectedAcct, onSelectAcct, onAddAcct, notifEnabled }) {
+export function TopBar({ theme, onTheme, onAdd, accounts, selectedAcct, onSelectAcct, onAddAcct, notifEnabled, user }) {
   const [q, setQ] = React.useState("");
   const [bell, setBell] = React.useState(false);
   const isMobile = useIsMobile();
+
+  const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Pengguna';
+
+  const tanggal = new Date().toLocaleDateString('id-ID', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  }).toUpperCase();
 
   if (isMobile) {
     return (
       <header style={{ display: "flex", alignItems: "center", gap: 10, padding: "16px 16px 10px", position: "relative" }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 11, color: "var(--muted)", letterSpacing: ".05em", textTransform: "uppercase" }}>
-            Rabu, 27 Mei
+            {tanggal}
           </div>
           <h1 className="serif" style={{ fontSize: 22, margin: "2px 0 0", letterSpacing: "-0.015em", lineHeight: 1.15 }}>
-            Selamat pagi, Adelia.
+            Selamat pagi, {displayName}.
           </h1>
         </div>
 
         <button onClick={() => setBell(b => !b)} aria-label="Notifications" style={{ ...iconBtnMobile }}>
           <IconBell size={19} />
-          {notifEnabled !== false && (
-            <span style={{ position: "absolute", top: 9, right: 9, width: 7, height: 7, borderRadius: "50%", background: "var(--terra)", boxShadow: "0 0 0 2px var(--cream)" }} />
-          )}
         </button>
 
         <button onClick={onTheme} aria-label="Toggle tema" style={iconBtnMobile}>
@@ -45,11 +48,10 @@ export function TopBar({ theme, onTheme, onAdd, accounts, selectedAcct, onSelect
     <header style={{ display: "flex", alignItems: "center", gap: 16, padding: "20px 32px 8px" }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 12, color: "var(--muted)", letterSpacing: ".05em", textTransform: "uppercase" }}>
-          Rabu, 27 Mei
+          {tanggal}
         </div>
         <h1 className="serif" style={{ fontSize: 30, margin: "4px 0 0", letterSpacing: "-0.015em", lineHeight: 1.1 }}>
-          Selamat pagi, Adelia.
-          <span style={{ color: "var(--muted)", fontStyle: "italic" }}> Ini ringkasan keuanganmu.</span>
+          Selamat pagi, {displayName}.
         </h1>
       </div>
 
@@ -71,9 +73,6 @@ export function TopBar({ theme, onTheme, onAdd, accounts, selectedAcct, onSelect
 
       <button onClick={() => setBell(b => !b)} aria-label="Notifications" style={iconBtn}>
         <IconBell size={17} />
-        {notifEnabled !== false && (
-          <span style={{ position: "absolute", top: 8, right: 8, width: 7, height: 7, borderRadius: "50%", background: "var(--terra)", boxShadow: "0 0 0 2px var(--cream)" }} />
-        )}
       </button>
 
       <button onClick={onTheme} aria-label="Theme" style={iconBtn}>
@@ -104,11 +103,7 @@ const iconBtnMobile = {
 };
 
 function Notifications({ onClose, enabled = true, mobile = false }) {
-  const items = [
-    { tone: "warn", text: "Anggaran belanja terlampaui Rp 540.000.", time: "2j" },
-    { tone: "good", text: "Gaji diterima — Rp 22.800.000.",          time: "5h" },
-    { tone: "info", text: "Wawasan AI baru untuk goal Kyoto.",       time: "1mg" },
-  ];
+  const items = [];
   return (
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 30 }} />
@@ -123,9 +118,9 @@ function Notifications({ onClose, enabled = true, mobile = false }) {
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "4px 6px 10px" }}>
           <div style={{ fontSize: 13, fontWeight: 500 }}>Notifikasi</div>
-          <div style={{ fontSize: 11.5, color: "var(--muted)" }}>{enabled ? "3 baru" : "Nonaktif"}</div>
+          <div style={{ fontSize: 11.5, color: "var(--muted)" }}>{enabled && items.length > 0 ? `${items.length} baru` : "Nonaktif"}</div>
         </div>
-        {enabled ? (
+        {enabled && items.length > 0 ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             {items.map((n, i) => (
               <div key={i} style={{ display: "flex", gap: 10, padding: "10px 8px", borderRadius: 10, alignItems: "flex-start" }}>
@@ -140,9 +135,9 @@ function Notifications({ onClose, enabled = true, mobile = false }) {
             <span style={{ width: 38, height: 38, display: "grid", placeItems: "center", borderRadius: "50%", background: "var(--paper)", border: "1px solid var(--line-soft)", color: "var(--muted)" }}>
               <IconBell size={17} />
             </span>
-            <div style={{ fontSize: 13, fontWeight: 500 }}>Notifikasi dimatikan</div>
+            <div style={{ fontSize: 13, fontWeight: 500 }}>{enabled ? "Belum ada notifikasi" : "Notifikasi dimatikan"}</div>
             <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.45, maxWidth: 220 }}>
-              Aktifkan notifikasi di Pengaturan untuk menerima pemberitahuan.
+              {enabled ? "Notifikasi akan muncul saat ada aktivitas baru." : "Aktifkan notifikasi di Pengaturan untuk menerima pemberitahuan."}
             </div>
           </div>
         )}

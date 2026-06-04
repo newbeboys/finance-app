@@ -10,7 +10,7 @@ export function KpiCards({ balanceVisible, onToggleVisible, totalBalance, accoun
   const expenseSpark = CASHFLOW.map(d => d.expense);
   const balanceSpark = CASHFLOW.map((d, i, a) => a.slice(0, i + 1).reduce((s, x) => s + (x.income - x.expense), 16000));
 
-  const savingsPct = Math.round((KPI.savings / KPI.savingsTarget) * 100);
+  const savingsPct = KPI.savingsTarget > 0 ? Math.round((KPI.savings / KPI.savingsTarget) * 100) : 0;
   const cards = [
     { label: "Total saldo",                       value: totalBalance != null ? totalBalance : KPI.balance, delta: KPI.balanceDelta, hero: true,  spark: balanceSpark,                          color: "var(--ink)",   sub: `dari ${accountCount != null ? accountCount : 3} akun` },
     { label: isMobile ? "Pemasukan"  : "Pemasukan (Mei)",  value: KPI.income,   delta: KPI.incomeDelta,                         spark: incomeSpark,                           color: "var(--sage)",  sub: "gaji + freelance" },
@@ -82,7 +82,15 @@ export function CashflowCard() {
           ))}
         </div>
       </div>
-      <CashflowChart data={CASHFLOW} range={range} />
+      {CASHFLOW.length === 0 ? (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, height: 160, color: "var(--muted)" }}>
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--line)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>
+          <div style={{ fontSize: 13, color: "var(--muted)" }}>Belum ada data arus kas</div>
+          <div style={{ fontSize: 12, color: "var(--muted)", opacity: 0.7 }}>Data akan muncul setelah kamu menambahkan transaksi</div>
+        </div>
+      ) : (
+        <CashflowChart data={CASHFLOW} range={range} />
+      )}
     </div>
   );
 }
@@ -94,6 +102,7 @@ const SPENDING_MONTHS = CASHFLOW.map((c, i) => ({ idx: i, abbr: c.m, label: ID_L
 
 function catsForExpense(monthExpense) {
   const refTotal = CATEGORIES.reduce((s, c) => s + c.amount, 0);
+  if (refTotal === 0) return [];
   const k = monthExpense / refTotal;
   return CATEGORIES.map(c => ({ ...c, amount: Math.round(c.amount * k / 1000) * 1000 }))
     .sort((a, b) => b.amount - a.amount);
@@ -101,8 +110,21 @@ function catsForExpense(monthExpense) {
 
 export function SpendingCard() {
   const [hover, setHover] = React.useState(null);
-  const [selectedIdx, setSelectedIdx] = React.useState(SPENDING_MONTHS.length - 1); // default: bulan terakhir (Mei)
+  const [selectedIdx, setSelectedIdx] = React.useState(Math.max(SPENDING_MONTHS.length - 1, 0));
   const [sheetOpen, setSheetOpen] = React.useState(false);
+
+  if (SPENDING_MONTHS.length === 0) {
+    return (
+      <div className="card rise" style={{ padding: 22, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, minHeight: 200 }}>
+        <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)", alignSelf: "flex-start" }}>Rincian pengeluaran</div>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: "24px 0" }}>
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--line)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 8v4M12 16h.01" /></svg>
+          <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink-2)" }}>Belum ada data pengeluaran</div>
+          <div style={{ fontSize: 12, color: "var(--muted)", textAlign: "center", lineHeight: 1.5 }}>Mulai tambahkan transaksi untuk melihat rincian per kategori</div>
+        </div>
+      </div>
+    );
+  }
 
   const selected = SPENDING_MONTHS[selectedIdx];
   const monthCats = catsForExpense(selected.expense);
@@ -178,6 +200,17 @@ export function SpendingCard() {
 
 export function InsightsCard() {
   const [idx, setIdx] = React.useState(0);
+
+  if (AI_INSIGHTS.length === 0) {
+    return (
+      <div className="card rise" style={{ padding: 22, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 180 }}>
+        <span style={{ color: "var(--muted)" }}><IconSpark size={22} /></span>
+        <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink-2)" }}>Belum ada wawasan AI</div>
+        <div style={{ fontSize: 12, color: "var(--muted)", textAlign: "center", lineHeight: 1.5, maxWidth: 220 }}>Tambahkan transaksi dan anggaran agar AI bisa menganalisis pola keuanganmu</div>
+      </div>
+    );
+  }
+
   const ins = AI_INSIGHTS[idx];
   const toneColor = ins.tone === "warn" ? "var(--terra)" : ins.tone === "good" ? "var(--sage)" : "var(--gold)";
 
@@ -223,34 +256,56 @@ export function SavingsCard({ goals = GOALS, onManage }) {
         <button style={ghostBtn} onClick={onManage}>Kelola</button>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        {goals.slice(0, 3).map((g, i) => {
-          const pct = Math.min(g.current / g.target, 1);
-          const col = g.color || ringColors[i % ringColors.length];
-          return (
-            <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 14 }}>
-              <Ring pct={pct} color={col} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 2 }}>
-                  <span style={{ fontSize: 13.5, fontWeight: 500 }}>{g.label}</span>
-                  <span className="tnum" style={{ fontSize: 12, color: "var(--muted)" }}>{g.deadline}</span>
-                </div>
-                <div className="tnum" style={{ fontSize: 12, color: "var(--muted)" }}>
-                  <span style={{ color: "var(--ink)", fontWeight: 500 }}>{fmtShort(g.current)}</span>{" dari "}{fmtShort(g.target)}
-                </div>
-                <div style={{ marginTop: 6, height: 3, background: "var(--line-soft)", borderRadius: 99 }}>
-                  <div style={{ height: "100%", width: `${pct * 100}%`, background: col, borderRadius: 99 }} />
+      {goals.length === 0 ? (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "20px 0 8px", textAlign: "center" }}>
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--line)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z" /><path d="m9 12 2 2 4-4" /></svg>
+          <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>Belum ada goal tabungan</div>
+          <button onClick={onManage} style={{ fontSize: 12, color: "var(--sage)", background: "transparent", border: 0, padding: 0, cursor: "pointer", textDecoration: "underline" }}>Buat goal pertama</button>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {goals.slice(0, 3).map((g, i) => {
+            const pct = Math.min(g.current / g.target, 1);
+            const col = g.color || ringColors[i % ringColors.length];
+            return (
+              <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <Ring pct={pct} color={col} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 2 }}>
+                    <span style={{ fontSize: 13.5, fontWeight: 500 }}>{g.label}</span>
+                    <span className="tnum" style={{ fontSize: 12, color: "var(--muted)" }}>{g.deadline}</span>
+                  </div>
+                  <div className="tnum" style={{ fontSize: 12, color: "var(--muted)" }}>
+                    <span style={{ color: "var(--ink)", fontWeight: 500 }}>{fmtShort(g.current)}</span>{" dari "}{fmtShort(g.target)}
+                  </div>
+                  <div style={{ marginTop: 6, height: 3, background: "var(--line-soft)", borderRadius: 99 }}>
+                    <div style={{ height: "100%", width: `${pct * 100}%`, background: col, borderRadius: 99 }} />
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
 
 export function BudgetsCard({ onManage }) {
+  const [budgets, setBudgets] = React.useState(() => {
+    try { return JSON.parse(localStorage.getItem('finance_budgets') || '[]').filter(b => b.enabled); }
+    catch { return []; }
+  });
+
+  React.useEffect(() => {
+    const refresh = () => {
+      try { setBudgets(JSON.parse(localStorage.getItem('finance_budgets') || '[]').filter(b => b.enabled)); }
+      catch {}
+    };
+    window.addEventListener('storage', refresh);
+    return () => window.removeEventListener('storage', refresh);
+  }, []);
+
   return (
     <div className="card rise" style={{ padding: 22 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 16 }}>
@@ -261,29 +316,37 @@ export function BudgetsCard({ onManage }) {
         <button style={ghostBtn} onClick={onManage}>Atur</button>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        {BUDGETS.map(b => {
-          const pct = Math.min(b.spent / b.limit, 1.15);
-          const over = b.spent > b.limit;
-          return (
-            <div key={b.id}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13 }}>
-                  <CatIcon kind={b.id} size={14} /> {b.label}
-                </span>
-                <span className="tnum" style={{ fontSize: 12.5, color: over ? "var(--terra)" : "var(--muted)" }}>
-                  <span style={{ color: "var(--ink)", fontWeight: 500 }}>{fmtShort(b.spent)}</span>{" / "}{fmtShort(b.limit)}
-                </span>
+      {budgets.length === 0 ? (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "16px 0 4px", textAlign: "center" }}>
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--line)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M9 21V9" /></svg>
+          <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>Belum ada anggaran aktif</div>
+          <button onClick={onManage} style={{ fontSize: 12, color: "var(--sage)", background: "transparent", border: 0, padding: 0, cursor: "pointer", textDecoration: "underline" }}>Atur anggaran</button>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {budgets.slice(0, 4).map(b => {
+            const pct = Math.min(b.spent / b.limit, 1.15);
+            const over = b.spent > b.limit;
+            return (
+              <div key={b.id}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                    <CatIcon kind={b.id} size={14} /> {b.label}
+                  </span>
+                  <span className="tnum" style={{ fontSize: 12.5, color: over ? "var(--terra)" : "var(--muted)" }}>
+                    <span style={{ color: "var(--ink)", fontWeight: 500 }}>{fmtShort(b.spent)}</span>{" / "}{fmtShort(b.limit)}
+                  </span>
+                </div>
+                <div style={{ height: 6, background: "var(--line-soft)", borderRadius: 99, overflow: "hidden", position: "relative" }}>
+                  <div style={{ height: "100%", width: `${Math.min(pct, 1) * 100}%`, background: over ? "var(--terra)" : b.color, borderRadius: 99, transition: "width .6s ease" }} />
+                  {over && <div style={{ position: "absolute", top: 0, left: "100%", height: "100%", width: `${(pct - 1) * 100}%`, background: "var(--terra)", transform: "translateX(-100%)", opacity: 0.4 }} />}
+                </div>
+                {over && <div style={{ fontSize: 11, color: "var(--terra)", marginTop: 4 }}>{fmtShort(b.spent - b.limit)} di atas anggaran</div>}
               </div>
-              <div style={{ height: 6, background: "var(--line-soft)", borderRadius: 99, overflow: "hidden", position: "relative" }}>
-                <div style={{ height: "100%", width: `${Math.min(pct, 1) * 100}%`, background: over ? "var(--terra)" : b.color, borderRadius: 99, transition: "width .6s ease" }} />
-                {over && <div style={{ position: "absolute", top: 0, left: "100%", height: "100%", width: `${(pct - 1) * 100}%`, background: "var(--terra)", transform: "translateX(-100%)", opacity: 0.4 }} />}
-              </div>
-              {over && <div style={{ fontSize: 11, color: "var(--terra)", marginTop: 4 }}>{fmtShort(b.spent - b.limit)} di atas anggaran</div>}
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

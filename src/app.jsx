@@ -11,7 +11,11 @@ import { TransactionsPage } from './transactions-page';
 import { TransactionsCard, AddTransactionModal } from './transactions';
 import { SettingsPage } from './settings-page';
 import { BudgetsPage } from './budgets-page';
-import { ACCOUNTS, GOALS, TRANSACTIONS } from './data';
+import { ACCOUNTS, GOALS } from './data';
+import { supabase } from './supabase';
+import { LoginPage } from './pages/Login';
+import { RegisterPage } from './pages/Register';
+import { useTransactions } from './hooks/useTransactions';
 
 const TWEAK_DEFAULTS = {
   theme: "light",
@@ -21,6 +25,29 @@ const TWEAK_DEFAULTS = {
 };
 
 export default function App() {
+  const [session, setSession] = React.useState(undefined); // undefined = loading
+  const [authView, setAuthView] = React.useState('login');
+
+  React.useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session ?? null));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => setSession(s ?? null));
+    return () => subscription.unsubscribe();
+  }, []);
+
+  if (session === undefined) {
+    return <div style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', background: 'var(--cream)', color: 'var(--muted)', fontSize: 14 }}>Memuat…</div>;
+  }
+
+  if (!session) {
+    return authView === 'login'
+      ? <LoginPage onSwitch={() => setAuthView('register')} />
+      : <RegisterPage onSwitch={() => setAuthView('login')} />;
+  }
+
+  return <AuthenticatedApp session={session} />;
+}
+
+function AuthenticatedApp({ session }) {
   const defaults = window.__TWEAK_DEFAULTS ?? TWEAK_DEFAULTS;
   const [t, setTweak] = useTweaks(defaults);
 
@@ -78,9 +105,8 @@ export default function App() {
     setSelectedAcct(sel => sel === id ? "all" : sel);
   };
 
-  // Transactions state — new entries prepended so they appear at top.
-  const [transactions, setTransactions] = React.useState(TRANSACTIONS);
-  const createTransaction = (tx) => setTransactions(list => [tx, ...list]);
+  // Transactions — sinkron dengan Supabase per user yang login
+  const { transactions, loading: txLoading, createTransaction } = useTransactions(session.user.id);
 
   // Savings goals state — create custom goals, deposit, delete.
   const [goals, setGoals] = React.useState(GOALS);
@@ -104,6 +130,7 @@ export default function App() {
           onSelectAcct={setSelectedAcct}
           onAddAcct={() => setAddAcct(true)}
           notifEnabled={t.notifications}
+          user={session.user}
         />
 
         {active === "dashboard" && (
@@ -117,7 +144,7 @@ export default function App() {
 
             {t.showAI && <InsightsCard />}
 
-            <TransactionsCard onAdd={() => setModal(true)} limit={8} onSeeAll={() => setActive("transactions")} transactions={transactions} />
+            <TransactionsCard onAdd={() => setModal(true)} limit={8} onSeeAll={() => setActive("transactions")} transactions={transactions} loading={txLoading} />
             <SavingsCard goals={goals} onManage={() => setActive("savings")} />
             <BudgetsCard onManage={() => setActive("budgets")} />
           </div>
@@ -138,10 +165,10 @@ export default function App() {
         )}
 
         {active === "transactions" && (
-          <TransactionsPage accounts={accounts} onAdd={() => setModal(true)} transactions={transactions} />
+          <TransactionsPage accounts={accounts} onAdd={() => setModal(true)} transactions={transactions} loading={txLoading} />
         )}
 
-        {active === "settings" && <SettingsPage t={t} setTweak={setTweak} />}
+        {active === "settings" && <SettingsPage t={t} setTweak={setTweak} user={session.user} />}
 
         {active !== "dashboard" && active !== "budgets" && active !== "wallets" && active !== "reports" && active !== "analytics" && active !== "savings" && active !== "transactions" && active !== "settings" && <Placeholder section={active} />}
       </main>

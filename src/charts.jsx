@@ -163,6 +163,9 @@ export function SpendingDonut({ data, active, onHover }) {
 
 export function Spark({ values, color = "var(--ink)" }) {
   const W = 92, H = 28;
+  if (!values || values.length < 2) {
+    return <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} />;
+  }
   const max = Math.max(...values), min = Math.min(...values);
   const span = max - min || 1;
   const pts = values.map((v, i) => [
