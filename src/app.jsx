@@ -136,13 +136,13 @@ function AuthenticatedApp({ session }) {
         {active === "dashboard" && (
           <div className="dash-grid">
             <div className="span-4">
-              <KpiCards balanceVisible={balanceVisible} onToggleVisible={() => setBalanceVisible(v => !v)} totalBalance={totalBalance} accountCount={accounts.length} />
+              <KpiCards balanceVisible={balanceVisible} onToggleVisible={() => setBalanceVisible(v => !v)} totalBalance={totalBalance} accountCount={accounts.length} transactions={transactions} />
             </div>
 
             <CashflowCard transactions={transactions} />
-            <SpendingCard />
+            <SpendingCard transactions={transactions} />
 
-            {t.showAI && <InsightsCard />}
+            {t.showAI && <InsightsCard transactions={transactions} />}
 
             <TransactionsCard onAdd={() => setModal(true)} limit={8} onSeeAll={() => setActive("transactions")} transactions={transactions} loading={txLoading} />
             <SavingsCard goals={goals} onManage={() => setActive("savings")} />

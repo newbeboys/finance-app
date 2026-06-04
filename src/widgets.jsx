@@ -1,21 +1,48 @@
 import React from 'react';
-import { KPI, CASHFLOW, CATEGORIES, BUDGETS, GOALS, AI_INSIGHTS, fmtShort, fmt } from './data';
+import { CATEGORIES, ALL_CATEGORIES, fmtShort, fmt } from './data';
 import { IconArrowUp, IconArrowDown, IconArrowRight, IconSpark, CatIcon } from './icons';
 import { CashflowChart, SpendingDonut, Spark, Ring } from './charts';
 import { useIsMobile } from './use-mobile';
 
-export function KpiCards({ balanceVisible, onToggleVisible, totalBalance, accountCount }) {
+export function KpiCards({ balanceVisible, onToggleVisible, totalBalance, accountCount, transactions = [] }) {
   const isMobile = useIsMobile();
-  const incomeSpark  = CASHFLOW.map(d => d.income);
-  const expenseSpark = CASHFLOW.map(d => d.expense);
-  const balanceSpark = CASHFLOW.map((d, i, a) => a.slice(0, i + 1).reduce((s, x) => s + (x.income - x.expense), 16000));
 
-  const savingsPct = KPI.savingsTarget > 0 ? Math.round((KPI.savings / KPI.savingsTarget) * 100) : 0;
+  // Hitung income & expense bulan ini dari transaksi Supabase
+  const { income, expenses, catCount } = React.useMemo(() => {
+    const now = new Date();
+    const pfx = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const month = transactions.filter(t => t.dateRaw && t.dateRaw.startsWith(pfx));
+    const income   = month.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+    const expenses = month.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+    const cats = new Set(month.filter(t => t.amount < 0).map(t => t.category));
+    return { income, expenses, catCount: cats.size };
+  }, [transactions]);
+
+  // Sparkline 8 bulan untuk income/expense
+  const sparks = React.useMemo(() => {
+    const n = 8;
+    const now = new Date();
+    const inc = [], exp = [], bal = [];
+    let runBal = 0;
+    for (let i = n - 1; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const pfx = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const m = transactions.filter(t => t.dateRaw && t.dateRaw.startsWith(pfx));
+      const i_ = m.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+      const e_ = m.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+      inc.push(i_); exp.push(e_); runBal += i_ - e_; bal.push(runBal);
+    }
+    return { income: inc, expense: exp, balance: bal };
+  }, [transactions]);
+
+  const savings  = Math.max(income - expenses, 0);
+  const monthName = new Date().toLocaleDateString('id-ID', { month: 'long' });
+
   const cards = [
-    { label: "Total saldo",                       value: totalBalance != null ? totalBalance : KPI.balance, delta: KPI.balanceDelta, hero: true,  spark: balanceSpark,                          color: "var(--ink)",   sub: `dari ${accountCount != null ? accountCount : 3} akun` },
-    { label: isMobile ? "Pemasukan"  : "Pemasukan (Mei)",  value: KPI.income,   delta: KPI.incomeDelta,                         spark: incomeSpark,                           color: "var(--sage)",  sub: "gaji + freelance" },
-    { label: isMobile ? "Pengeluaran": "Pengeluaran (Mei)", value: KPI.expenses, delta: KPI.expensesDelta, deltaInverted: true,  spark: expenseSpark,                          color: "var(--terra)", sub: "9 kategori" },
-    { label: isMobile ? "Tabungan"   : "Tabungan bulan ini", value: KPI.savings, delta: KPI.savingsDelta,                        spark: balanceSpark.slice(-8).map(v => v * 0.07), color: "var(--gold)", sub: isMobile ? `${savingsPct}% • ${fmtShort(KPI.savingsTarget)}` : `${savingsPct}% dari target ${fmtShort(KPI.savingsTarget)}`, progress: KPI.savings / KPI.savingsTarget },
+    { label: "Total saldo", value: totalBalance ?? 0, delta: 0, hero: true, spark: sparks.balance, color: "var(--ink)", sub: `dari ${accountCount ?? 0} akun` },
+    { label: isMobile ? "Pemasukan"   : `Pemasukan (${monthName})`,   value: income,   delta: 0, spark: sparks.income,  color: "var(--sage)",  sub: "bulan ini" },
+    { label: isMobile ? "Pengeluaran" : `Pengeluaran (${monthName})`, value: expenses, delta: 0, deltaInverted: true, spark: sparks.expense, color: "var(--terra)", sub: catCount > 0 ? `${catCount} kategori` : "bulan ini" },
+    { label: isMobile ? "Selisih" : "Selisih bulan ini", value: income - expenses, delta: 0, spark: [], color: income >= expenses ? "var(--sage)" : "var(--terra)", sub: "pemasukan − pengeluaran" },
   ];
 
   return (
@@ -206,25 +233,38 @@ export function CashflowCard({ transactions = [] }) {
   );
 }
 
-// Month metadata aligned with CASHFLOW array order
-const ID_LABEL = { Jun:"Jun", Jul:"Jul", Aug:"Agu", Sep:"Sep", Oct:"Okt", Nov:"Nov", Dec:"Des", Jan:"Jan", Feb:"Feb", Mar:"Mar", Apr:"Apr", May:"Mei" };
-const YEAR_OF  = { Jun:2025, Jul:2025, Aug:2025, Sep:2025, Oct:2025, Nov:2025, Dec:2025, Jan:2026, Feb:2026, Mar:2026, Apr:2026, May:2026 };
-const SPENDING_MONTHS = CASHFLOW.map((c, i) => ({ idx: i, abbr: c.m, label: ID_LABEL[c.m], year: YEAR_OF[c.m], expense: c.expense }));
+const SP_MONTHS_ID = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
 
-function catsForExpense(monthExpense) {
-  const refTotal = CATEGORIES.reduce((s, c) => s + c.amount, 0);
-  if (refTotal === 0) return [];
-  const k = monthExpense / refTotal;
-  return CATEGORIES.map(c => ({ ...c, amount: Math.round(c.amount * k / 1000) * 1000 }))
-    .sort((a, b) => b.amount - a.amount);
-}
-
-export function SpendingCard() {
+export function SpendingCard({ transactions = [] }) {
   const [hover, setHover] = React.useState(null);
-  const [selectedIdx, setSelectedIdx] = React.useState(Math.max(SPENDING_MONTHS.length - 1, 0));
   const [sheetOpen, setSheetOpen] = React.useState(false);
+  const now = new Date();
+  const [sel, setSel] = React.useState({ year: now.getFullYear(), month: now.getMonth() });
 
-  if (SPENDING_MONTHS.length === 0) {
+  // Bulan yang punya data expense
+  const monthsWithData = React.useMemo(() => {
+    const set = new Set();
+    transactions.filter(t => t.amount < 0 && t.dateRaw).forEach(t => set.add(t.dateRaw.slice(0, 7)));
+    return Array.from(set).sort().reverse().map(s => {
+      const [yr, mo] = s.split('-');
+      return { year: +yr, month: +mo - 1 };
+    });
+  }, [transactions]);
+
+  const pfx = `${sel.year}-${String(sel.month + 1).padStart(2, '0')}`;
+
+  const monthCats = React.useMemo(() => {
+    const map = {};
+    transactions
+      .filter(t => t.amount < 0 && t.dateRaw && t.dateRaw.startsWith(pfx))
+      .forEach(t => { map[t.category] = (map[t.category] || 0) + Math.abs(t.amount); });
+    return CATEGORIES
+      .filter(c => map[c.id])
+      .map(c => ({ ...c, amount: map[c.id] }))
+      .sort((a, b) => b.amount - a.amount);
+  }, [transactions, pfx]);
+
+  if (monthCats.length === 0) {
     return (
       <div className="card rise" style={{ padding: 22, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, minHeight: 200 }}>
         <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)", alignSelf: "flex-start" }}>Rincian pengeluaran</div>
@@ -237,11 +277,11 @@ export function SpendingCard() {
     );
   }
 
-  const selected = SPENDING_MONTHS[selectedIdx];
-  const monthCats = catsForExpense(selected.expense);
   const total = monthCats.reduce((s, c) => s + c.amount, 0);
+  const selLabel = `${SP_MONTHS_ID[sel.month]} ${sel.year !== now.getFullYear() ? sel.year : ""}`.trim();
 
-  const years = [2026, 2025]; // tampil 2026 dulu, lalu 2025
+  const byYear = {};
+  monthsWithData.forEach(m => { (byYear[m.year] ||= []).push(m); });
 
   return (
     <>
@@ -251,7 +291,7 @@ export function SpendingCard() {
             <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Rincian pengeluaran</div>
             <div className="serif" style={{ fontSize: 26, marginTop: 2, letterSpacing: "-0.01em" }}>Per kategori</div>
           </div>
-          <button onClick={() => setSheetOpen(true)} style={ghostBtn}>{selected.label} {selected.year !== 2026 ? selected.year : ""} ▾</button>
+          <button onClick={() => setSheetOpen(true)} style={ghostBtn}>{selLabel} ▾</button>
         </div>
 
         <SpendingDonut data={monthCats} active={hover} onHover={setHover} />
@@ -266,42 +306,37 @@ export function SpendingCard() {
               <span className="tnum" style={{ fontSize: 12, color: "var(--ink)", minWidth: 92, textAlign: "right" }}>{fmtShort(c.amount)}</span>
             </div>
           ))}
-          <button style={{ ...ghostBtn, marginTop: 4, width: "fit-content", padding: "4px 0", border: 0, background: "transparent", color: "var(--muted)" }}>
-            + {monthCats.length - 5} kategori lagi
-          </button>
+          {monthCats.length > 5 && (
+            <button style={{ ...ghostBtn, marginTop: 4, width: "fit-content", padding: "4px 0", border: 0, background: "transparent", color: "var(--muted)" }}>
+              + {monthCats.length - 5} kategori lagi
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Overlay + Bottom Sheet */}
       {sheetOpen && (
         <>
           <div onClick={() => setSheetOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(42,44,32,.45)", zIndex: 150, animation: "rise .2s ease-out" }} />
           <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "var(--ivory)", borderRadius: "16px 16px 0 0", padding: "20px 16px 80px", zIndex: 200, maxHeight: "50vh", overflowY: "auto", boxShadow: "0 -8px 32px -8px rgba(42,44,32,.2)", animation: "rise .25s ease-out" }}>
-            {/* Handle */}
             <div style={{ width: 36, height: 4, borderRadius: 99, background: "var(--line)", margin: "-8px auto 16px" }} />
             <div style={{ fontSize: 11, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 14 }}>Pilih bulan</div>
-
-            {years.map(year => {
-              const yearMonths = SPENDING_MONTHS.filter(m => m.year === year);
-              if (!yearMonths.length) return null;
-              return (
-                <div key={year} style={{ marginBottom: 20 }}>
-                  <div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 10 }}>{year}</div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
-                    {yearMonths.map(m => {
-                      const active = m.idx === selectedIdx;
-                      return (
-                        <button key={m.idx}
-                          onClick={() => { setSelectedIdx(m.idx); setSheetOpen(false); }}
-                          style={{ padding: "10px 0", borderRadius: 10, border: active ? 0 : "1px solid var(--line-soft)", background: active ? "var(--ink)" : "var(--paper)", color: active ? "var(--cream)" : "var(--ink)", fontSize: 13.5, fontWeight: active ? 600 : 400, fontFamily: "inherit", cursor: "pointer" }}>
-                          {m.label}
-                        </button>
-                      );
-                    })}
-                  </div>
+            {Object.entries(byYear).sort((a, b) => b[0] - a[0]).map(([yr, months]) => (
+              <div key={yr} style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 10 }}>{yr}</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+                  {months.map(m => {
+                    const active = m.year === sel.year && m.month === sel.month;
+                    return (
+                      <button key={`${m.year}-${m.month}`}
+                        onClick={() => { setSel(m); setSheetOpen(false); }}
+                        style={{ padding: "10px 0", borderRadius: 10, border: active ? 0 : "1px solid var(--line-soft)", background: active ? "var(--ink)" : "var(--paper)", color: active ? "var(--cream)" : "var(--ink)", fontSize: 13.5, fontWeight: active ? 600 : 400, fontFamily: "inherit", cursor: "pointer" }}>
+                        {SP_MONTHS_ID[m.month]}
+                      </button>
+                    );
+                  })}
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         </>
       )}
@@ -309,10 +344,59 @@ export function SpendingCard() {
   );
 }
 
-export function InsightsCard() {
-  const [idx, setIdx] = React.useState(0);
+function buildInsights(transactions) {
+  const now = new Date();
+  const pfx = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const monthName = now.toLocaleDateString('id-ID', { month: 'long' });
 
-  if (AI_INSIGHTS.length === 0) {
+  const expTx = transactions.filter(t => t.amount < 0 && t.dateRaw && t.dateRaw.startsWith(pfx));
+  if (expTx.length === 0) return [];
+
+  const totalExp = expTx.reduce((s, t) => s + Math.abs(t.amount), 0);
+  const totalInc = transactions.filter(t => t.amount > 0 && t.dateRaw && t.dateRaw.startsWith(pfx)).reduce((s, t) => s + t.amount, 0);
+
+  const catMap = {};
+  expTx.forEach(t => { catMap[t.category] = (catMap[t.category] || 0) + Math.abs(t.amount); });
+  const sorted = Object.entries(catMap).sort((a, b) => b[1] - a[1]);
+  const topId  = sorted[0][0];
+  const topCat = ALL_CATEGORIES.find(c => c.id === topId) || { label: topId };
+  const topPct = Math.round((sorted[0][1] / totalExp) * 100);
+
+  const insights = [
+    {
+      title: `Pengeluaran terbesar: ${topCat.label}`,
+      body: `${topCat.label} menyumbang ${topPct}% dari total pengeluaran ${monthName} (${fmt(sorted[0][1])}). ${topPct > 40 ? "Pertimbangkan untuk mengurangi anggaran di kategori ini." : "Proporsinya masih dalam batas yang wajar."}`,
+      cta: "Lihat anggaran",
+      tone: topPct > 40 ? "warn" : "info",
+    },
+  ];
+
+  if (totalInc > 0) {
+    const ratio = totalExp / totalInc;
+    insights.push({
+      title: `${Math.round(ratio * 100)}% pendapatan terpakai`,
+      body: `Dari ${fmt(totalInc)} yang masuk ${monthName}, kamu menghabiskan ${fmt(totalExp)}. ${ratio > 0.8 ? "Coba tingkatkan porsi tabungan bulan depan." : "Pengeluaranmu masih terkontrol dengan baik!"}`,
+      cta: "Lihat detail",
+      tone: ratio > 0.8 ? "warn" : "good",
+    });
+  }
+
+  insights.push({
+    title: `${expTx.length} transaksi tercatat`,
+    body: `Kamu sudah mencatat ${expTx.length} transaksi pengeluaran di ${sorted.length} kategori bulan ini. ${expTx.length >= 10 ? "Kebiasaan mencatat yang bagus — terus pertahankan!" : "Catat setiap pengeluaran untuk analisis yang lebih akurat."}`,
+    cta: "Tambah transaksi",
+    tone: expTx.length >= 10 ? "good" : "info",
+  });
+
+  return insights;
+}
+
+export function InsightsCard({ transactions = [] }) {
+  const [idx, setIdx] = React.useState(0);
+  const insights = React.useMemo(() => buildInsights(transactions), [transactions]);
+  React.useEffect(() => { setIdx(0); }, [insights.length]);
+
+  if (insights.length === 0) {
     return (
       <div className="card rise" style={{ padding: 22, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 180 }}>
         <span style={{ color: "var(--muted)" }}><IconSpark size={22} /></span>
@@ -322,7 +406,7 @@ export function InsightsCard() {
     );
   }
 
-  const ins = AI_INSIGHTS[idx];
+  const ins = insights[Math.min(idx, insights.length - 1)];
   const toneColor = ins.tone === "warn" ? "var(--terra)" : ins.tone === "good" ? "var(--sage)" : "var(--gold)";
 
   return (
@@ -335,7 +419,7 @@ export function InsightsCard() {
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
         <span style={{ color: toneColor }}><IconSpark size={14} /></span>
-        <span style={{ fontSize: 11, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)" }}>Wawasan AI · {idx + 1} dari {AI_INSIGHTS.length}</span>
+        <span style={{ fontSize: 11, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)" }}>Wawasan AI · {idx + 1} dari {insights.length}</span>
       </div>
 
       <div className="serif" style={{ fontSize: 24, lineHeight: 1.15, letterSpacing: "-0.01em", marginBottom: 10 }}>{ins.title}</div>
@@ -346,7 +430,7 @@ export function InsightsCard() {
           {ins.cta} <IconArrowRight size={12} />
         </button>
         <div style={{ display: "flex", gap: 6 }}>
-          {AI_INSIGHTS.map((_, i) => (
+          {insights.map((_, i) => (
             <button key={i} onClick={() => setIdx(i)} style={{ width: i === idx ? 22 : 6, height: 6, borderRadius: 99, background: i === idx ? toneColor : "var(--line)", border: 0, padding: 0, transition: "all .25s ease" }} />
           ))}
         </div>
