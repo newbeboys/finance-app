@@ -11,11 +11,12 @@ import { TransactionsPage } from './transactions-page';
 import { TransactionsCard, AddTransactionModal } from './transactions';
 import { SettingsPage } from './settings-page';
 import { BudgetsPage } from './budgets-page';
-import { ACCOUNTS, GOALS } from './data';
 import { supabase } from './supabase';
 import { LoginPage } from './pages/Login';
 import { RegisterPage } from './pages/Register';
 import { useTransactions } from './hooks/useTransactions';
+import { useSavings } from './hooks/useSavings';
+import { useWallets } from './hooks/useWallets';
 
 const TWEAK_DEFAULTS = {
   theme: "light",
@@ -92,29 +93,24 @@ function AuthenticatedApp({ session }) {
   const [balanceVisible, setBalanceVisible] = React.useState(true);
   const [modal, setModal] = React.useState(false);
 
-  // Multi-wallet state — accounts live here so creating one updates everywhere.
-  const [accounts, setAccounts] = React.useState(ACCOUNTS);
+  // Multi-wallet state — sinkron dengan Supabase
+  const { accounts, createAccount, setPrimary, deleteAccount: _deleteAccount } = useWallets(session.user.id);
   const [selectedAcct, setSelectedAcct] = React.useState("all");
   const [addAcct, setAddAcct] = React.useState(false);
 
   const totalBalance = accounts.reduce((s, a) => s + a.balance, 0);
-  const createAccount = (a) => setAccounts(list => [...list, a]);
-  const setPrimary = (id) => setAccounts(list => list.map(a => ({ ...a, primary: a.id === id })));
   const deleteAccount = (id) => {
-    setAccounts(list => list.filter(a => a.id !== id));
+    _deleteAccount(id);
     setSelectedAcct(sel => sel === id ? "all" : sel);
   };
 
   // Transactions — sinkron dengan Supabase per user yang login
   const { transactions, loading: txLoading, createTransaction } = useTransactions(session.user.id);
 
-  // Savings goals state — create custom goals, deposit, delete.
-  const [goals, setGoals] = React.useState(GOALS);
+  // Savings goals — Supabase
+  const { goals, createGoal, deleteGoal, depositToGoal } = useSavings(session.user.id);
   const [addGoal, setAddGoal] = React.useState(false);
   const [depositGoal, setDepositGoal] = React.useState(null);
-  const createGoal = (g) => setGoals(list => [...list, g]);
-  const deleteGoal = (id) => setGoals(list => list.filter(g => g.id !== id));
-  const depositToGoal = (id, amt) => setGoals(list => list.map(g => g.id === id ? { ...g, current: g.current + amt } : g));
 
   return (
     <div className="app" data-screen-label="Dashboard">
