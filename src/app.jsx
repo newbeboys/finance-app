@@ -48,9 +48,31 @@ export default function App() {
   return <AuthenticatedApp session={session} />;
 }
 
+const TWEAKS_KEY = 'finance_tweaks';
+
+function loadSavedTweaks() {
+  try { return JSON.parse(localStorage.getItem(TWEAKS_KEY) || '{}'); } catch { return {}; }
+}
+
 function AuthenticatedApp({ session }) {
-  const defaults = window.__TWEAK_DEFAULTS ?? TWEAK_DEFAULTS;
-  const [t, setTweak] = useTweaks(defaults);
+  // Merge: hardcoded defaults ← localStorage ← window overrides
+  const defaults = React.useMemo(() => ({
+    ...TWEAK_DEFAULTS,
+    ...loadSavedTweaks(),
+    ...(window.__TWEAK_DEFAULTS ?? {}),
+  }), []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const [t, setTweakRaw] = useTweaks(defaults);
+
+  // Wrap setTweak agar setiap perubahan disimpan ke localStorage
+  const setTweak = React.useCallback((key, val) => {
+    setTweakRaw(key, val);
+    try {
+      const saved = loadSavedTweaks();
+      const edits = typeof key === 'object' && key !== null ? key : { [key]: val };
+      localStorage.setItem(TWEAKS_KEY, JSON.stringify({ ...saved, ...edits }));
+    } catch {}
+  }, [setTweakRaw]);
 
   // Theme application
   React.useEffect(() => {
