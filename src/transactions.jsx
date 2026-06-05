@@ -151,7 +151,8 @@ export function TransactionsCard({ onAdd, limit, onSeeAll, transactions: txProp,
   );
 }
 
-export function AddTransactionModal({ open, onClose, onSave }) {
+export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial = null }) {
+  const isEdit = !!initial;
   const [type, setType] = React.useState("expense");
   const [amount, setAmount] = React.useState("");
   const [cat, setCat] = React.useState("food");
@@ -159,13 +160,29 @@ export function AddTransactionModal({ open, onClose, onSave }) {
   const [note, setNote] = React.useState("");
   const [recurring, setRecurring] = React.useState(false);
 
+  // Pre-fill saat mode edit atau reset saat modal buka baru
+  React.useEffect(() => {
+    if (!open) return;
+    if (initial) {
+      const t = initial.amount < 0 ? "expense" : "income";
+      setType(t);
+      setAmount(String(Math.abs(initial.amount)));
+      setCat(initial.category);
+      setMerchant(initial.merchant === '—' ? '' : (initial.merchant || ''));
+      setNote(initial.note || '');
+      setRecurring(false);
+    } else {
+      setType("expense"); setAmount(""); setCat("food");
+      setMerchant(""); setNote(""); setRecurring(false);
+    }
+  }, [open, initial]);
+
   if (!open) return null;
 
   const activeCats = type === "income" ? INCOME_CATEGORIES : CATEGORIES;
 
   const switchType = (newType) => {
     setType(newType);
-    // Reset ke default kategori sesuai jenis baru
     if (newType === "income") setCat(INCOME_CATEGORIES[0].id);
     else setCat(CATEGORIES[0].id);
   };
@@ -176,16 +193,21 @@ export function AddTransactionModal({ open, onClose, onSave }) {
     const date = `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
     const time = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
     const tx = {
-      id: "tx-" + Date.now(),
-      date,
-      time,
+      id:       initial?.id || "tx-" + Date.now(),
+      date:     initial?.date || date,
+      dateRaw:  initial?.dateRaw,
+      time:     initial?.time || time,
       merchant: merchant.trim() || "—",
-      note: note.trim(),
+      note:     note.trim(),
       category: cat,
-      method: "Tunai",
-      amount: type === "expense" ? -(+amount || 0) : (+amount || 0),
+      method:   initial?.method || "Tunai",
+      amount:   type === "expense" ? -(+amount || 0) : (+amount || 0),
     };
-    onSave?.(tx);
+    if (isEdit) {
+      onUpdate?.(initial.id, tx);
+    } else {
+      onSave?.(tx);
+    }
     onClose();
   };
 
@@ -194,8 +216,8 @@ export function AddTransactionModal({ open, onClose, onSave }) {
       <div className="card modal-sheet" onClick={e => e.stopPropagation()} style={{ width: "min(480px, 100%)", padding: 24, animation: "rise .3s ease-out", boxShadow: "0 30px 80px -20px rgba(42,44,32,.4)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
-            <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Entri baru</div>
-            <div className="serif" style={{ fontSize: 26, marginTop: 4, letterSpacing: "-0.01em" }}>Catat transaksi</div>
+            <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{isEdit ? "Edit transaksi" : "Entri baru"}</div>
+            <div className="serif" style={{ fontSize: 26, marginTop: 4, letterSpacing: "-0.01em" }}>{isEdit ? "Perbarui data" : "Catat transaksi"}</div>
           </div>
           <button onClick={onClose} style={{ width: 36, height: 36, borderRadius: 10, border: "1px solid var(--line-soft)", background: "var(--paper)", display: "grid", placeItems: "center", color: "var(--ink-2)" }}>
             <IconClose size={14} />
@@ -235,7 +257,7 @@ export function AddTransactionModal({ open, onClose, onSave }) {
 
         <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
           <button onClick={onClose} style={{ flex: 1, padding: "13px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 12, fontSize: 14, color: "var(--ink-2)" }}>Batal</button>
-          <button onClick={submit} style={{ flex: 2, padding: "13px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 14, fontWeight: 500 }}>Simpan transaksi</button>
+          <button onClick={submit} style={{ flex: 2, padding: "13px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 14, fontWeight: 500 }}>{isEdit ? "Simpan perubahan" : "Simpan transaksi"}</button>
         </div>
       </div>
     </div>

@@ -1,13 +1,16 @@
 import React from 'react';
-import { TRANSACTIONS, CATEGORIES, ALL_CATEGORIES, fmt, fmtShort } from './data';
-import { IconSearch, IconPlus, CatIcon } from './icons';
+import { TRANSACTIONS, ALL_CATEGORIES, fmt, fmtShort } from './data';
+import { IconSearch, IconPlus, IconClose, CatIcon } from './icons';
 import { useIsMobile } from './use-mobile';
+import { AddTransactionModal } from './transactions';
 
-export function TransactionsPage({ accounts, onAdd, transactions: txProp }) {
+export function TransactionsPage({ accounts, onAdd, transactions: txProp, loading = false, onDelete, onUpdate }) {
   const transactions = txProp ?? TRANSACTIONS;
   const isMobile = useIsMobile();
   const [q, setQ] = React.useState("");
   const [type, setType] = React.useState("all");
+  const [deletingId, setDeletingId] = React.useState(null); // id transaksi yang akan dihapus
+  const [editingTx, setEditingTx] = React.useState(null);   // objek transaksi yang akan diedit
   const [cat, setCat] = React.useState("all");
   const [method, setMethod] = React.useState("all");
   const [hover, setHover] = React.useState(null);
@@ -126,28 +129,36 @@ export function TransactionsPage({ accounts, onAdd, transactions: txProp }) {
                 const isIncome = t.amount > 0;
                 const color = c?.color || (isIncome ? "var(--sage)" : "var(--muted-2)");
                 const borderBottom = i < g.items.length - 1 ? "1px solid var(--line-soft)" : 0;
+                const isDeleting = deletingId === t.id;
+
                 return (
                   <React.Fragment key={t.id}>
                     {/* ── Mobile compact row ── */}
                     <div className="tx-row-mobile"
-                      style={{ alignItems: "center", gap: 12, padding: "12px 2px", borderBottom }}>
-                      <span style={{ width: 38, height: 38, borderRadius: 10, background: `color-mix(in oklch, ${color} 14%, var(--ivory))`, color, display: "grid", placeItems: "center", flexShrink: 0 }}>
+                      style={{ alignItems: "center", gap: 10, padding: "12px 2px", borderBottom }}>
+                      <span onClick={() => setEditingTx(t)} style={{ width: 38, height: 38, borderRadius: 10, background: `color-mix(in oklch, ${color} 14%, var(--ivory))`, color, display: "grid", placeItems: "center", flexShrink: 0, cursor: "pointer" }}>
                         <CatIcon kind={t.category} size={16} />
                       </span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
+                      <div onClick={() => setEditingTx(t)} style={{ flex: 1, minWidth: 0, cursor: "pointer" }}>
                         <div style={{ fontSize: 14, fontWeight: 500, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.merchant}</div>
                         <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 1 }}>{c?.label || t.category} · {t.method} · {t.time}</div>
                       </div>
-                      <div className="tnum" style={{ fontSize: 14.5, fontWeight: 600, color: isIncome ? "var(--sage)" : "var(--ink)", flexShrink: 0 }}>
+                      <div className="tnum" style={{ fontSize: 13.5, fontWeight: 600, color: isIncome ? "var(--sage)" : "var(--ink)", flexShrink: 0 }}>
                         {isIncome ? "+" : "−"}{fmt(Math.abs(t.amount))}
                       </div>
+                      {onDelete && (
+                        <button onClick={() => setDeletingId(t.id)} title="Hapus"
+                          style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid var(--line-soft)", background: "var(--paper)", color: "var(--terra)", display: "grid", placeItems: "center", flexShrink: 0 }}>
+                          <IconClose size={12} />
+                        </button>
+                      )}
                     </div>
 
                     {/* ── Desktop 5-column row ── */}
                     <div className="tx-row-desktop"
                       onMouseEnter={() => setHover(t.id)} onMouseLeave={() => setHover(null)}
-                      style={{ display: "grid", gridTemplateColumns: "minmax(220px,1.6fr) 1fr 1fr 0.7fr 150px", alignItems: "center", padding: "12px 4px", borderBottom, background: hover === t.id ? "var(--paper)" : "transparent", transition: "background .15s ease", cursor: "pointer" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+                      style={{ display: "grid", gridTemplateColumns: "minmax(220px,1.6fr) 1fr 1fr 0.7fr 130px 72px", alignItems: "center", padding: "12px 4px", borderBottom, background: hover === t.id ? "var(--paper)" : "transparent", transition: "background .15s ease" }}>
+                      <div onClick={() => setEditingTx(t)} style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0, cursor: "pointer" }}>
                         <span style={{ width: 34, height: 34, borderRadius: 10, background: `color-mix(in oklch, ${color} 14%, var(--ivory))`, color, display: "grid", placeItems: "center", flexShrink: 0 }}>
                           <CatIcon kind={t.category} size={15} />
                         </span>
@@ -161,6 +172,21 @@ export function TransactionsPage({ accounts, onAdd, transactions: txProp }) {
                       <div className="tnum" style={{ fontSize: 12.5, color: "var(--muted)" }}>{t.time}</div>
                       <div className="tnum" style={{ textAlign: "right", fontSize: 13.5, fontWeight: 500, color: isIncome ? "var(--sage)" : "var(--ink)", whiteSpace: "nowrap" }}>
                         {isIncome ? "+" : "−"}{fmt(Math.abs(t.amount))}
+                      </div>
+                      {/* Edit + Hapus — tampil saat hover */}
+                      <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", opacity: hover === t.id ? 1 : 0, transition: "opacity .15s" }}>
+                        {onUpdate && (
+                          <button onClick={() => setEditingTx(t)} title="Edit"
+                            style={{ padding: "5px 10px", borderRadius: 8, border: "1px solid var(--line-soft)", background: "var(--paper)", color: "var(--ink-2)", fontSize: 11, cursor: "pointer" }}>
+                            Edit
+                          </button>
+                        )}
+                        {onDelete && (
+                          <button onClick={() => setDeletingId(t.id)} title="Hapus"
+                            style={{ width: 28, height: 28, borderRadius: 8, border: "1px solid var(--line-soft)", background: "var(--paper)", color: "var(--terra)", display: "grid", placeItems: "center", cursor: "pointer" }}>
+                            <IconClose size={12} />
+                          </button>
+                        )}
                       </div>
                     </div>
                   </React.Fragment>
@@ -176,6 +202,46 @@ export function TransactionsPage({ accounts, onAdd, transactions: txProp }) {
           </div>
         )}
       </div>
+
+      {/* ── Konfirmasi Hapus ── */}
+      {deletingId && (
+        <>
+          <div onClick={() => setDeletingId(null)}
+            style={{ position: "fixed", inset: 0, background: "rgba(42,44,32,.45)", zIndex: 150, animation: "rise .2s ease-out" }} />
+          <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "var(--ivory)", borderRadius: "16px 16px 0 0", padding: "24px 20px 40px", zIndex: 200, boxShadow: "0 -8px 32px -8px rgba(42,44,32,.2)", animation: "rise .25s ease-out" }}>
+            <div style={{ width: 36, height: 4, borderRadius: 99, background: "var(--line)", margin: "-12px auto 20px" }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+              <span style={{ width: 40, height: 40, borderRadius: 10, background: "color-mix(in oklch, var(--terra) 12%, transparent)", color: "var(--terra)", display: "grid", placeItems: "center", flexShrink: 0 }}>
+                <IconClose size={18} />
+              </span>
+              <div>
+                <div className="serif" style={{ fontSize: 20, letterSpacing: "-0.01em" }}>Hapus transaksi?</div>
+                <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 2, lineHeight: 1.4 }}>
+                  Tindakan ini tidak dapat dibatalkan. Data akan dihapus permanen dari Supabase.
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+              <button onClick={() => setDeletingId(null)}
+                style={{ flex: 1, padding: "13px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 12, fontSize: 14, color: "var(--ink-2)", fontFamily: "inherit" }}>
+                Batal
+              </button>
+              <button onClick={() => { onDelete?.(deletingId); setDeletingId(null); }}
+                style={{ flex: 1, padding: "13px", background: "var(--terra)", color: "#fff", border: 0, borderRadius: 12, fontSize: 14, fontWeight: 500, fontFamily: "inherit", cursor: "pointer" }}>
+                Hapus
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Edit Modal ── */}
+      <AddTransactionModal
+        open={!!editingTx}
+        initial={editingTx}
+        onClose={() => setEditingTx(null)}
+        onUpdate={onUpdate}
+      />
     </div>
   );
 }

@@ -84,5 +84,27 @@ export function useTransactions(userId) {
     return { error: err };
   }
 
-  return { transactions, loading, error, createTransaction, deleteTransaction };
+  async function updateTransaction(id, updates) {
+    const { data, error: err } = await supabase
+      .from('transactions')
+      .update({
+        type:     updates.amount < 0 ? 'expense' : 'income',
+        amount:   updates.amount,
+        category: updates.category,
+        merchant: updates.merchant || '',
+        note:     updates.note     || '',
+        method:   updates.method   || 'Tunai',
+      })
+      .eq('id', id)
+      .eq('user_id', userId)
+      .select()
+      .single();
+
+    if (!err && data) {
+      setTransactions(prev => prev.map(t => t.id === id ? toAppTx(data) : t));
+    }
+    return { error: err };
+  }
+
+  return { transactions, loading, error, createTransaction, deleteTransaction, updateTransaction };
 }

@@ -127,7 +127,7 @@ function AuthenticatedApp({ session }) {
   };
 
   // Transactions — sinkron dengan Supabase per user yang login
-  const { transactions, loading: txLoading, createTransaction } = useTransactions(session.user.id);
+  const { transactions, loading: txLoading, createTransaction, deleteTransaction, updateTransaction } = useTransactions(session.user.id);
 
   // Savings goals — Supabase
   const { goals, createGoal, deleteGoal, depositToGoal } = useSavings(session.user.id);
@@ -183,7 +183,7 @@ function AuthenticatedApp({ session }) {
         )}
 
         {active === "transactions" && (
-          <TransactionsPage accounts={accounts} onAdd={() => setModal(true)} transactions={transactions} loading={txLoading} />
+          <TransactionsPage accounts={accounts} onAdd={() => setModal(true)} transactions={transactions} loading={txLoading} onDelete={deleteTransaction} onUpdate={updateTransaction} />
         )}
 
         {active === "settings" && <SettingsPage t={t} setTweak={setTweak} user={session.user} />}
