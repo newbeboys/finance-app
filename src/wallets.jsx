@@ -1,5 +1,5 @@
 import React from 'react';
-import { ACCOUNT_TYPES, ALL_CATEGORIES, fmtShort, fmt } from './data';
+import { ACCOUNT_TYPES, ALL_CATEGORIES, fmtShort, fmt, formatNominal, nominalFontSize } from './data';
 import { IconBudget, IconPlus, IconChev, IconClose, CatIcon } from './icons';
 
 const WALLET_GLYPH = {
@@ -145,7 +145,7 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
       <div className="card rise" style={{ padding: 24, marginBottom: 20, display: "flex", alignItems: "center", gap: 28, flexWrap: "wrap" }}>
         <div style={{ flex: "0 0 auto" }}>
           <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Total kekayaan bersih</div>
-          <div className="serif tnum" style={{ fontSize: 40, letterSpacing: "-0.02em", marginTop: 6 }}>{fmtShort(total)}</div>
+          <div className="serif tnum kpi-nominal" style={{ fontSize: nominalFontSize(total, { hero: true }), letterSpacing: "-0.02em", marginTop: 6 }}>{formatNominal(total)}</div>
         </div>
         <div style={{ flex: 1, display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
           {byType.map(t => (

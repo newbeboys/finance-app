@@ -1,5 +1,5 @@
 import React from 'react';
-import { fmtShort } from './data';
+import { fmtShort, formatNominal, nominalFontSize } from './data';
 import { IconPlus, IconClose } from './icons';
 import { Ring } from './charts';
 import { useIsMobile } from './use-mobile';
@@ -63,8 +63,8 @@ export function SavingsPage({ goals, onAdd, onDeposit, onDelete }) {
         <div style={{ display: "flex", gap: isMobile ? 16 : 28, alignItems: "center", flexWrap: "wrap", marginBottom: 14 }}>
           <div style={{ flex: "0 0 auto" }}>
             <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Total terkumpul</div>
-            <div className="serif tnum" style={{ fontSize: isMobile ? 28 : 40, letterSpacing: "-0.02em", marginTop: 4 }}>{fmtShort(totalSaved)}</div>
-            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>dari target {fmtShort(totalTarget)}</div>
+            <div className="serif tnum kpi-nominal" style={{ fontSize: nominalFontSize(totalSaved, { hero: true, mobile: isMobile }), letterSpacing: "-0.02em", marginTop: 4 }}>{formatNominal(totalSaved)}</div>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>dari target {formatNominal(totalTarget)}</div>
           </div>
           <div style={{ fontSize: 12, color: "var(--muted)" }}>{completed} goal tercapai</div>
         </div>

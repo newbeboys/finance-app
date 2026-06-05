@@ -109,6 +109,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
   box-sizing: border-box;
 }
 
+.kpi-nominal {
+  word-break: break-all;
+  overflow-wrap: break-word;
+  line-height: 1.2;
+  white-space: normal;
+}
+
 .kpi-grid {
   display: grid;
   grid-template-columns: 1.5fr 1fr 1fr 1fr;
@@ -209,20 +216,24 @@ button { font: inherit; color: inherit; cursor: pointer; }
     width: 100% !important;
   }
   .kpi-hero-val {
-    font-size: 20px !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: unset !important;
     max-width: 100% !important;
     display: block !important;
+    word-break: break-all !important;
+    overflow-wrap: break-word !important;
+    line-height: 1.2 !important;
   }
   .kpi-value {
-    font-size: 18px !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: unset !important;
     max-width: 100% !important;
     display: block !important;
+    word-break: break-all !important;
+    overflow-wrap: break-word !important;
+    line-height: 1.2 !important;
   }
   .kpi-label {
     font-size: 10px !important;

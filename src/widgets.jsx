@@ -1,5 +1,5 @@
 import React from 'react';
-import { CATEGORIES, ALL_CATEGORIES, fmtShort, fmt } from './data';
+import { CATEGORIES, ALL_CATEGORIES, fmtShort, fmt, formatNominal, nominalFontSize } from './data';
 import { IconArrowUp, IconArrowDown, IconArrowRight, IconSpark, CatIcon } from './icons';
 import { CashflowChart, SpendingDonut, Spark, Ring } from './charts';
 import { useIsMobile } from './use-mobile';
@@ -61,8 +61,9 @@ export function KpiCards({ balanceVisible, onToggleVisible, totalBalance, accoun
             </div>
 
             <div style={{ minWidth: 0, overflow: "hidden" }}>
-              <div className={c.hero ? "serif kpi-hero-val" : "serif kpi-value"} style={{ fontSize: c.hero ? (isMobile ? 20 : 38) : (isMobile ? 18 : 26), lineHeight: 1, letterSpacing: "-0.02em", color: "var(--ink)", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>
-                {c.hero && !balanceVisible ? "Rp ••••••" : fmtShort(c.value)}
+              <div className={`${c.hero ? "serif kpi-hero-val" : "serif kpi-value"} kpi-nominal`}
+                style={{ fontSize: nominalFontSize(c.value, { hero: c.hero, mobile: isMobile }), letterSpacing: "-0.02em", color: "var(--ink)", fontVariantNumeric: "tabular-nums" }}>
+                {c.hero && !balanceVisible ? "Rp ••••••" : formatNominal(c.value)}
               </div>
             </div>
 

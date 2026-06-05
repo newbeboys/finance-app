@@ -1,5 +1,5 @@
 import React from 'react';
-import { TRANSACTIONS, ALL_CATEGORIES, fmt, fmtShort } from './data';
+import { TRANSACTIONS, ALL_CATEGORIES, fmt, fmtShort, formatNominal, nominalFontSize } from './data';
 import { IconSearch, IconPlus, IconClose, CatIcon } from './icons';
 import { useIsMobile } from './use-mobile';
 import { AddTransactionModal } from './transactions';
@@ -65,14 +65,14 @@ export function TransactionsPage({ accounts, onAdd, transactions: txProp, loadin
 
       <div className="tx-stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: 16 }}>
         {[
-          { l: "Pemasukan",   v: fmtShort(income),           c: "var(--sage)",  n: filtered.filter(t => t.amount > 0).length },
-          { l: "Pengeluaran", v: fmtShort(expense),          c: "var(--terra)", n: filtered.filter(t => t.amount < 0).length },
-          { l: "Selisih",     v: fmtShort(income - expense), c: "var(--ink)",   n: filtered.length },
+          { l: "Pemasukan",   v: income,         c: "var(--sage)",  n: filtered.filter(t => t.amount > 0).length },
+          { l: "Pengeluaran", v: expense,        c: "var(--terra)", n: filtered.filter(t => t.amount < 0).length },
+          { l: "Selisih",     v: income-expense, c: income >= expense ? "var(--ink)" : "var(--terra)", n: filtered.length },
         ].map((s, i) => (
           <div key={i} className={`card rise tx-stat-card${i === 2 ? " tx-stat-selisih" : ""}`} style={{ padding: 16, animationDelay: `${i * 0.03}s` }}>
             <div style={{ fontSize: 10.5, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", fontWeight: 500 }}>{s.l}</div>
             <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 3 }}>{s.n} transaksi</div>
-            <div className="serif tnum" style={{ fontSize: 26, letterSpacing: "-0.01em", marginTop: 8, color: s.c }}>{s.v}</div>
+            <div className="serif tnum kpi-nominal" style={{ fontSize: nominalFontSize(s.v), letterSpacing: "-0.01em", marginTop: 8, color: s.c }}>{formatNominal(s.v)}</div>
           </div>
         ))}
       </div>

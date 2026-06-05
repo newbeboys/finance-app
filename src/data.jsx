@@ -9,6 +9,24 @@ export const fmtShort = (n) => {
 };
 export const fmtSigned = (n) => (n >= 0 ? "+" : "−") + fmt(Math.abs(n));
 
+// Angka lengkap dengan titik — tidak dibulatkan ke jt/rb
+export const formatNominal = (n) => {
+  if (n == null || isNaN(n)) return 'Rp 0';
+  const sign = n < 0 ? '−' : '';
+  return sign + 'Rp ' + Math.abs(Math.round(n)).toLocaleString('id-ID');
+};
+
+// Font size otomatis berdasarkan jumlah digit
+export const nominalFontSize = (n, { hero = false, mobile = false } = {}) => {
+  const digits = Math.abs(Math.round(n || 0)).toString().length;
+  if (hero) {
+    if (mobile) return digits < 8 ? 22 : digits <= 11 ? 18 : 14;
+    return digits < 8 ? 34 : digits <= 11 ? 24 : 18;
+  }
+  if (mobile) return digits < 8 ? 18 : digits <= 11 ? 14 : 11;
+  return digits < 8 ? 24 : digits <= 11 ? 18 : 14;
+};
+
 export const CURRENCY = { code: "IDR", symbol: "Rp" };
 
 export const ACCOUNTS = [];

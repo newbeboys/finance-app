@@ -1,5 +1,5 @@
 import React from 'react';
-import { CATEGORIES, fmt, fmtShort } from './data';
+import { CATEGORIES, fmt, fmtShort, formatNominal, nominalFontSize } from './data';
 import { IconArrowDown } from './icons';
 import { SpendingDonut } from './charts';
 
@@ -153,10 +153,10 @@ export function AnalyticsPage({ transactions = [] }) {
   const catTotal = cats.reduce((s, c) => s + (c.amount || 0), 0);
 
   const stats = [
-    { l: "Total pemasukan",  v: fmtShort(totalIncome  || 0), c: "var(--sage)" },
-    { l: "Total pengeluaran",v: fmtShort(totalExpense || 0), c: "var(--terra)" },
-    { l: "Selisih bersih",   v: fmtShort(net          || 0), c: net >= 0 ? "var(--ink)" : "var(--terra)" },
-    { l: avgLabel,           v: fmtShort(avgExpense   || 0), c: "var(--muted)" },
+    { l: "Total pemasukan",  v: totalIncome  || 0, c: "var(--sage)" },
+    { l: "Total pengeluaran",v: totalExpense || 0, c: "var(--terra)" },
+    { l: "Selisih bersih",   v: net          || 0, c: net >= 0 ? "var(--ink)" : "var(--terra)" },
+    { l: avgLabel,           v: avgExpense   || 0, c: "var(--muted)" },
   ];
 
   // Available months for picker
@@ -216,7 +216,7 @@ export function AnalyticsPage({ transactions = [] }) {
           {stats.map((s, i) => (
             <div key={i} className="card rise" style={{ padding: 16, animationDelay: `${i * 0.03}s` }}>
               <div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{s.l}</div>
-              <div className="serif tnum" style={{ fontSize: 26, letterSpacing: "-0.01em", marginTop: 6, color: s.c }}>{s.v}</div>
+              <div className="serif tnum kpi-nominal" style={{ fontSize: nominalFontSize(s.v), letterSpacing: "-0.01em", marginTop: 6, color: s.c }}>{formatNominal(s.v)}</div>
             </div>
           ))}
         </div>

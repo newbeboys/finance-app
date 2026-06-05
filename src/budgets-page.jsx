@@ -1,5 +1,5 @@
 import React from 'react';
-import { fmt, fmtShort, CATEGORIES } from './data';
+import { fmt, fmtShort, formatNominal, nominalFontSize, CATEGORIES } from './data';
 import { IconPlus, IconSpark, IconClose, CatIcon } from './icons';
 import { useIsMobile } from './use-mobile';
 
@@ -112,7 +112,7 @@ export function BudgetsPage({ transactions = [] }) {
             <div className="card rise" style={{ padding: 18 }}>
               <div style={{ marginBottom: 14 }}>
                 <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Total anggaran {period === "monthly" ? "bulanan" : "mingguan"}</div>
-                <div className="serif tnum" style={{ fontSize: 30, letterSpacing: "-0.02em", marginTop: 4 }}>{fmtShort(totalLimit)}</div>
+                <div className="serif tnum kpi-nominal" style={{ fontSize: nominalFontSize(totalLimit, { hero: true, mobile: true }), letterSpacing: "-0.02em", marginTop: 4 }}>{formatNominal(totalLimit)}</div>
                 <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>{active.length} kategori aktif</div>
                 <div style={{ marginTop: 12, height: 8, background: "var(--line-soft)", borderRadius: 99, overflow: "hidden" }}>
                   <div style={{ height: "100%", width: `${Math.min(totalPct, 1) * 100}%`, background: totalPct > 1 ? "var(--terra)" : "var(--sage)", borderRadius: 99, transition: "width .5s ease" }} />
@@ -140,7 +140,7 @@ export function BudgetsPage({ transactions = [] }) {
             <div className="card rise" style={{ padding: 24, display: "grid", gridTemplateColumns: "1.1fr 1px 1fr 1px 1fr", gap: 24, alignItems: "center" }}>
               <div>
                 <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Total anggaran {period === "monthly" ? "bulanan" : "mingguan"}</div>
-                <div className="serif tnum" style={{ fontSize: 34, letterSpacing: "-0.02em", marginTop: 6 }}>{fmtShort(totalLimit)}</div>
+                <div className="serif tnum kpi-nominal" style={{ fontSize: nominalFontSize(totalLimit, { hero: true }), letterSpacing: "-0.02em", marginTop: 6 }}>{formatNominal(totalLimit)}</div>
                 <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 2 }}>{active.length} kategori aktif</div>
                 <div style={{ marginTop: 14, height: 8, background: "var(--line-soft)", borderRadius: 99, overflow: "hidden" }}>
                   <div style={{ height: "100%", width: `${Math.min(totalPct, 1) * 100}%`, background: totalPct > 1 ? "var(--terra)" : "var(--sage)", borderRadius: 99, transition: "width .5s ease" }} />
