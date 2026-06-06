@@ -5,7 +5,6 @@ const NOTIF_KEY    = 'notif_data';
 const PREFS_KEY    = 'notif_prefs';
 const WEEKLY_KEY   = 'notif_weekly_sent';
 const INC_IDS_KEY  = 'notif_income_ids';
-const BUDGET_KEY   = 'finance_budgets';
 const MAX_NOTIFS   = 50;
 
 const DEFAULT_PREFS = { budget: true, income: true, weekly: true, bills: false };
@@ -29,12 +28,12 @@ function thisWeekKey() {
 }
 
 // ── Generate: Peringatan Anggaran ──────────────────────────────────
-function budgetNotifs(transactions) {
+function budgetNotifs(transactions, budgets) {
   const now = new Date();
   const pfx = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-  const budgets = load(BUDGET_KEY, []).filter(b => b.enabled && b.limit > 0);
-  if (!budgets.length) return [];
+  const activeBudgets = (budgets || []).filter(b => b.enabled && b.limit > 0);
+  if (!activeBudgets.length) return [];
 
   // Hitung pengeluaran bulan ini per categoryId
   const spent = {};
@@ -57,7 +56,7 @@ function budgetNotifs(transactions) {
   };
 
   const notifs = [];
-  budgets.forEach(b => {
+  activeBudgets.forEach(b => {
     const catId   = b.categoryId || fuzzyId(b.label);
     const s       = catId ? (spent[catId] || 0) : 0;
     if (s === 0) return;
@@ -166,7 +165,7 @@ function billsNotif(transactions) {
 
 // ── Hook utama ────────────────────────────────────────────────────
 
-export function useNotifications(transactions, prefs) {
+export function useNotifications(transactions, prefs, budgets) {
   const [notifs, setNotifs] = React.useState(() => load(NOTIF_KEY, []));
 
   // Merge passed prefs with defaults (falls back to localStorage if not passed)
@@ -182,10 +181,10 @@ export function useNotifications(transactions, prefs) {
     const doneIds  = new Set(existing.map(n => n.id));
 
     const fresh = [
-      ...(resolvedPrefs.budget  ? budgetNotifs(transactions) : []),
-      ...(resolvedPrefs.income  ? incomeNotifs(transactions)  : []),
-      ...(resolvedPrefs.weekly  ? weeklyNotif(transactions)   : []),
-      ...(resolvedPrefs.bills   ? billsNotif(transactions)    : []),
+      ...(resolvedPrefs.budget  ? budgetNotifs(transactions, budgets) : []),
+      ...(resolvedPrefs.income  ? incomeNotifs(transactions)           : []),
+      ...(resolvedPrefs.weekly  ? weeklyNotif(transactions)            : []),
+      ...(resolvedPrefs.bills   ? billsNotif(transactions)             : []),
     ].filter(n => !doneIds.has(n.id));
 
     if (fresh.length > 0) {
@@ -193,7 +192,7 @@ export function useNotifications(transactions, prefs) {
       setNotifs(updated);
       save(NOTIF_KEY, updated);
     }
-  }, [transactions, resolvedPrefs]);
+  }, [transactions, resolvedPrefs, budgets]);
 
   const markAllRead = React.useCallback(() => {
     setNotifs(prev => {

@@ -18,6 +18,7 @@ import { useTransactions } from './hooks/useTransactions';
 import { useSavings } from './hooks/useSavings';
 import { useWallets } from './hooks/useWallets';
 import { useNotifications } from './hooks/useNotifications';
+import { useBudgets } from './hooks/useBudgets';
 
 const TWEAK_DEFAULTS = {
   theme: "light",
@@ -147,8 +148,11 @@ function AuthenticatedApp({ session }) {
   // Transactions — sinkron dengan Supabase per user yang login
   const { transactions, loading: txLoading, createTransaction, deleteTransaction, updateTransaction } = useTransactions(session.user.id);
 
+  // Budgets — Supabase
+  const { budgets, createBudget, updateBudget, deleteBudget } = useBudgets(session.user.id);
+
   // Notifications
-  const { notifications, unreadCount, markAllRead } = useNotifications(transactions, notifSubs);
+  const { notifications, unreadCount, markAllRead } = useNotifications(transactions, notifSubs, budgets);
 
   // Savings goals — Supabase
   const { goals, createGoal, deleteGoal, depositToGoal } = useSavings(session.user.id);
@@ -188,11 +192,11 @@ function AuthenticatedApp({ session }) {
 
             <TransactionsCard onAdd={() => setModal(true)} limit={8} onSeeAll={() => setActive("transactions")} transactions={transactions} loading={txLoading} />
             <SavingsCard goals={goals} onManage={() => setActive("savings")} />
-            <BudgetsCard onManage={() => setActive("budgets")} transactions={transactions} />
+            <BudgetsCard onManage={() => setActive("budgets")} transactions={transactions} budgets={budgets} />
           </div>
         )}
 
-        {active === "budgets" && <BudgetsPage transactions={transactions} />}
+        {active === "budgets" && <BudgetsPage transactions={transactions} budgets={budgets} onAdd={createBudget} onUpdate={updateBudget} onDelete={deleteBudget} />}
 
         {active === "wallets" && (
           <WalletsPage accounts={accounts} onAdd={() => setAddAcct(true)} onSetPrimary={setPrimary} onDelete={deleteAccount} transactions={transactions} />

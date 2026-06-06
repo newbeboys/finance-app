@@ -489,20 +489,8 @@ export function SavingsCard({ goals = GOALS, onManage }) {
   );
 }
 
-export function BudgetsCard({ onManage, transactions = [] }) {
-  const [budgets, setBudgets] = React.useState(() => {
-    try { return JSON.parse(localStorage.getItem('finance_budgets') || '[]').filter(b => b.enabled); }
-    catch { return []; }
-  });
-
-  React.useEffect(() => {
-    const refresh = () => {
-      try { setBudgets(JSON.parse(localStorage.getItem('finance_budgets') || '[]').filter(b => b.enabled)); }
-      catch {}
-    };
-    window.addEventListener('storage', refresh);
-    return () => window.removeEventListener('storage', refresh);
-  }, []);
+export function BudgetsCard({ onManage, transactions = [], budgets: allBudgets = [] }) {
+  const budgets = allBudgets.filter(b => b.enabled);
 
   // Hitung pengeluaran aktual per category dari transaksi bulan ini
   const spentByCategory = React.useMemo(() => {
@@ -564,7 +552,7 @@ export function BudgetsCard({ onManage, transactions = [] }) {
                   <div style={{ height: "100%", width: `${Math.min(pct, 1) * 100}%`, background: over ? "var(--terra)" : b.color, borderRadius: 99, transition: "width .6s ease" }} />
                   {over && <div style={{ position: "absolute", top: 0, left: "100%", height: "100%", width: `${(pct - 1) * 100}%`, background: "var(--terra)", transform: "translateX(-100%)", opacity: 0.4 }} />}
                 </div>
-                {over && <div style={{ fontSize: 11, color: "var(--terra)", marginTop: 4 }}>{fmtShort(b.spent - b.limit)} di atas anggaran</div>}
+                {over && <div style={{ fontSize: 11, color: "var(--terra)", marginTop: 4 }}>{fmtShort(computedSpent - b.limit)} di atas anggaran</div>}
               </div>
             );
           })}

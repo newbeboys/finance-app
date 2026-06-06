@@ -3,28 +3,33 @@ import { fmt, fmtShort, formatNominal, nominalFontSize, CATEGORIES } from './dat
 import { IconPlus, IconSpark, IconClose, CatIcon } from './icons';
 import { useIsMobile } from './use-mobile';
 
-const STORAGE_KEY = 'finance_budgets';
-
-function loadBudgets() {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved) : [];
-  } catch {
-    return [];
-  }
-}
-
-export function BudgetsPage({ transactions = [] }) {
+export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, onDelete }) {
   const isMobile = useIsMobile();
 
-  const [rows, setRows] = React.useState(loadBudgets);
+  // Local draft limits while slider is being dragged (flushed to Supabase on release)
+  const [draftLimits, setDraftLimits] = React.useState({});
   const [editing, setEditing] = React.useState(null);
   const [period, setPeriod] = React.useState("monthly");
   const [showAddModal, setShowAddModal] = React.useState(false);
 
-  React.useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(rows)); } catch {}
-  }, [rows]);
+  const getLimit = (r) => draftLimits[r.id] ?? r.limit;
+
+  // Slider drag: update draft locally for instant feedback
+  const onSliderChange = (id, val) =>
+    setDraftLimits(prev => ({ ...prev, [id]: Math.max(0, val) }));
+
+  // Slider release OR input blur: persist to Supabase, clear draft
+  const onLimitCommit = (id, val) => {
+    const limit = Math.max(0, val);
+    onUpdate(id, { limit });
+    setDraftLimits(prev => { const n = { ...prev }; delete n[id]; return n; });
+  };
+
+  const toggle    = (id, enabled) => onUpdate(id, { enabled: !enabled });
+  const deleteRow = (id)          => {
+    onDelete(id);
+    setDraftLimits(prev => { const n = { ...prev }; delete n[id]; return n; });
+  };
 
   // Hitung pengeluaran aktual per category dari transaksi bulan ini
   const spentByCategory = React.useMemo(() => {
@@ -39,9 +44,6 @@ export function BudgetsPage({ transactions = [] }) {
     return map;
   }, [transactions]);
 
-  // 1. Match langsung via categoryId (budget baru)
-  // 2. Fuzzy match via label case-insensitive (budget lama tanpa categoryId)
-  // 3. Fallback ke nilai stored r.spent
   const getSpent = (r) => {
     if (r.categoryId) return spentByCategory[r.categoryId] || 0;
     const bl = (r.label || '').toLowerCase().trim();
@@ -49,20 +51,17 @@ export function BudgetsPage({ transactions = [] }) {
       const cl = c.label.toLowerCase();
       return cl === bl || cl.startsWith(bl) || bl.startsWith(cl.split(' ')[0]);
     });
-    return (match ? spentByCategory[match.id] : undefined) ?? r.spent ?? 0;
+    return match ? (spentByCategory[match.id] || 0) : 0;
   };
 
-  const setLimit  = (id, limit) => setRows(rs => rs.map(r => r.id === id ? { ...r, limit: Math.max(0, limit) } : r));
-  const toggle    = (id)        => setRows(rs => rs.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r));
-  const deleteRow = (id)        => setRows(rs => rs.filter(r => r.id !== id));
-
-  // Filter sesuai tab periode aktif; row lama tanpa field periode default ke "monthly"
+  // Use `budgets` prop (from Supabase) instead of local state
+  const rows = budgets;
   const visibleRows = rows.filter(r => (r.periode || "monthly") === period);
   const active      = visibleRows.filter(r => r.enabled);
-  const totalLimit  = active.reduce((s, r) => s + r.limit, 0);
+  const totalLimit  = active.reduce((s, r) => s + getLimit(r), 0);
   const totalSpent  = active.reduce((s, r) => s + getSpent(r), 0);
   const totalPct    = totalLimit ? totalSpent / totalLimit : 0;
-  const overCount   = active.filter(r => getSpent(r) > r.limit).length;
+  const overCount   = active.filter(r => getSpent(r) > getLimit(r)).length;
 
   // Tanggal otomatis
   const monthLabel = new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }).toUpperCase();
@@ -196,8 +195,9 @@ export function BudgetsPage({ transactions = [] }) {
 
             {visibleRows.map((r, i) => {
               const computedSpent = getSpent(r);
-              const pct = r.limit ? computedSpent / r.limit : 0;
-              const over = computedSpent > r.limit;
+              const currentLimit  = getLimit(r);
+              const pct  = currentLimit ? computedSpent / currentLimit : 0;
+              const over = computedSpent > currentLimit;
               const isEditing = editing === r.id;
 
               if (isMobile) {
@@ -214,7 +214,7 @@ export function BudgetsPage({ transactions = [] }) {
                           {over && <span style={{ marginLeft: 6, color: "var(--terra)" }}>• over!</span>}
                         </div>
                       </div>
-                      <button onClick={() => toggle(r.id)} role="switch" aria-checked={r.enabled}
+                      <button onClick={() => toggle(r.id, r.enabled)} role="switch" aria-checked={r.enabled}
                         style={{ width: 44, height: 26, borderRadius: 99, border: 0, padding: 3, background: r.enabled ? "var(--sage)" : "var(--line)", display: "flex", justifyContent: r.enabled ? "flex-end" : "flex-start", transition: "background .2s ease", flexShrink: 0 }}>
                         <span style={{ width: 20, height: 20, borderRadius: "50%", background: "var(--paper)", boxShadow: "0 1px 2px rgba(0,0,0,.2)" }} />
                       </button>
@@ -228,18 +228,21 @@ export function BudgetsPage({ transactions = [] }) {
                     {r.enabled && (
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                         <input type="range" min="0" max={Math.max(computedSpent * 2, 2_000_000)} step="50000"
-                          value={r.limit} onChange={e => setLimit(r.id, +e.target.value)}
+                          value={getLimit(r)}
+                          onChange={e => onSliderChange(r.id, +e.target.value)}
+                          onMouseUp={e => onLimitCommit(r.id, +e.target.value)}
+                          onTouchEnd={() => onLimitCommit(r.id, getLimit(r))}
                           style={{ flex: 1, accentColor: r.color, cursor: "pointer", height: 20 }} />
                         {isEditing ? (
-                          <input autoFocus type="text" value={r.limit.toLocaleString("id-ID")}
-                            onChange={e => setLimit(r.id, +e.target.value.replace(/\D/g, "") || 0)}
-                            onBlur={() => setEditing(null)}
-                            onKeyDown={e => e.key === "Enter" && setEditing(null)}
+                          <input autoFocus type="text" value={getLimit(r).toLocaleString("id-ID")}
+                            onChange={e => onSliderChange(r.id, +e.target.value.replace(/\D/g, "") || 0)}
+                            onBlur={() => { onLimitCommit(r.id, getLimit(r)); setEditing(null); }}
+                            onKeyDown={e => { if (e.key === "Enter") { onLimitCommit(r.id, getLimit(r)); setEditing(null); } }}
                             style={{ width: 110, padding: "8px 10px", textAlign: "right", fontFamily: "'Geist Mono', monospace", fontSize: 12.5, background: "var(--paper)", border: "1px solid var(--ink)", borderRadius: 8, color: "var(--ink)", outline: "none", flexShrink: 0 }} />
                         ) : (
                           <button onClick={() => setEditing(r.id)}
                             style={{ padding: "8px 10px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 8, fontSize: 12.5, color: "var(--ink)", fontVariantNumeric: "tabular-nums", minWidth: 100, textAlign: "right", flexShrink: 0 }}>
-                            {fmt(r.limit)}
+                            {fmt(getLimit(r))}
                           </button>
                         )}
                       </div>
@@ -266,25 +269,28 @@ export function BudgetsPage({ transactions = [] }) {
                     </div>
                     {r.enabled && (
                       <input type="range" min="0" max={Math.max(computedSpent * 2, 2_000_000)} step="50000"
-                        value={r.limit} onChange={e => setLimit(r.id, +e.target.value)}
+                        value={getLimit(r)}
+                        onChange={e => onSliderChange(r.id, +e.target.value)}
+                        onMouseUp={e => onLimitCommit(r.id, +e.target.value)}
+                        onTouchEnd={() => onLimitCommit(r.id, getLimit(r))}
                         style={{ width: "100%", marginTop: 8, accentColor: r.color, cursor: "pointer" }} />
                     )}
                   </div>
 
                   <div style={{ textAlign: "right" }}>
                     {isEditing ? (
-                      <input autoFocus type="text" value={r.limit.toLocaleString("id-ID")}
-                        onChange={e => setLimit(r.id, +e.target.value.replace(/\D/g, "") || 0)}
-                        onBlur={() => setEditing(null)}
-                        onKeyDown={e => e.key === "Enter" && setEditing(null)}
+                      <input autoFocus type="text" value={getLimit(r).toLocaleString("id-ID")}
+                        onChange={e => onSliderChange(r.id, +e.target.value.replace(/\D/g, "") || 0)}
+                        onBlur={() => { onLimitCommit(r.id, getLimit(r)); setEditing(null); }}
+                        onKeyDown={e => { if (e.key === "Enter") { onLimitCommit(r.id, getLimit(r)); setEditing(null); } }}
                         style={{ width: 130, padding: "7px 10px", textAlign: "right", fontFamily: "'Geist Mono', monospace", fontSize: 12.5, background: "var(--paper)", border: "1px solid var(--ink)", borderRadius: 8, color: "var(--ink)", outline: "none" }} />
                     ) : (
-                      <button onClick={() => r.enabled && setEditing(r.id)} disabled={!r.enabled} style={{ padding: "7px 12px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 8, fontSize: 12.5, color: "var(--ink)", fontVariantNumeric: "tabular-nums", cursor: r.enabled ? "pointer" : "default", minWidth: 130 }}>{fmt(r.limit)}</button>
+                      <button onClick={() => r.enabled && setEditing(r.id)} disabled={!r.enabled} style={{ padding: "7px 12px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 8, fontSize: 12.5, color: "var(--ink)", fontVariantNumeric: "tabular-nums", cursor: r.enabled ? "pointer" : "default", minWidth: 130 }}>{fmt(getLimit(r))}</button>
                     )}
                   </div>
 
                   <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                    <button onClick={() => toggle(r.id)} role="switch" aria-checked={r.enabled} style={{ width: 42, height: 24, borderRadius: 99, border: 0, padding: 3, background: r.enabled ? "var(--sage)" : "var(--line)", display: "flex", justifyContent: r.enabled ? "flex-end" : "flex-start", transition: "background .2s ease" }}>
+                    <button onClick={() => toggle(r.id, r.enabled)} role="switch" aria-checked={r.enabled} style={{ width: 42, height: 24, borderRadius: 99, border: 0, padding: 3, background: r.enabled ? "var(--sage)" : "var(--line)", display: "flex", justifyContent: r.enabled ? "flex-end" : "flex-start", transition: "background .2s ease" }}>
                       <span style={{ width: 18, height: 18, borderRadius: "50%", background: "var(--paper)", boxShadow: "0 1px 2px rgba(0,0,0,.2)" }} />
                     </button>
                   </div>
@@ -298,11 +304,10 @@ export function BudgetsPage({ transactions = [] }) {
               );
             })}
 
-            <div style={{ paddingTop: 18, display: "flex", flexDirection: isMobile ? "column" : "row", justifyContent: isMobile ? "stretch" : "space-between", alignItems: isMobile ? "stretch" : "center", gap: isMobile ? 10 : 0 }}>
+            <div style={{ paddingTop: 18, display: "flex", flexDirection: isMobile ? "column" : "row", justifyContent: isMobile ? "stretch" : "flex-start", alignItems: isMobile ? "stretch" : "center", gap: isMobile ? 10 : 0 }}>
               <button onClick={() => setShowAddModal(true)} style={{ display: "inline-flex", alignItems: "center", justifyContent: isMobile ? "center" : "flex-start", gap: 8, padding: isMobile ? "13px 14px" : "9px 14px", background: "var(--paper)", border: "1px dashed var(--line)", borderRadius: 10, fontSize: isMobile ? 14 : 12.5, color: "var(--ink-2)" }}>
                 <IconPlus size={14} /> Tambah kategori anggaran
               </button>
-              <button onClick={() => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(rows)); } catch {} }} style={{ padding: isMobile ? "14px 18px" : "10px 18px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 10, fontSize: isMobile ? 14 : 13, fontWeight: 500 }}>Simpan anggaran</button>
             </div>
           </div>
 
@@ -321,7 +326,7 @@ export function BudgetsPage({ transactions = [] }) {
           defaultPeriod={period}
           existingCategoryIds={rows.map(r => r.categoryId).filter(Boolean)}
           onClose={() => setShowAddModal(false)}
-          onAdd={row => { setRows(rs => [...rs, row]); setShowAddModal(false); }}
+          onAdd={row => { onAdd(row); setShowAddModal(false); }}
         />
       )}
     </div>
