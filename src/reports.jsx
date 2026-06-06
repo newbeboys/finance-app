@@ -203,15 +203,82 @@ function reportPayload(kind, key) {
   };
 }
 
-function downloadReport(kind, key) {
+// Resolve CSS custom properties to literal values so html2canvas can render them
+const PDF_COLORS = {
+  '--ink': '#2A2C20', '--muted': '#6E6B58', '--line': '#D8D2BE', '--paper': '#FBF8EE',
+  '--sage': '#5C6B4C', '--terra': '#B26A4A', '--gold': '#B68A3E', '--blush': '#C9886D',
+  '--cream': '#EAE5D5', '--line-soft': '#E4DEC8',
+};
+function resolveCssVars(html) {
+  return Object.entries(PDF_COLORS).reduce(
+    (s, [k, v]) => s.replaceAll(`var(${k})`, v), html
+  );
+}
+
+async function downloadReport(kind, key) {
   const p = reportPayload(kind, key);
-  const html = buildReportDoc(p);
-  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = p.filename + ".html";
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 4000);
+  const isAndroid = window.Capacitor?.getPlatform?.() === 'android';
+
+  // Dynamic import keeps the initial bundle small
+  const [{ default: html2canvas }, jspdfMod] = await Promise.all([
+    import('html2canvas'),
+    import('jspdf'),
+  ]);
+  const jsPDF = jspdfMod.jsPDF ?? jspdfMod.default?.jsPDF ?? jspdfMod.default;
+
+  const resolvedHtml = resolveCssVars(buildReportDoc(p));
+  const parsed = new DOMParser().parseFromString(resolvedHtml, 'text/html');
+
+  // Build an off-screen container with the report's own <style> injected
+  const container = document.createElement('div');
+  container.style.cssText = 'position:fixed;left:-9999px;top:0;width:760px;z-index:-1;background:#FBF8EE;';
+  const styleEl = document.createElement('style');
+  styleEl.textContent = Array.from(parsed.querySelectorAll('style')).map(s => s.textContent).join('\n');
+  container.appendChild(styleEl);
+  const page = parsed.querySelector('.page');
+  if (page) container.appendChild(page);
+  document.body.appendChild(container);
+
+  try {
+    await new Promise(r => setTimeout(r, 350)); // let fonts/layout settle
+
+    const canvas = await html2canvas(container, {
+      scale: 2, useCORS: true, allowTaint: true,
+      backgroundColor: '#FBF8EE', logging: false,
+    });
+
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pdfW   = pdf.internal.pageSize.getWidth();
+    const pdfH   = pdf.internal.pageSize.getHeight();
+    const imgW   = canvas.width;
+    const imgH   = canvas.height;
+    const imgH_mm = (imgH * pdfW) / imgW;     // total PDF height of image
+    const pageH_px = (pdfH * imgW) / pdfW;    // canvas pixels per PDF page
+
+    const imgData = canvas.toDataURL('image/png');
+    const pages = Math.ceil(imgH / pageH_px);
+    for (let i = 0; i < pages; i++) {
+      if (i > 0) pdf.addPage();
+      pdf.addImage(imgData, 'PNG', 0, -(i * pdfH), pdfW, imgH_mm);
+    }
+
+    if (isAndroid) {
+      const { Filesystem, Directory } = await import('@capacitor/filesystem');
+      const base64 = pdf.output('datauristring').split(',')[1];
+      const filename = `${p.filename}.pdf`;
+      await Filesystem.writeFile({
+        path: `Download/${filename}`,
+        data: base64,
+        directory: Directory.ExternalStorage,
+        recursive: true,
+      });
+      alert(`PDF berhasil disimpan!\nBuka folder Download di HP kamu.\n${filename}`);
+    } else {
+      pdf.save(`${p.filename}.pdf`);
+    }
+  } finally {
+    document.body.removeChild(container);
+  }
 }
 
 function printReport(kind, key) {
