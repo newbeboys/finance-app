@@ -3,7 +3,7 @@ import { IconSearch, IconBell, IconSun, IconMoon, IconPlus } from './icons';
 import { AccountSwitcher } from './wallets';
 import { useIsMobile } from './use-mobile';
 
-export function TopBar({ theme, onTheme, onAdd, accounts, selectedAcct, onSelectAcct, onAddAcct, notifEnabled, user }) {
+export function TopBar({ theme, onTheme, onAdd, accounts, selectedAcct, onSelectAcct, onAddAcct, notifEnabled, user, notifications = [], unreadCount = 0, onMarkAllRead }) {
   const [q, setQ] = React.useState("");
   const [bell, setBell] = React.useState(false);
   const isMobile = useIsMobile();
@@ -13,6 +13,17 @@ export function TopBar({ theme, onTheme, onAdd, accounts, selectedAcct, onSelect
   const tanggal = new Date().toLocaleDateString('id-ID', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   }).toUpperCase();
+
+  const bellBtn = (size, style) => (
+    <button onClick={() => setBell(b => !b)} aria-label="Notifications" style={{ ...style, position: "relative" }}>
+      <IconBell size={size} />
+      {unreadCount > 0 && notifEnabled !== false && (
+        <span style={{ position: "absolute", top: -3, right: -3, minWidth: 16, height: 16, borderRadius: 999, background: "var(--terra)", color: "#fff", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px", lineHeight: 1 }}>
+          {unreadCount > 9 ? "9+" : unreadCount}
+        </span>
+      )}
+    </button>
+  );
 
   if (isMobile) {
     return (
@@ -26,9 +37,7 @@ export function TopBar({ theme, onTheme, onAdd, accounts, selectedAcct, onSelect
           </h1>
         </div>
 
-        <button onClick={() => setBell(b => !b)} aria-label="Notifications" style={{ ...iconBtnMobile }}>
-          <IconBell size={19} />
-        </button>
+        {bellBtn(19, iconBtnMobile)}
 
         <button onClick={onTheme} aria-label="Toggle tema" style={iconBtnMobile}>
           {theme === "dark" ? <IconSun size={19} /> : <IconMoon size={19} />}
@@ -39,7 +48,7 @@ export function TopBar({ theme, onTheme, onAdd, accounts, selectedAcct, onSelect
           <IconPlus size={18} />
         </button>
 
-        {bell && <Notifications onClose={() => setBell(false)} enabled={notifEnabled !== false} mobile />}
+        {bell && <Notifications onClose={() => setBell(false)} enabled={notifEnabled !== false} mobile notifications={notifications} unreadCount={unreadCount} onMarkAllRead={onMarkAllRead} />}
       </header>
     );
   }
@@ -71,9 +80,7 @@ export function TopBar({ theme, onTheme, onAdd, accounts, selectedAcct, onSelect
         <AccountSwitcher accounts={accounts} selected={selectedAcct} onSelect={onSelectAcct} onAdd={onAddAcct} />
       )}
 
-      <button onClick={() => setBell(b => !b)} aria-label="Notifications" style={iconBtn}>
-        <IconBell size={17} />
-      </button>
+      {bellBtn(17, iconBtn)}
 
       <button onClick={onTheme} aria-label="Theme" style={iconBtn}>
         {theme === "dark" ? <IconSun size={17} /> : <IconMoon size={17} />}
@@ -83,7 +90,7 @@ export function TopBar({ theme, onTheme, onAdd, accounts, selectedAcct, onSelect
         <IconPlus size={15} /> Tambah transaksi
       </button>
 
-      {bell && <Notifications onClose={() => setBell(false)} enabled={notifEnabled !== false} />}
+      {bell && <Notifications onClose={() => setBell(false)} enabled={notifEnabled !== false} notifications={notifications} unreadCount={unreadCount} onMarkAllRead={onMarkAllRead} />}
     </header>
   );
 }
@@ -102,8 +109,7 @@ const iconBtnMobile = {
   borderRadius: 12, color: "var(--ink)", flexShrink: 0,
 };
 
-function Notifications({ onClose, enabled = true, mobile = false }) {
-  const items = [];
+function Notifications({ onClose, enabled = true, mobile = false, notifications = [], unreadCount = 0, onMarkAllRead }) {
   return (
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 30 }} />
@@ -116,17 +122,31 @@ function Notifications({ onClose, enabled = true, mobile = false }) {
         width: mobile ? undefined : 320,
         zIndex: 31, padding: 12,
       }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "4px 6px 10px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 6px 10px" }}>
           <div style={{ fontSize: 13, fontWeight: 500 }}>Notifikasi</div>
-          <div style={{ fontSize: 11.5, color: "var(--muted)" }}>{enabled && items.length > 0 ? `${items.length} baru` : "Nonaktif"}</div>
+          {enabled && unreadCount > 0 ? (
+            <button onClick={onMarkAllRead} style={{ fontSize: 11.5, color: "var(--sage)", background: "transparent", border: 0, cursor: "pointer", padding: 0, fontFamily: "inherit" }}>
+              Tandai semua dibaca
+            </button>
+          ) : (
+            <div style={{ fontSize: 11.5, color: "var(--muted)" }}>
+              {!enabled ? "Nonaktif" : notifications.length > 0 ? "Semua terbaca" : ""}
+            </div>
+          )}
         </div>
-        {enabled && items.length > 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            {items.map((n, i) => (
-              <div key={i} style={{ display: "flex", gap: 10, padding: "10px 8px", borderRadius: 10, alignItems: "flex-start" }}>
-                <span style={{ marginTop: 6, width: 7, height: 7, borderRadius: "50%", background: n.tone === "warn" ? "var(--terra)" : n.tone === "good" ? "var(--sage)" : "var(--gold)", flexShrink: 0 }} />
-                <div style={{ fontSize: 13, lineHeight: 1.4, flex: 1 }}>{n.text}</div>
-                <div style={{ fontSize: 11.5, color: "var(--muted)", flexShrink: 0 }}>{n.time}</div>
+        {enabled && notifications.length > 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 2, maxHeight: 380, overflowY: "auto" }}>
+            {notifications.map((n) => (
+              <div key={n.id} style={{
+                display: "flex", gap: 10, padding: "10px 8px", borderRadius: 10, alignItems: "flex-start",
+                background: n.read ? "transparent" : "color-mix(in oklch, var(--sage) 8%, transparent)",
+              }}>
+                <span style={{ fontSize: 15, lineHeight: 1.5, flexShrink: 0 }}>{n.icon}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: n.read ? 400 : 600, lineHeight: 1.4 }}>{n.message}</div>
+                  {n.detail && <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2, lineHeight: 1.4 }}>{n.detail}</div>}
+                </div>
+                {!n.read && <span style={{ marginTop: 6, width: 7, height: 7, borderRadius: "50%", background: "var(--terra)", flexShrink: 0 }} />}
               </div>
             ))}
           </div>

@@ -80,10 +80,10 @@ const PALETTE_SWATCHES = [
   { id: "bone",  label: "Bone",  hint: "Netral", c: "#EFEBDF" },
 ];
 
-export function SettingsPage({ t, setTweak, user }) {
+export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub }) {
   const notifOn = t.notifications !== false;
-  const [subs, setSubs] = React.useState({ budget: true, income: true, weekly: true, bills: false });
-  const toggleSub = (k) => setSubs(s => ({ ...s, [k]: !s[k] }));
+  const subs = notifSubs ?? { budget: true, income: true, weekly: true, bills: false };
+  const toggleSub = onToggleNotifSub ?? (() => {});
   const [loggingOut, setLoggingOut] = React.useState(false);
 
   const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Pengguna';

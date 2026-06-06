@@ -17,6 +17,7 @@ import { RegisterPage } from './pages/Register';
 import { useTransactions } from './hooks/useTransactions';
 import { useSavings } from './hooks/useSavings';
 import { useWallets } from './hooks/useWallets';
+import { useNotifications } from './hooks/useNotifications';
 
 const TWEAK_DEFAULTS = {
   theme: "light",
@@ -49,9 +50,16 @@ export default function App() {
 }
 
 const TWEAKS_KEY = 'finance_tweaks';
+const NOTIF_PREFS_KEY = 'notif_prefs';
+const NOTIF_PREFS_DEFAULTS = { budget: true, income: true, weekly: true, bills: false };
 
 function loadSavedTweaks() {
   try { return JSON.parse(localStorage.getItem(TWEAKS_KEY) || '{}'); } catch { return {}; }
+}
+
+function loadNotifPrefs() {
+  try { return { ...NOTIF_PREFS_DEFAULTS, ...JSON.parse(localStorage.getItem(NOTIF_PREFS_KEY) || '{}') }; }
+  catch { return { ...NOTIF_PREFS_DEFAULTS }; }
 }
 
 function AuthenticatedApp({ session }) {
@@ -126,8 +134,21 @@ function AuthenticatedApp({ session }) {
     setSelectedAcct(sel => sel === id ? "all" : sel);
   };
 
+  // Notification preferences — lifted so both SettingsPage and useNotifications stay in sync
+  const [notifSubs, setNotifSubsRaw] = React.useState(loadNotifPrefs);
+  const toggleNotifSub = React.useCallback((k) => {
+    setNotifSubsRaw(s => {
+      const next = { ...s, [k]: !s[k] };
+      try { localStorage.setItem(NOTIF_PREFS_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
+
   // Transactions — sinkron dengan Supabase per user yang login
   const { transactions, loading: txLoading, createTransaction, deleteTransaction, updateTransaction } = useTransactions(session.user.id);
+
+  // Notifications
+  const { notifications, unreadCount, markAllRead } = useNotifications(transactions, notifSubs);
 
   // Savings goals — Supabase
   const { goals, createGoal, deleteGoal, depositToGoal } = useSavings(session.user.id);
@@ -149,6 +170,9 @@ function AuthenticatedApp({ session }) {
           onAddAcct={() => setAddAcct(true)}
           notifEnabled={t.notifications}
           user={session.user}
+          notifications={notifications}
+          unreadCount={unreadCount}
+          onMarkAllRead={markAllRead}
         />
 
         {active === "dashboard" && (
@@ -186,7 +210,7 @@ function AuthenticatedApp({ session }) {
           <TransactionsPage accounts={accounts} onAdd={() => setModal(true)} transactions={transactions} loading={txLoading} onDelete={deleteTransaction} onUpdate={updateTransaction} />
         )}
 
-        {active === "settings" && <SettingsPage t={t} setTweak={setTweak} user={session.user} />}
+        {active === "settings" && <SettingsPage t={t} setTweak={setTweak} user={session.user} notifSubs={notifSubs} onToggleNotifSub={toggleNotifSub} />}
 
         {active !== "dashboard" && active !== "budgets" && active !== "wallets" && active !== "reports" && active !== "analytics" && active !== "savings" && active !== "transactions" && active !== "settings" && <Placeholder section={active} />}
       </main>
