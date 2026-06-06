@@ -205,7 +205,7 @@ export function AnalyticsPage({ transactions = [] }) {
                 {scope === "month" ? pickedLabel : "1 Bulan"} ▾
               </button>
             </div>
-            <button onClick={() => { if (typeof downloadReport === "function") downloadReport("year", now.getFullYear()); }} style={{ padding: "10px 14px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 10, fontSize: 12.5, display: "inline-flex", gap: 7, alignItems: "center" }}>
+            <button onClick={() => { if (window.buildPayload && window.downloadPdf) window.downloadPdf(window.buildPayload(transactions, "year", String(now.getFullYear()))); }} style={{ padding: "10px 14px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 10, fontSize: 12.5, display: "inline-flex", gap: 7, alignItems: "center" }}>
               <IconArrowDown size={14} /> Unduh laporan
             </button>
           </div>

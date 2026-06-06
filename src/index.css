@@ -396,9 +396,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
     height: 100vh !important;
     height: 100dvh !important;
     border-radius: 0 !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+    overflow: hidden !important;
   }
   .report-preview-header {
     padding: 10px 14px !important;
+    padding-top: calc(10px + env(safe-area-inset-top, 0px)) !important;
+    flex-shrink: 0 !important;
   }
   .report-preview-btn-print {
     display: none !important;

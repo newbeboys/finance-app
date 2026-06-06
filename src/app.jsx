@@ -19,6 +19,7 @@ import { useSavings } from './hooks/useSavings';
 import { useWallets } from './hooks/useWallets';
 import { useNotifications } from './hooks/useNotifications';
 import { useBudgets } from './hooks/useBudgets';
+import { useCustomCategories } from './hooks/useCustomCategories';
 
 const TWEAK_DEFAULTS = {
   theme: "light",
@@ -169,6 +170,9 @@ function AuthenticatedApp({ session }) {
   // Budgets — Supabase
   const { budgets, createBudget, updateBudget, deleteBudget } = useBudgets(session.user.id);
 
+  // Kategori kustom — dipakai bersama menu Anggaran & Transaksi (realtime)
+  const { customCategories, addCustomCategory } = useCustomCategories(session.user.id);
+
   // Notifications
   const { notifications, unreadCount, markAllRead } = useNotifications(transactions, notifSubs, budgets);
 
@@ -208,19 +212,19 @@ function AuthenticatedApp({ session }) {
 
             {t.showAI && <InsightsCard transactions={transactions} />}
 
-            <TransactionsCard onAdd={() => setModal(true)} limit={8} onSeeAll={() => setActive("transactions")} transactions={transactions} loading={txLoading} />
+            <TransactionsCard onAdd={() => setModal(true)} limit={8} onSeeAll={() => setActive("transactions")} transactions={transactions} loading={txLoading} customCategories={customCategories} />
             <SavingsCard goals={goals} onManage={() => setActive("savings")} />
             <BudgetsCard onManage={() => setActive("budgets")} transactions={transactions} budgets={budgets} />
           </div>
         )}
 
-        {active === "budgets" && <BudgetsPage transactions={transactions} budgets={budgets} onAdd={createBudget} onUpdate={updateBudget} onDelete={deleteBudget} />}
+        {active === "budgets" && <BudgetsPage transactions={transactions} budgets={budgets} onAdd={createBudget} onUpdate={updateBudget} onDelete={deleteBudget} customCategories={customCategories} onCreateCustom={addCustomCategory} />}
 
         {active === "wallets" && (
           <WalletsPage accounts={accounts} onAdd={() => setAddAcct(true)} onSetPrimary={setPrimary} onDelete={deleteAccount} transactions={transactions} />
         )}
 
-        {active === "reports" && <ReportsPage />}
+        {active === "reports" && <ReportsPage transactions={transactions} />}
 
         {active === "analytics" && <AnalyticsPage transactions={transactions} />}
 
@@ -229,7 +233,7 @@ function AuthenticatedApp({ session }) {
         )}
 
         {active === "transactions" && (
-          <TransactionsPage accounts={accounts} onAdd={() => setModal(true)} transactions={transactions} loading={txLoading} onDelete={deleteTransaction} onUpdate={updateTransaction} />
+          <TransactionsPage accounts={accounts} onAdd={() => setModal(true)} transactions={transactions} loading={txLoading} onDelete={deleteTransaction} onUpdate={updateTransaction} customCategories={customCategories} onCreateCustom={addCustomCategory} />
         )}
 
         {active === "settings" && <SettingsPage t={t} setTweak={setTweak} user={session.user} notifSubs={notifSubs} onToggleNotifSub={toggleNotifSub} />}
@@ -237,7 +241,7 @@ function AuthenticatedApp({ session }) {
         {active !== "dashboard" && active !== "budgets" && active !== "wallets" && active !== "reports" && active !== "analytics" && active !== "savings" && active !== "transactions" && active !== "settings" && <Placeholder section={active} />}
       </main>
 
-      <AddTransactionModal open={modal} onClose={() => setModal(false)} onSave={createTransaction} />
+      <AddTransactionModal open={modal} onClose={() => setModal(false)} onSave={createTransaction} customCategories={customCategories} onCreateCustom={addCustomCategory} />
       <AddAccountModal open={addAcct} onClose={() => setAddAcct(false)} onCreate={createAccount} />
       <AddGoalModal open={addGoal} onClose={() => setAddGoal(false)} onCreate={createGoal} />
       <DepositModal goal={depositGoal} onClose={() => setDepositGoal(null)} onConfirm={depositToGoal} />

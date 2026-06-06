@@ -1,11 +1,12 @@
 import React from 'react';
-import { TRANSACTIONS, CATEGORIES, INCOME_CATEGORIES, ALL_CATEGORIES, fmt } from './data';
+import { TRANSACTIONS, CATEGORIES, INCOME_CATEGORIES, fmt } from './data';
 
 import { IconFilter, IconPlus, IconArrowRight, IconClose, CatIcon } from './icons';
 import { ghostBtn } from './widgets';
 import { useIsMobile } from './use-mobile';
+import { CategoryField, CUSTOM_ID, resolveCategory } from './category-field';
 
-export function TransactionsCard({ onAdd, limit, onSeeAll, transactions: txProp, loading = false }) {
+export function TransactionsCard({ onAdd, limit, onSeeAll, transactions: txProp, loading = false, customCategories = [] }) {
   const transactions = txProp ?? TRANSACTIONS;
   const isMobile = useIsMobile();
   const [filter, setFilter] = React.useState("all");
@@ -91,7 +92,7 @@ export function TransactionsCard({ onAdd, limit, onSeeAll, transactions: txProp,
           </div>
 
           {items.map((t, i) => {
-            const cat = ALL_CATEGORIES.find(c => c.id === t.category);
+            const cat = resolveCategory(t.category, customCategories);
             const isIncome = t.amount > 0;
             const color = cat?.color || (isIncome ? "var(--sage)" : "var(--muted-2)");
             const borderBottom = i < items.length - 1 ? "1px solid var(--line-soft)" : 0;
@@ -151,18 +152,22 @@ export function TransactionsCard({ onAdd, limit, onSeeAll, transactions: txProp,
   );
 }
 
-export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial = null }) {
+export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial = null, customCategories = [], onCreateCustom }) {
   const isEdit = !!initial;
   const [type, setType] = React.useState("expense");
   const [amount, setAmount] = React.useState("");
   const [cat, setCat] = React.useState("food");
+  const [pendingCustom, setPendingCustom] = React.useState(null); // { name, color } saat pilih Kustom
   const [merchant, setMerchant] = React.useState("");
   const [note, setNote] = React.useState("");
   const [recurring, setRecurring] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
 
   // Pre-fill saat mode edit atau reset saat modal buka baru
   React.useEffect(() => {
     if (!open) return;
+    setPendingCustom(null);
+    setSaving(false);
     if (initial) {
       const t = initial.amount < 0 ? "expense" : "income";
       setType(t);
@@ -179,15 +184,33 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
 
   if (!open) return null;
 
+  // Kategori kustom hanya untuk pengeluaran (sinkron dengan menu Anggaran)
   const activeCats = type === "income" ? INCOME_CATEGORIES : CATEGORIES;
+  const activeCustom = type === "income" ? [] : customCategories;
+  const isCustom = cat === CUSTOM_ID;
 
   const switchType = (newType) => {
     setType(newType);
+    setPendingCustom(null);
     if (newType === "income") setCat(INCOME_CATEGORIES[0].id);
     else setCat(CATEGORIES[0].id);
   };
 
-  const submit = () => {
+  const valid = (+amount > 0) && (!isCustom || (pendingCustom?.name || '').trim().length > 0);
+
+  const submit = async () => {
+    if (!valid || saving) return;
+    setSaving(true);
+
+    // Kategori Kustom → simpan dulu ke Supabase, lalu pakai id-nya
+    let categoryId = cat;
+    if (isCustom) {
+      if (!onCreateCustom) { setSaving(false); return; }
+      const { category, error } = await onCreateCustom({ name: pendingCustom.name, color: pendingCustom.color });
+      if (error || !category) { setSaving(false); return; }
+      categoryId = category.id;
+    }
+
     const now = new Date();
     const months = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
     const date = `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
@@ -199,15 +222,16 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
       time:     initial?.time || time,
       merchant: merchant.trim() || "—",
       note:     note.trim(),
-      category: cat,
+      category: categoryId,
       method:   initial?.method || "Tunai",
       amount:   type === "expense" ? -(+amount || 0) : (+amount || 0),
     };
     if (isEdit) {
-      onUpdate?.(initial.id, tx);
+      await onUpdate?.(initial.id, tx);
     } else {
-      onSave?.(tx);
+      await onSave?.(tx);
     }
+    setSaving(false);
     onClose();
   };
 
@@ -244,7 +268,15 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
             <input value={merchant} onChange={e => setMerchant(e.target.value)} placeholder="nama merchant" style={inputStyle} />
           </Field>
           <Field label="Kategori">
-            <CategorySelect value={cat} onChange={setCat} categories={activeCats} />
+            <CategoryField
+              value={cat}
+              onChange={setCat}
+              categories={activeCats}
+              customCategories={activeCustom}
+              allowCustom={type !== "income"}
+              pending={pendingCustom}
+              onPendingChange={setPendingCustom}
+            />
           </Field>
           <Field label="Catatan (opsional)">
             <input value={note} onChange={e => setNote(e.target.value)} placeholder="Untuk apa?" style={inputStyle} />
@@ -257,7 +289,10 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
 
         <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
           <button onClick={onClose} style={{ flex: 1, padding: "13px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 12, fontSize: 14, color: "var(--ink-2)" }}>Batal</button>
-          <button onClick={submit} style={{ flex: 2, padding: "13px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 14, fontWeight: 500 }}>{isEdit ? "Simpan perubahan" : "Simpan transaksi"}</button>
+          <button onClick={submit} disabled={!valid || saving}
+            style={{ flex: 2, padding: "13px", background: (valid && !saving) ? "var(--ink)" : "var(--line-soft)", color: (valid && !saving) ? "var(--cream)" : "var(--muted-2)", border: 0, borderRadius: 12, fontSize: 14, fontWeight: 500, cursor: (valid && !saving) ? "pointer" : "default" }}>
+            {saving ? "Menyimpan…" : (isEdit ? "Simpan perubahan" : "Simpan transaksi")}
+          </button>
         </div>
       </div>
     </div>
@@ -272,96 +307,5 @@ function Field({ label, children }) {
       <span style={{ display: "block", fontSize: 11, color: "var(--muted)", letterSpacing: ".05em", textTransform: "uppercase", marginBottom: 6 }}>{label}</span>
       {children}
     </label>
-  );
-}
-
-function CategorySelect({ value, onChange, categories = CATEGORIES }) {
-  const [open, setOpen] = React.useState(false);
-  const [pos, setPos] = React.useState(null);
-  const wrapRef = React.useRef(null);
-  const selected = categories.find(c => c.id === value);
-
-  const toggle = () => {
-    if (!open && wrapRef.current) {
-      const r = wrapRef.current.getBoundingClientRect();
-      setPos({ top: r.bottom + 4, left: r.left, width: r.width });
-    }
-    setOpen(o => !o);
-  };
-
-  React.useEffect(() => {
-    if (!open) return;
-    const close = (e) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
-    };
-    document.addEventListener("mousedown", close);
-    document.addEventListener("touchstart", close);
-    return () => {
-      document.removeEventListener("mousedown", close);
-      document.removeEventListener("touchstart", close);
-    };
-  }, [open]);
-
-  return (
-    <div ref={wrapRef}>
-      <button type="button" onClick={toggle}
-        style={{ ...inputStyle, display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}>
-        <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-          {selected && (
-            <span style={{ width: 10, height: 10, borderRadius: 3, background: selected.color, flexShrink: 0 }} />
-          )}
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {selected?.label || "Pilih kategori"}
-          </span>
-        </span>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--muted)", flexShrink: 0, marginLeft: 6, transform: open ? "rotate(180deg)" : "none", transition: "transform .15s ease" }}>
-          <path d="M6 9l6 6 6-6" />
-        </svg>
-      </button>
-
-      {open && pos && (
-        <div style={{
-          position: "fixed",
-          top: pos.top,
-          left: pos.left,
-          width: pos.width,
-          maxHeight: 200,
-          overflowY: "auto",
-          background: "var(--paper)",
-          border: "1px solid var(--line-soft)",
-          borderRadius: 10,
-          boxShadow: "0 8px 28px -8px rgba(42,44,32,.3)",
-          zIndex: 9999,
-        }}>
-          {categories.map((c, i) => (
-            <button key={c.id} type="button"
-              onClick={() => { onChange(c.id); setOpen(false); }}
-              style={{
-                width: "100%",
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "10px 14px",
-                background: c.id === value ? "var(--ivory)" : "transparent",
-                border: 0,
-                borderBottom: i < categories.length - 1 ? "1px solid var(--line-soft)" : 0,
-                fontSize: 14,
-                color: "var(--ink)",
-                cursor: "pointer",
-                textAlign: "left",
-                fontFamily: "inherit",
-              }}>
-              <span style={{ width: 10, height: 10, borderRadius: 3, background: c.color, flexShrink: 0 }} />
-              {c.label}
-              {c.id === value && (
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: "auto", color: "var(--sage)" }}>
-                  <path d="M20 6L9 17l-5-5" />
-                </svg>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
   );
 }

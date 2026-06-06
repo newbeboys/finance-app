@@ -1,28 +1,106 @@
 import React from 'react';
-import { CASHFLOW, CATEGORIES, fmtShort } from './data';
+import { ALL_CATEGORIES, fmtShort } from './data';
 import { IconReport, IconArrowDown, IconClose } from './icons';
+import { downloadExcel } from './report-excel';
 
 // ── Halaman Laporan (Reports) ──────────────────────────────────────
 // Generates monthly & yearly financial reports as downloadable, print-ready
 // documents (standalone HTML → "Save as PDF").
 
-const ID_MONTHS = { Jan: "Januari", Feb: "Februari", Mar: "Maret", Apr: "April", May: "Mei", Jun: "Juni", Jul: "Juli", Aug: "Agustus", Sep: "September", Oct: "Oktober", Nov: "November", Dec: "Desember" };
+const ID_MONTHS_FULL = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+const ID_MONTHS_ABBR = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
 
-// Map CASHFLOW (Jun..May) onto calendar years: Jun–Dec = 2025, Jan–May = 2026.
-function monthMeta() {
-  const yearOf = { Jun: 2025, Jul: 2025, Aug: 2025, Sep: 2025, Oct: 2025, Nov: 2025, Dec: 2025, Jan: 2026, Feb: 2026, Mar: 2026, Apr: 2026, May: 2026 };
-  return CASHFLOW.map((c, i) => ({
-    idx: i, abbr: c.m, full: ID_MONTHS[c.m], year: yearOf[c.m],
-    income: c.income, expense: c.expense, net: c.income - c.expense,
-  }));
+// Aggregate transactions → income / expense / net + expense-by-category.
+function aggregate(txs) {
+  let income = 0, expense = 0;
+  const catMap = {};
+  txs.forEach(t => {
+    if (t.amount >= 0) { income += t.amount; }
+    else { const a = -t.amount; expense += a; catMap[t.category] = (catMap[t.category] || 0) + a; }
+  });
+  const cats = Object.entries(catMap).map(([id, amount]) => {
+    const c = ALL_CATEGORIES.find(x => x.id === id);
+    return { id, label: c?.label || id, color: c?.color || '#8C7B5C', amount };
+  }).sort((a, b) => b.amount - a.amount);
+  return { income, expense, net: income - expense, cats };
 }
 
-// Category breakdown for a given month, scaled from the reference month.
-function categoriesFor(monthExpense) {
-  const refTotal = CATEGORIES.reduce((s, c) => s + c.amount, 0);
-  const k = monthExpense / refTotal;
-  return CATEGORIES.map(c => ({ ...c, amount: Math.round(c.amount * k / 1000) * 1000 }))
-    .sort((a, b) => b.amount - a.amount);
+// Attach a human-readable category label to each tx (for the Excel detail sheet).
+function withLabels(txs) {
+  return txs.map(t => {
+    const c = ALL_CATEGORIES.find(x => x.id === t.category);
+    return { ...t, catLabel: c?.label || t.category || '—' };
+  });
+}
+
+// Newest → oldest by ISO date then time.
+function sortDesc(txs) {
+  return [...txs].sort((a, b) => {
+    const k = (b.dateRaw || '').localeCompare(a.dateRaw || '');
+    return k !== 0 ? k : (b.time || '').localeCompare(a.time || '');
+  });
+}
+
+// Months present in the data, newest first.
+function monthsIndex(transactions) {
+  const map = {};
+  transactions.forEach(t => {
+    const k = (t.dateRaw || '').slice(0, 7);
+    if (k.length !== 7) return;
+    if (!map[k]) map[k] = { income: 0, expense: 0 };
+    if (t.amount >= 0) map[k].income += t.amount;
+    else map[k].expense += -t.amount;
+  });
+  return Object.keys(map).sort().reverse().map(k => {
+    const year = +k.slice(0, 4), month = +k.slice(5, 7) - 1;
+    const { income, expense } = map[k];
+    return { key: k, year, month, abbr: ID_MONTHS_ABBR[month], full: ID_MONTHS_FULL[month], income, expense, net: income - expense };
+  });
+}
+
+// Years present in the data, newest first (each with its months).
+function yearsIndex(months) {
+  const ys = [...new Set(months.map(m => m.year))].sort((a, b) => b - a);
+  return ys.map(year => {
+    const ms = months.filter(m => m.year === year).sort((a, b) => a.month - b.month);
+    return {
+      year,
+      income: ms.reduce((s, m) => s + m.income, 0),
+      expense: ms.reduce((s, m) => s + m.expense, 0),
+      net: ms.reduce((s, m) => s + m.net, 0),
+      months: ms,
+    };
+  });
+}
+
+// Full payload consumed by BOTH the PDF (buildReportDoc) and Excel (downloadExcel).
+function buildPayload(transactions, kind, key) {
+  if (kind === "month") {
+    const periodTx = sortDesc(transactions.filter(t => (t.dateRaw || '').slice(0, 7) === key));
+    const { income, expense, net, cats } = aggregate(periodTx);
+    const year = +key.slice(0, 4), month = +key.slice(5, 7) - 1;
+    return {
+      kind, title: "Laporan Bulanan",
+      periodLabel: `${ID_MONTHS_FULL[month]} ${year}`,
+      filename: `Laporan-${ID_MONTHS_FULL[month]}-${year}`,
+      excelFilename: `FinanceApp_Laporan_${ID_MONTHS_FULL[month]}_${year}.xlsx`,
+      income, expense, net, cats, months: null,
+      transactions: withLabels(periodTx),
+    };
+  }
+  // year
+  const y = +key;
+  const periodTx = sortDesc(transactions.filter(t => (t.dateRaw || '').slice(0, 4) === String(y)));
+  const { income, expense, net, cats } = aggregate(periodTx);
+  const months = monthsIndex(periodTx).filter(m => m.year === y).sort((a, b) => a.month - b.month);
+  return {
+    kind, title: "Laporan Tahunan",
+    periodLabel: `Tahun ${y}`,
+    filename: `Laporan-Tahunan-${y}`,
+    excelFilename: `FinanceApp_Laporan_${y}.xlsx`,
+    income, expense, net, cats, months,
+    transactions: withLabels(periodTx),
+  };
 }
 
 // ── SVG chart builders for the report document (return SVG strings) ─
@@ -177,32 +255,6 @@ function buildReportDoc({ title, periodLabel, income, expense, net, cats, months
 </div></body></html>`;
 }
 
-// Build report payload for a month or a year
-function reportPayload(kind, key) {
-  const meta = monthMeta();
-  if (kind === "month") {
-    const m = meta.find(x => x.idx === key);
-    return {
-      title: "Laporan Bulanan",
-      periodLabel: `${m.full} ${m.year}`,
-      filename: `Laporan-${m.abbr}-${m.year}`,
-      income: m.income, expense: m.expense, net: m.net,
-      cats: categoriesFor(m.expense), months: null,
-    };
-  }
-  // year
-  const months = meta.filter(x => x.year === key);
-  const income = months.reduce((s, x) => s + x.income, 0);
-  const expense = months.reduce((s, x) => s + x.expense, 0);
-  return {
-    title: "Laporan Tahunan",
-    periodLabel: `Tahun ${key}${key === 2025 ? " (Jun–Des)" : " (Jan–Mei)"}`,
-    filename: `Laporan-Tahunan-${key}`,
-    income, expense, net: income - expense,
-    cats: categoriesFor(expense), months,
-  };
-}
-
 // Resolve CSS custom properties to literal values so html2canvas can render them
 const PDF_COLORS = {
   '--ink': '#2A2C20', '--muted': '#6E6B58', '--line': '#D8D2BE', '--paper': '#FBF8EE',
@@ -215,8 +267,7 @@ function resolveCssVars(html) {
   );
 }
 
-async function downloadReport(kind, key) {
-  const p = reportPayload(kind, key);
+async function downloadPdf(p) {
   const isAndroid = window.Capacitor?.getPlatform?.() === 'android';
 
   // Dynamic import keeps the initial bundle small
@@ -281,29 +332,25 @@ async function downloadReport(kind, key) {
   }
 }
 
-function printReport(kind, key) {
-  const p = reportPayload(kind, key);
+function printReport(p) {
   const html = buildReportDoc(p);
   const w = window.open("", "_blank");
-  if (!w) { downloadReport(kind, key); return; } // popup blocked → fallback
+  if (!w) { downloadPdf(p); return; } // popup blocked → fallback
   w.document.write(html);
   w.document.close();
   w.onload = () => setTimeout(() => w.print(), 400);
 }
 
 // ── Preview modal ──────────────────────────────────────────────────
-function ReportPreview({ open, kind, rkey, onClose }) {
+function ReportPreview({ payload, onClose, onDownload }) {
   const ref = React.useRef(null);
   React.useEffect(() => {
-    if (open && ref.current) {
-      const p = reportPayload(kind, rkey);
-      ref.current.srcdoc = buildReportDoc(p);
-    }
-  }, [open, kind, rkey]);
-  if (!open) return null;
-  const p = reportPayload(kind, rkey);
+    if (payload && ref.current) ref.current.srcdoc = buildReportDoc(payload);
+  }, [payload]);
+  if (!payload) return null;
+  const p = payload;
   return (
-    <div className="report-preview-backdrop" onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(42,44,32,.4)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 24, animation: "rise .25s ease-out" }}>
+    <div className="report-preview-backdrop" onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(42,44,32,.4)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 24, animation: "rise .25s ease-out" }}>
       <div className="report-preview-container" onClick={e => e.stopPropagation()} style={{ width: 820, maxWidth: "100%", height: "88vh", display: "flex", flexDirection: "column", background: "var(--ivory)", borderRadius: 16, overflow: "hidden", boxShadow: "0 30px 80px -20px rgba(42,44,32,.5)" }}>
         <div className="report-preview-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", borderBottom: "1px solid var(--line-soft)", gap: 10, flexWrap: "wrap" }}>
           <div style={{ minWidth: 0 }}>
@@ -311,10 +358,10 @@ function ReportPreview({ open, kind, rkey, onClose }) {
             <div className="serif" style={{ fontSize: 22, letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.periodLabel}</div>
           </div>
           <div className="report-preview-actions" style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
-            <button className="report-preview-btn-print" onClick={() => printReport(kind, rkey)} style={{ padding: "9px 14px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10, fontSize: 12.5, display: "inline-flex", gap: 7, alignItems: "center" }}>
+            <button className="report-preview-btn-print" onClick={() => printReport(p)} style={{ padding: "9px 14px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10, fontSize: 12.5, display: "inline-flex", gap: 7, alignItems: "center" }}>
               <IconReport size={14} /> Cetak / PDF
             </button>
-            <button onClick={() => downloadReport(kind, rkey)} style={{ padding: "9px 14px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 10, fontSize: 12.5, display: "inline-flex", gap: 7, alignItems: "center" }}>
+            <button onClick={() => onDownload(p)} style={{ padding: "9px 14px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 10, fontSize: 12.5, display: "inline-flex", gap: 7, alignItems: "center" }}>
               <IconArrowDown size={14} /> <span className="report-preview-btn-label">Unduh</span>
             </button>
             <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: 10, border: "1px solid var(--line-soft)", background: "var(--paper)", display: "grid", placeItems: "center", color: "var(--ink-2)", flexShrink: 0 }}>
@@ -328,14 +375,97 @@ function ReportPreview({ open, kind, rkey, onClose }) {
   );
 }
 
-// ── Reports page ───────────────────────────────────────────────────
-export function ReportsPage() {
-  const [scope, setScope] = React.useState("month"); // month | year
-  const [preview, setPreview] = React.useState(null); // { kind, key }
-  const meta = monthMeta();
+// ── Format picker (PDF / Excel) ────────────────────────────────────
+const IconPdf = ({ size = 22 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M7 3h8l4 4v14H7z" /><path d="M15 3v4h4" />
+    <text x="12" y="17" textAnchor="middle" fontSize="6" fill="currentColor" stroke="none" fontFamily="sans-serif" fontWeight="700">PDF</text>
+  </svg>
+);
+const IconExcel = ({ size = 22 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M7 3h8l4 4v14H7z" /><path d="M15 3v4h4" />
+    <path d="M10 12l4 5M14 12l-4 5" />
+  </svg>
+);
 
-  const monthlyCards = [...meta].reverse(); // newest first
-  const years = [2026, 2025];
+function FormatPicker({ payload, onClose }) {
+  const [busy, setBusy] = React.useState(null); // 'pdf' | 'excel' | null
+  if (!payload) return null;
+
+  const run = async (kind, fn) => {
+    setBusy(kind);
+    try {
+      await fn(payload);
+      onClose();
+    } catch (e) {
+      alert("Gagal membuat file: " + (e?.message || e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const opt = {
+    display: "flex", alignItems: "center", gap: 14, width: "100%", textAlign: "left",
+    padding: "16px 18px", borderRadius: 14, border: "1px solid var(--line-soft)",
+    background: "var(--paper)", cursor: "pointer", fontSize: 14, color: "var(--ink)",
+  };
+  const iconWrap = (bg) => ({ width: 44, height: 44, borderRadius: 12, background: bg, color: "#fff", display: "grid", placeItems: "center", flexShrink: 0 });
+
+  return (
+    <div onClick={() => busy || onClose()} style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(42,44,32,.45)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 24, animation: "rise .2s ease-out" }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: 400, maxWidth: "100%", background: "var(--ivory)", borderRadius: 18, padding: 22, boxShadow: "0 30px 80px -20px rgba(42,44,32,.5)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
+          <div>
+            <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Unduh laporan</div>
+            <div className="serif" style={{ fontSize: 22, letterSpacing: "-0.01em" }}>Pilih format</div>
+          </div>
+          <button onClick={onClose} disabled={!!busy} style={{ width: 32, height: 32, borderRadius: 9, border: "1px solid var(--line-soft)", background: "var(--paper)", display: "grid", placeItems: "center", color: "var(--ink-2)", opacity: busy ? 0.5 : 1 }}>
+            <IconClose size={14} />
+          </button>
+        </div>
+        <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 16 }}>{payload.periodLabel}</div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <button onClick={() => run("pdf", downloadPdf)} disabled={!!busy} style={{ ...opt, opacity: busy && busy !== "pdf" ? 0.5 : 1 }}>
+            <span style={iconWrap("var(--terra)")}><IconPdf size={22} /></span>
+            <span style={{ flex: 1 }}>
+              <span style={{ display: "block", fontWeight: 500 }}>PDF</span>
+              <span style={{ display: "block", fontSize: 12, color: "var(--muted)" }}>Dokumen siap cetak — rapi & ringkas</span>
+            </span>
+            {busy === "pdf" && <Spinner />}
+          </button>
+
+          <button onClick={() => run("excel", downloadExcel)} disabled={!!busy} style={{ ...opt, opacity: busy && busy !== "excel" ? 0.5 : 1 }}>
+            <span style={iconWrap("var(--sage)")}><IconExcel size={22} /></span>
+            <span style={{ flex: 1 }}>
+              <span style={{ display: "block", fontWeight: 500 }}>Excel</span>
+              <span style={{ display: "block", fontSize: 12, color: "var(--muted)" }}>4 sheet, formula aktif, grafik & warna</span>
+            </span>
+            {busy === "excel" && <Spinner />}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Spinner() {
+  return <span style={{ width: 18, height: 18, border: "2px solid var(--line)", borderTopColor: "var(--ink)", borderRadius: "50%", animation: "spin .7s linear infinite", flexShrink: 0 }} />;
+}
+
+// ── Reports page ───────────────────────────────────────────────────
+export function ReportsPage({ transactions = [] }) {
+  const [scope, setScope] = React.useState("month"); // month | year
+  const [preview, setPreview] = React.useState(null);         // payload
+  const [downloadTarget, setDownloadTarget] = React.useState(null); // payload
+
+  const months = React.useMemo(() => monthsIndex(transactions), [transactions]);
+  const years = React.useMemo(() => yearsIndex(months), [months]);
+  const empty = transactions.length === 0;
+
+  const openPreview = (kind, key) => setPreview(buildPayload(transactions, kind, key));
+  const openDownload = (kind, key) => setDownloadTarget(buildPayload(transactions, kind, key));
 
   return (
     <div className="page-wrap" style={{ padding: "16px 32px 48px", maxWidth: 1180, margin: "0 auto" }}>
@@ -344,7 +474,7 @@ export function ReportsPage() {
           <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Laporan</div>
           <h2 className="serif" style={{ fontSize: 34, margin: "4px 0 0", letterSpacing: "-0.015em" }}>Laporan keuangan</h2>
           <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 6, maxWidth: 540, lineHeight: 1.5 }}>
-            Setiap bulan dirangkum otomatis — pratinjau, unduh PDF, gratis.
+            Setiap periode dirangkum otomatis dari transaksimu — pratinjau, unduh PDF atau Excel, gratis.
           </div>
         </div>
         <div style={{ display: "flex", padding: 3, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10 }}>
@@ -360,32 +490,43 @@ export function ReportsPage() {
         </div>
       </div>
 
-      {scope === "month" && (
+      {empty && (
+        <div className="card" style={{ padding: 40, textAlign: "center" }}>
+          <div className="serif" style={{ fontSize: 24, letterSpacing: "-0.01em" }}>Belum ada data</div>
+          <div style={{ color: "var(--muted)", fontSize: 13.5, marginTop: 8, lineHeight: 1.5 }}>
+            Tambahkan transaksi terlebih dahulu — laporan akan otomatis dirangkum di sini.
+          </div>
+        </div>
+      )}
+
+      {!empty && scope === "month" && (
         <div className="report-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
-          {monthlyCards.map((m, i) => (
-            <ReportCard key={m.idx} eyebrow={`${m.full} ${m.year}`} income={m.income} expense={m.expense} net={m.net}
+          {months.map((m, i) => (
+            <ReportCard key={m.key} eyebrow={`${m.full} ${m.year}`} income={m.income} expense={m.expense} net={m.net}
               latest={i === 0} delay={i * 0.03}
-              onPreview={() => setPreview({ kind: "month", key: m.idx })}
-              onDownload={() => downloadReport("month", m.idx)} />
+              onPreview={() => openPreview("month", m.key)}
+              onDownload={() => openDownload("month", m.key)} />
           ))}
         </div>
       )}
 
-      {scope === "year" && (
+      {!empty && scope === "year" && (
         <div className="report-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16 }}>
           {years.map((y, i) => {
-            const p = reportPayload("year", y);
+            const ms = y.months;
+            const sub = ms.length ? `${ms[0].abbr} – ${ms[ms.length - 1].abbr} ${y.year}` : null;
             return (
-              <ReportCard key={y} eyebrow={`Tahun ${y}`} income={p.income} expense={p.expense} net={p.net}
-                big latest={i === 0} delay={i * 0.04} sub={y === 2025 ? "Jun – Des 2025" : "Jan – Mei 2026"}
-                onPreview={() => setPreview({ kind: "year", key: y })}
-                onDownload={() => downloadReport("year", y)} />
+              <ReportCard key={y.year} eyebrow={`Tahun ${y.year}`} income={y.income} expense={y.expense} net={y.net}
+                big latest={i === 0} delay={i * 0.04} sub={sub}
+                onPreview={() => openPreview("year", String(y.year))}
+                onDownload={() => openDownload("year", String(y.year))} />
             );
           })}
         </div>
       )}
 
-      <ReportPreview open={!!preview} kind={preview?.kind} rkey={preview?.key} onClose={() => setPreview(null)} />
+      <ReportPreview payload={preview} onClose={() => setPreview(null)} onDownload={(p) => setDownloadTarget(p)} />
+      <FormatPicker payload={downloadTarget} onClose={() => setDownloadTarget(null)} />
     </div>
   );
 }
@@ -437,4 +578,4 @@ function ReportCard({ eyebrow, sub, income, expense, net, latest, big, delay, on
   );
 }
 
-Object.assign(window, { ReportsPage, monthMeta, downloadReport, printReport, buildReportDoc, reportPayload });
+Object.assign(window, { ReportsPage, buildPayload, downloadPdf, downloadExcel, printReport, buildReportDoc });

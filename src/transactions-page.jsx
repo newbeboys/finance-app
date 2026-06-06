@@ -3,8 +3,9 @@ import { TRANSACTIONS, ALL_CATEGORIES, fmt, fmtShort, formatNominal, nominalFont
 import { IconSearch, IconPlus, IconClose, CatIcon } from './icons';
 import { useIsMobile } from './use-mobile';
 import { AddTransactionModal } from './transactions';
+import { resolveCategory } from './category-field';
 
-export function TransactionsPage({ accounts, onAdd, transactions: txProp, loading = false, onDelete, onUpdate }) {
+export function TransactionsPage({ accounts, onAdd, transactions: txProp, loading = false, onDelete, onUpdate, customCategories = [], onCreateCustom }) {
   const transactions = txProp ?? TRANSACTIONS;
   const isMobile = useIsMobile();
   const [q, setQ] = React.useState("");
@@ -24,7 +25,7 @@ export function TransactionsPage({ accounts, onAdd, transactions: txProp, loadin
     if (method !== "all" && t.method !== method) return false;
     if (q.trim()) {
       const s = q.toLowerCase();
-      const catLabel = (ALL_CATEGORIES.find(c => c.id === t.category) || {}).label || t.category;
+      const catLabel = (resolveCategory(t.category, customCategories) || {}).label || t.category;
       if (!(`${t.merchant} ${t.note} ${catLabel} ${t.method}`.toLowerCase().includes(s))) return false;
     }
     return true;
@@ -40,7 +41,7 @@ export function TransactionsPage({ accounts, onAdd, transactions: txProp, loadin
     g.items.push(t);
   });
 
-  const catsUsed = ALL_CATEGORIES.filter(c => transactions.some(t => t.category === c.id));
+  const catsUsed = [...ALL_CATEGORIES, ...customCategories].filter(c => transactions.some(t => t.category === c.id));
   const reset = () => { setQ(""); setType("all"); setCat("all"); setMethod("all"); };
   const active = q || type !== "all" || cat !== "all" || method !== "all";
 
@@ -125,7 +126,7 @@ export function TransactionsPage({ accounts, onAdd, transactions: txProp, loadin
                 </span>
               </div>
               {g.items.map((t, i) => {
-                const c = ALL_CATEGORIES.find(x => x.id === t.category);
+                const c = resolveCategory(t.category, customCategories);
                 const isIncome = t.amount > 0;
                 const color = c?.color || (isIncome ? "var(--sage)" : "var(--muted-2)");
                 const borderBottom = i < g.items.length - 1 ? "1px solid var(--line-soft)" : 0;
@@ -241,6 +242,8 @@ export function TransactionsPage({ accounts, onAdd, transactions: txProp, loadin
         initial={editingTx}
         onClose={() => setEditingTx(null)}
         onUpdate={onUpdate}
+        customCategories={customCategories}
+        onCreateCustom={onCreateCustom}
       />
     </div>
   );

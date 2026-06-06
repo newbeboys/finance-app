@@ -2,8 +2,9 @@ import React from 'react';
 import { fmt, fmtShort, formatNominal, nominalFontSize, CATEGORIES } from './data';
 import { IconPlus, IconSpark, IconClose, CatIcon } from './icons';
 import { useIsMobile } from './use-mobile';
+import { CategoryField, CUSTOM_ID } from './category-field';
 
-export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, onDelete }) {
+export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, onDelete, customCategories = [], onCreateCustom }) {
   const isMobile = useIsMobile();
 
   // Local draft limits while slider is being dragged (flushed to Supabase on release)
@@ -325,6 +326,8 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
         <AddBudgetModal
           defaultPeriod={period}
           existingCategoryIds={rows.map(r => r.categoryId).filter(Boolean)}
+          customCategories={customCategories}
+          onCreateCustom={onCreateCustom}
           onClose={() => setShowAddModal(false)}
           onAdd={row => { onAdd(row); setShowAddModal(false); }}
         />
@@ -333,26 +336,40 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
   );
 }
 
-const PRESET_COLORS = ["var(--sage)", "var(--terra)", "var(--gold)", "var(--blush)", "var(--muted)"];
-
-function AddBudgetModal({ onClose, onAdd, defaultPeriod = "monthly", existingCategoryIds = [] }) {
+function AddBudgetModal({ onClose, onAdd, defaultPeriod = "monthly", existingCategoryIds = [], customCategories = [], onCreateCustom }) {
   const [selectedCatId, setSelectedCatId] = React.useState("");
-  const [customName, setCustomName]       = React.useState("");
+  const [pendingCustom, setPendingCustom] = React.useState(null); // { name, color } saat pilih Kustom
   const [limit, setLimit]                 = React.useState("");
   const [periode, setPeriode]             = React.useState(defaultPeriod);
-  const [customColor, setCustomColor]     = React.useState(PRESET_COLORS[0]);
+  const [saving, setSaving]               = React.useState(false);
 
-  const isCustom    = selectedCatId === "__custom__";
-  const selectedCat = CATEGORIES.find(c => c.id === selectedCatId);
-  const label       = isCustom ? customName.trim() : (selectedCat?.label || "");
-  const color       = isCustom ? customColor : (selectedCat?.color || "var(--sage)");
-  const categoryId  = isCustom ? null : selectedCatId || null;
+  const isCustom = selectedCatId === CUSTOM_ID;
 
-  const availableCats = CATEGORIES.filter(c => !existingCategoryIds.includes(c.id));
-  const valid = label.length > 0 && +limit > 0 && selectedCatId !== "";
+  // Kategori yang belum dipakai sebagai anggaran (bawaan + kustom)
+  const availableCats   = CATEGORIES.filter(c => !existingCategoryIds.includes(c.id));
+  const availableCustom = customCategories.filter(c => !existingCategoryIds.includes(c.id));
 
-  const submit = () => {
-    if (!valid) return;
+  const customNameValid = (pendingCustom?.name || "").trim().length > 0;
+  const valid = +limit > 0 && selectedCatId !== "" && (!isCustom || customNameValid);
+
+  const submit = async () => {
+    if (!valid || saving) return;
+    setSaving(true);
+
+    let categoryId, label, color;
+    if (isCustom) {
+      // Simpan kategori kustom ke Supabase dulu → dipakai bersama menu Transaksi
+      if (!onCreateCustom) { setSaving(false); return; }
+      const { category, error } = await onCreateCustom({ name: pendingCustom.name, color: pendingCustom.color });
+      if (error || !category) { setSaving(false); return; }
+      categoryId = category.id; label = category.label; color = category.color;
+    } else {
+      const cat = [...CATEGORIES, ...customCategories].find(c => c.id === selectedCatId);
+      categoryId = selectedCatId;
+      label = cat?.label || "";
+      color = cat?.color || "var(--sage)";
+    }
+
     onAdd({
       id: `cat-${Date.now()}`,
       categoryId,
@@ -382,29 +399,18 @@ function AddBudgetModal({ onClose, onAdd, defaultPeriod = "monthly", existingCat
         </div>
 
         <div style={{ display: "grid", gap: 14 }}>
-          {/* Category selector */}
+          {/* Category selector — sama dengan menu Transaksi (titik warna + Kustom) */}
           <label style={{ display: "block" }}>
             <span style={{ display: "block", fontSize: 11, color: "var(--muted)", letterSpacing: ".05em", textTransform: "uppercase", marginBottom: 6 }}>Kategori</span>
-            <select autoFocus value={selectedCatId} onChange={e => setSelectedCatId(e.target.value)}
-              style={{ width: "100%", padding: "11px 12px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10, color: selectedCatId ? "var(--ink)" : "var(--muted)", fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box", cursor: "pointer" }}>
-              <option value="">Pilih kategori…</option>
-              {availableCats.map(c => (
-                <option key={c.id} value={c.id}>{c.label}</option>
-              ))}
-              <option value="__custom__">Kustom (nama bebas)</option>
-            </select>
+            <CategoryField
+              value={selectedCatId}
+              onChange={setSelectedCatId}
+              categories={availableCats}
+              customCategories={availableCustom}
+              pending={pendingCustom}
+              onPendingChange={setPendingCustom}
+            />
           </label>
-
-          {/* Custom name input — hanya muncul jika pilih Kustom */}
-          {isCustom && (
-            <label style={{ display: "block" }}>
-              <span style={{ display: "block", fontSize: 11, color: "var(--muted)", letterSpacing: ".05em", textTransform: "uppercase", marginBottom: 6 }}>Nama kategori kustom</span>
-              <input autoFocus value={customName} onChange={e => setCustomName(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && submit()}
-                placeholder="Contoh: Rokok, Laundry, Investasi…"
-                style={{ width: "100%", padding: "11px 12px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10, color: "var(--ink)", fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
-            </label>
-          )}
 
           {/* Limit */}
           <label style={{ display: "block" }}>
@@ -428,25 +434,13 @@ function AddBudgetModal({ onClose, onAdd, defaultPeriod = "monthly", existingCat
             </div>
           </div>
 
-          {/* Warna kustom — hanya untuk kategori kustom */}
-          {isCustom && (
-            <div>
-              <span style={{ display: "block", fontSize: 11, color: "var(--muted)", letterSpacing: ".05em", textTransform: "uppercase", marginBottom: 8 }}>Warna</span>
-              <div style={{ display: "flex", gap: 8 }}>
-                {PRESET_COLORS.map(c => (
-                  <button key={c} onClick={() => setCustomColor(c)}
-                    style={{ width: 28, height: 28, borderRadius: "50%", border: customColor === c ? "2px solid var(--ink)" : "2px solid transparent", background: c, cursor: "pointer", outline: customColor === c ? "2px solid var(--ivory)" : "none", outlineOffset: "-4px" }} />
-                ))}
-              </div>
-            </div>
-          )}
         </div>
 
         <div style={{ display: "flex", gap: 10, marginTop: 22 }}>
           <button onClick={onClose} style={{ flex: 1, padding: "13px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 12, fontSize: 14, color: "var(--ink-2)" }}>Batal</button>
-          <button onClick={submit} disabled={!valid}
-            style={{ flex: 2, padding: "13px", background: valid ? "var(--ink)" : "var(--line-soft)", color: valid ? "var(--cream)" : "var(--muted-2)", border: 0, borderRadius: 12, fontSize: 14, fontWeight: 500, cursor: valid ? "pointer" : "default" }}>
-            Tambah kategori
+          <button onClick={submit} disabled={!valid || saving}
+            style={{ flex: 2, padding: "13px", background: (valid && !saving) ? "var(--ink)" : "var(--line-soft)", color: (valid && !saving) ? "var(--cream)" : "var(--muted-2)", border: 0, borderRadius: 12, fontSize: 14, fontWeight: 500, cursor: (valid && !saving) ? "pointer" : "default" }}>
+            {saving ? "Menyimpan…" : "Tambah kategori"}
           </button>
         </div>
       </div>
