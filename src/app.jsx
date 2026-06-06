@@ -25,6 +25,15 @@ const TWEAK_DEFAULTS = {
   palette: "cream",
   showAI: true,
   notifications: true,
+  fontTheme: "modern-tech",
+};
+
+const FONT_THEMES = {
+  'modern-tech':   { body: "'Geist', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif", mono: "'Geist Mono', ui-monospace, monospace",       heading: "'Instrument Serif', 'Times New Roman', serif" },
+  'pro-finance':   { body: "'Plus Jakarta Sans', sans-serif",                                          mono: "'JetBrains Mono', monospace",                   heading: "'Playfair Display', serif"                    },
+  'elegant':       { body: "'Raleway', sans-serif",                                                    mono: "'Courier Prime', monospace",                    heading: "'Merriweather', serif"                         },
+  'luxury':        { body: "'Manrope', sans-serif",                                                    mono: "'Roboto Mono', monospace",                      heading: "'Fraunces', serif"                             },
+  'soft-friendly': { body: "'DM Sans', sans-serif",                                                    mono: "'DM Mono', monospace",                          heading: "'Cormorant Garamond', serif"                   },
 };
 
 export default function App() {
@@ -87,6 +96,15 @@ function AuthenticatedApp({ session }) {
   React.useEffect(() => {
     document.documentElement.classList.toggle("dark", t.theme === "dark");
   }, [t.theme]);
+
+  // Font theme — applies CSS vars on documentElement
+  React.useEffect(() => {
+    const root = document.documentElement;
+    const ft = FONT_THEMES[t.fontTheme] || FONT_THEMES['modern-tech'];
+    root.style.setProperty('--font-body',    ft.body);
+    root.style.setProperty('--font-mono',    ft.mono);
+    root.style.setProperty('--font-heading', ft.heading);
+  }, [t.fontTheme]);
 
   // Palette swap — light tweak that retones cream
   React.useEffect(() => {

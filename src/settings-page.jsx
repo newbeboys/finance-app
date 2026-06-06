@@ -73,6 +73,14 @@ function ThemePreview({ mode, active, onClick }) {
   );
 }
 
+const FONT_THEME_OPTIONS = [
+  { id: 'modern-tech',   name: 'Modern Tech',          sub: 'Geist',             body: "'Geist', sans-serif",              mono: "'Geist Mono', monospace",     heading: "'Instrument Serif', serif"     },
+  { id: 'pro-finance',   name: 'Professional Finance', sub: 'Plus Jakarta Sans', body: "'Plus Jakarta Sans', sans-serif",   mono: "'JetBrains Mono', monospace",  heading: "'Playfair Display', serif"     },
+  { id: 'elegant',       name: 'Elegant Classic',      sub: 'Raleway',           body: "'Raleway', sans-serif",             mono: "'Courier Prime', monospace",   heading: "'Merriweather', serif"         },
+  { id: 'luxury',        name: 'Luxury Fintech',        sub: 'Manrope',           body: "'Manrope', sans-serif",             mono: "'Roboto Mono', monospace",     heading: "'Fraunces', serif"             },
+  { id: 'soft-friendly', name: 'Soft & Friendly',       sub: 'DM Sans',           body: "'DM Sans', sans-serif",             mono: "'DM Mono', monospace",         heading: "'Cormorant Garamond', serif"  },
+];
+
 const PALETTE_SWATCHES = [
   { id: "cream", label: "Cream", hint: "Hangat", c: "#EAE5D5" },
   { id: "sand",  label: "Sand",  hint: "Tanah",  c: "#E6DECB" },
@@ -146,6 +154,43 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub })
               })}
             </div>
           </SettingRow>
+        </SettingCard>
+
+        {/* Font Theme */}
+        <SettingCard eyebrow="Tipografi" title="Tema font">
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 14, lineHeight: 1.5 }}>
+              Pilih gaya tipografi. Hanya font-family yang berubah — ukuran dan layout tetap sama.
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(128px, 1fr))", gap: 10 }}>
+              {FONT_THEME_OPTIONS.map(ft => {
+                const active = (t.fontTheme || 'modern-tech') === ft.id;
+                return (
+                  <button key={ft.id} onClick={() => setTweak('fontTheme', ft.id)} style={{
+                    padding: "14px 12px 12px",
+                    background: active ? "color-mix(in oklch, var(--sage) 10%, var(--ivory))" : "var(--paper)",
+                    border: `2px solid ${active ? "var(--sage)" : "var(--line-soft)"}`,
+                    borderRadius: 14,
+                    cursor: "pointer",
+                    textAlign: "left",
+                    position: "relative",
+                    transition: "border-color .15s, background .15s",
+                  }}>
+                    {active && (
+                      <span style={{ position: "absolute", top: 8, right: 8, color: "var(--sage)" }}>
+                        <IconCheck size={14} />
+                      </span>
+                    )}
+                    <div style={{ fontSize: 26, fontFamily: ft.heading, fontWeight: 400, color: "var(--ink)", lineHeight: 1.1 }}>Aa</div>
+                    <div style={{ fontSize: 12, fontFamily: ft.mono, color: "var(--muted)", marginTop: 2 }}>Bb 1234</div>
+                    <div style={{ fontSize: 11.5, fontFamily: ft.body, color: active ? "var(--sage)" : "var(--ink)", fontWeight: 600, marginTop: 10, lineHeight: 1.3 }}>
+                      {ft.name}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </SettingCard>
 
         {/* Layout */}

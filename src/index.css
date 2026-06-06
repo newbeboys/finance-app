@@ -26,6 +26,10 @@
   --r-xl: 28px;
 
   --shadow-card: 0 1px 0 rgba(42,44,32,.04), 0 8px 24px -16px rgba(42,44,32,.18);
+
+  --font-body:    'Geist', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  --font-mono:    'Geist Mono', ui-monospace, monospace;
+  --font-heading: 'Instrument Serif', 'Times New Roman', serif;
 }
 
 html.dark {
@@ -54,7 +58,7 @@ html.dark {
 html, body { margin: 0; padding: 0; overflow-x: hidden; }
 body {
   padding-top: env(safe-area-inset-top, 0px);
-  font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  font-family: var(--font-body);
   background: var(--cream);
   color: var(--ink);
   font-size: 14px;
@@ -64,8 +68,8 @@ body {
   font-variant-numeric: tabular-nums;
   transition: background-color .35s ease, color .35s ease;
 }
-.serif { font-family: 'Instrument Serif', 'Times New Roman', serif; font-weight: 400; letter-spacing: -0.01em; }
-.mono  { font-family: 'Geist Mono', ui-monospace, monospace; }
+.serif { font-family: var(--font-heading); font-weight: 400; letter-spacing: -0.01em; }
+.mono  { font-family: var(--font-mono); }
 .tnum  { font-variant-numeric: tabular-nums; }
 
 .card {
