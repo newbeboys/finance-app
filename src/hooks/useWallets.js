@@ -24,6 +24,7 @@ export function useWallets(userId) {
 
   React.useEffect(() => {
     if (!userId) { setLoading(false); return; }
+    let alive = true;
     setLoading(true);
     supabase
       .from('wallets')
@@ -31,6 +32,7 @@ export function useWallets(userId) {
       .eq('user_id', userId)
       .order('created_at', { ascending: true })
       .then(({ data, error }) => {
+        if (!alive) return;
         if (error) {
           console.error('[useWallets] fetch error:', error.code, error.message);
         } else {
@@ -38,6 +40,8 @@ export function useWallets(userId) {
         }
         setLoading(false);
       });
+
+    return () => { alive = false; };
   }, [userId]);
 
   async function createAccount(a) {
@@ -52,16 +56,11 @@ export function useWallets(userId) {
       is_primary: a.primary     || false,
     };
 
-    console.log('[useWallets] INSERT payload:', basePayload);
-    console.log('[useWallets] userId:', userId);
-
     const { data, error } = await supabase
       .from('wallets')
       .insert(basePayload)
       .select()
       .single();
-
-    console.log('[useWallets] INSERT result → data:', data, '| error:', error);
 
     if (error) {
       console.error('[useWallets] createAccount FAILED:', error.code, error.message, error.details);
@@ -91,7 +90,6 @@ export function useWallets(userId) {
   }
 
   async function setPrimary(id) {
-    console.log('[useWallets] SET PRIMARY id:', id);
     await supabase.from('wallets').update({ is_primary: false }).eq('user_id', userId);
     const { error } = await supabase
       .from('wallets').update({ is_primary: true }).eq('id', id).eq('user_id', userId);
@@ -104,7 +102,6 @@ export function useWallets(userId) {
   }
 
   async function deleteAccount(id) {
-    console.log('[useWallets] DELETE id:', id);
     const { error } = await supabase
       .from('wallets').delete().eq('id', id).eq('user_id', userId);
     if (error) {

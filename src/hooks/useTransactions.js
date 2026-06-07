@@ -26,6 +26,7 @@ export function useTransactions(userId) {
 
   React.useEffect(() => {
     if (!userId) { setLoading(false); return; }
+    let alive = true;
 
     setLoading(true);
     setError(null);
@@ -36,6 +37,7 @@ export function useTransactions(userId) {
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .then(({ data, error: err }) => {
+        if (!alive) return;
         if (err) {
           setError(err.message);
         } else {
@@ -43,11 +45,15 @@ export function useTransactions(userId) {
         }
         setLoading(false);
       });
+
+    return () => { alive = false; };
   }, [userId]);
 
   async function createTransaction(tx) {
     const now = new Date();
-    const isoDate = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const todayISO = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    // Tanggal pilihan user (ISO yyyy-mm-dd); fallback ke hari ini
+    const isoDate = tx.dateRaw || todayISO;
 
     const { data, error: err } = await supabase
       .from('transactions')
@@ -94,6 +100,8 @@ export function useTransactions(userId) {
         merchant: updates.merchant || '',
         note:     updates.note     || '',
         method:   updates.method   || 'Tunai',
+        ...(updates.dateRaw ? { date: updates.dateRaw } : {}),
+        ...(updates.time    ? { time: updates.time    } : {}),
       })
       .eq('id', id)
       .eq('user_id', userId)

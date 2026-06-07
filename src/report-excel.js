@@ -25,6 +25,14 @@ function argb(hex) {
   return 'FF' + (h.length === 3 ? h.split('').map(x => x + x).join('') : h).toUpperCase();
 }
 
+// Cegah formula/CSV injection: teks user yang diawali = + - @ (atau tab/CR)
+// bisa dieksekusi sebagai formula saat dibuka di Excel. Prefiks tanda kutip
+// agar selalu diperlakukan sebagai teks biasa.
+const safeText = (v) => {
+  const s = String(v ?? '');
+  return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+};
+
 const rupiah = (n) => 'Rp ' + new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(Math.round(n || 0));
 const rupiahShort = (n) => {
   const a = Math.abs(n);
@@ -247,8 +255,8 @@ function buildDetailSheet(wb, p, refs) {
     const row = ws.addRow([
       i + 1,
       d || t.date,
-      t.catLabel,
-      ket,
+      safeText(t.catLabel),
+      safeText(ket),
       isIncome ? 'Pemasukan' : 'Pengeluaran',
       Math.abs(t.amount),
     ]);
@@ -296,7 +304,7 @@ function buildCategorySheet(wb, p, refs) {
     const totalF = dn >= 2
       ? { formula: `SUMIFS('Detail Transaksi'!$F$2:$F$${dn},'Detail Transaksi'!$C$2:$C$${dn},A${rowIdx},'Detail Transaksi'!$E$2:$E$${dn},"Pengeluaran")`, result: cat.amount }
       : cat.amount;
-    const row = ws.addRow([cat.label, totalF, null]);
+    const row = ws.addRow([safeText(cat.label), totalF, null]);
     row.getCell(2).numFmt = RP_FMT;
     row.getCell(2).alignment = { horizontal: 'right' };
     row.getCell(3).value = { formula: `IF(B${rowIdx}=0,0,B${rowIdx}/$B$${firstRow + cats.length})`, result: p.expense ? cat.amount / p.expense : 0 };

@@ -135,6 +135,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .rise { animation: rise .5s ease-out both; }
 
+/* Fade tanpa transform — untuk elemen yang sudah memakai transform untuk centering (mis. date picker popup) */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
 @keyframes spin { to { transform: rotate(360deg); } }
 
 

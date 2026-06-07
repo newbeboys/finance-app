@@ -3,3 +3,8 @@ node_modules/
 *.local
 finance-app-debug/
 *.apk
+
+# Environment secrets — jangan commit .env (anon key publik, tapi tetap praktik baik)
+.env
+.env.*
+!.env.example

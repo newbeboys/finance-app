@@ -15,3 +15,8 @@ ALTER TABLE public.wallets
 
 ALTER TABLE public.wallets
   ADD COLUMN IF NOT EXISTS last4 text NOT NULL DEFAULT '—';
+
+-- transactions: pastikan kolom tanggal ada (untuk fitur "pilih tanggal" di Catat Transaksi)
+-- Tanggal yang dipilih user disimpan di sini, dipakai untuk laporan (bukan tanggal sistem).
+ALTER TABLE public.transactions
+  ADD COLUMN IF NOT EXISTS date date NOT NULL DEFAULT CURRENT_DATE;

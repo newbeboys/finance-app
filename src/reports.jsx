@@ -10,6 +10,12 @@ import { downloadExcel } from './report-excel';
 const ID_MONTHS_FULL = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 const ID_MONTHS_ABBR = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
 
+// Escape teks yang berasal dari user (mis. nama kategori kustom) sebelum
+// disisipkan ke string HTML laporan — cegah HTML/script injection (self-XSS).
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => (
+  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+));
+
 // Aggregate transactions → income / expense / net + expense-by-category.
 function aggregate(txs) {
   let income = 0, expense = 0;
@@ -118,7 +124,7 @@ function reportPieSVG(cats, total) {
     return `<path d="M ${x0} ${y0} A ${R} ${R} 0 ${large} 1 ${x1} ${y1} L ${x2} ${y2} A ${r} ${r} 0 ${large} 0 ${x3} ${y3} Z" fill="${c.color}"/>`;
   }).join("");
   const legend = cats.slice(0, 8).map(c =>
-    `<div class="lg"><span class="dot" style="background:${c.color}"></span>${c.label} <span class="muted">${Math.round((c.amount / total) * 100)}%</span></div>`
+    `<div class="lg"><span class="dot" style="background:${c.color}"></span>${esc(c.label)} <span class="muted">${Math.round((c.amount / total) * 100)}%</span></div>`
   ).join("");
   return `<div class="chart-row"><svg viewBox="0 0 180 180" width="180" height="180">${arcs}<circle cx="${cx}" cy="${cy}" r="${r - 1}" fill="var(--paper)"/></svg><div class="legend">${legend}</div></div>`;
 }
@@ -145,7 +151,7 @@ function reportCatBarSVG(cats, expense) {
   const max = Math.max(...top.map(c => c.amount)) || 1;
   const rows = top.map(c => {
     const w = Math.round((c.amount / max) * 100);
-    return `<div class="hbar"><span class="hlabel">${c.label}</span><span class="htrack"><span class="hfill" style="width:${w}%;background:${c.color}"></span></span><span class="hval num">${Math.round((c.amount / expense) * 100)}%</span></div>`;
+    return `<div class="hbar"><span class="hlabel">${esc(c.label)}</span><span class="htrack"><span class="hfill" style="width:${w}%;background:${c.color}"></span></span><span class="hval num">${Math.round((c.amount / expense) * 100)}%</span></div>`;
   }).join("");
   return `<div class="hbars">${rows}</div>`;
 }
@@ -156,7 +162,7 @@ function buildReportDoc({ title, periodLabel, income, expense, net, cats, months
   const rupiah = (n) => "Rp " + new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(Math.round(n));
   const catRows = cats.map(c => {
     const pct = expense ? Math.round((c.amount / expense) * 100) : 0;
-    return `<tr><td><span class="dot" style="background:${c.color.startsWith('var') ? '#8C7B5C' : c.color}"></span>${c.label}</td><td class="num">${rupiah(c.amount)}</td><td class="num muted">${pct}%</td></tr>`;
+    return `<tr><td><span class="dot" style="background:${c.color.startsWith('var') ? '#8C7B5C' : c.color}"></span>${esc(c.label)}</td><td class="num">${rupiah(c.amount)}</td><td class="num muted">${pct}%</td></tr>`;
   }).join("");
 
   const monthRows = (months || []).map(m =>

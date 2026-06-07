@@ -1,7 +1,7 @@
 import React from 'react';
 import { TRANSACTIONS, CATEGORIES, INCOME_CATEGORIES, fmt } from './data';
 
-import { IconFilter, IconPlus, IconArrowRight, IconClose, CatIcon } from './icons';
+import { IconFilter, IconPlus, IconArrowRight, IconClose, IconCalendar, IconChev, CatIcon } from './icons';
 import { ghostBtn } from './widgets';
 import { useIsMobile } from './use-mobile';
 import { CategoryField, CUSTOM_ID, resolveCategory } from './category-field';
@@ -152,6 +152,111 @@ export function TransactionsCard({ onAdd, limit, onSeeAll, transactions: txProp,
   );
 }
 
+// ── Helpers tanggal (lokal, tanpa pergeseran timezone) ──
+const DAY_NAMES   = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+const MONTH_NAMES = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+const WEEKDAYS    = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"]; // mulai Senin
+
+const dateToISO  = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const isoToDate  = iso => new Date(iso + "T00:00:00");
+const todayISO   = () => dateToISO(new Date());
+const formatLong = iso => {
+  const d = isoToDate(iso);
+  return `${DAY_NAMES[d.getDay()]}, ${d.getDate()} ${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
+};
+
+// Date picker popup — tema mengikuti CSS variable aplikasi (light/dark)
+function DatePickerPopup({ valueISO, onConfirm, onClose }) {
+  const [sel, setSel] = React.useState(valueISO || todayISO());
+  const todayIso = todayISO();
+  const selDate = isoToDate(sel);
+  const [view, setView] = React.useState(() => new Date(selDate.getFullYear(), selDate.getMonth(), 1));
+
+  const year = view.getFullYear();
+  const month = view.getMonth();
+  const startOffset = (new Date(year, month, 1).getDay() + 6) % 7; // Senin = 0
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const cells = [];
+  for (let i = 0; i < startOffset; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+  const navBtn = {
+    width: 30, height: 30, borderRadius: 8, border: "1px solid var(--line-soft)",
+    background: "var(--paper)", color: "var(--ink-2)", display: "grid", placeItems: "center", cursor: "pointer",
+  };
+
+  return (
+    <>
+      {/* penangkap klik di luar + dim ringan */}
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(42,44,32,.18)" }} />
+      <div onClick={e => e.stopPropagation()}
+        style={{
+          position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
+          zIndex: 61, width: "min(320px, 90vw)", maxHeight: "90vh", overflowY: "auto", boxSizing: "border-box",
+          background: "var(--ivory)", border: "1px solid var(--line-soft)", borderRadius: 16,
+          padding: 14, boxShadow: "0 24px 60px -18px rgba(42,44,32,.45)", animation: "fade-in .18s ease-out",
+        }}>
+        {/* Navigasi bulan */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <button onClick={() => setView(new Date(year, month - 1, 1))} style={navBtn}>
+            <IconChev size={15} className="" style={{ transform: "rotate(90deg)" }} />
+          </button>
+          <div className="serif" style={{ fontSize: 16, color: "var(--ink)", letterSpacing: "-0.01em" }}>
+            {MONTH_NAMES[month]} {year}
+          </div>
+          <button onClick={() => setView(new Date(year, month + 1, 1))} style={navBtn}>
+            <IconChev size={15} className="" style={{ transform: "rotate(-90deg)" }} />
+          </button>
+        </div>
+
+        {/* Hari */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, marginBottom: 4 }}>
+          {WEEKDAYS.map(w => (
+            <div key={w} style={{ textAlign: "center", fontSize: 10.5, color: "var(--muted)", padding: "4px 0", letterSpacing: ".03em" }}>{w}</div>
+          ))}
+        </div>
+
+        {/* Tanggal */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
+          {cells.map((d, i) => {
+            if (d === null) return <div key={"e" + i} />;
+            const iso = dateToISO(new Date(year, month, d));
+            const isSel = iso === sel;
+            const isToday = iso === todayIso;
+            return (
+              <button key={iso} onClick={() => setSel(iso)}
+                style={{
+                  height: 34, borderRadius: 9, fontSize: 13, cursor: "pointer",
+                  fontVariantNumeric: "tabular-nums",
+                  border: isToday && !isSel ? "1px solid var(--sage)" : "1px solid transparent",
+                  background: isSel ? "var(--ink)" : "transparent",
+                  color: isSel ? "var(--cream)" : "var(--ink-2)",
+                  fontWeight: isSel ? 600 : 400,
+                }}>
+                {d}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Aksi */}
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+          <button onClick={() => { const t = todayIso; setSel(t); setView(isoToDate(t)); }}
+            style={{ flex: 1, padding: "10px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10, fontSize: 12.5, color: "var(--ink-2)", cursor: "pointer" }}>
+            Hari ini
+          </button>
+          <button onClick={() => onConfirm(sel)}
+            style={{ flex: 1.4, padding: "10px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 10, fontSize: 12.5, fontWeight: 500, cursor: "pointer" }}>
+            Pilih tanggal
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial = null, customCategories = [], onCreateCustom }) {
   const isEdit = !!initial;
   const [type, setType] = React.useState("expense");
@@ -162,12 +267,17 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
   const [note, setNote] = React.useState("");
   const [recurring, setRecurring] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
+  const [saveError, setSaveError] = React.useState('');       // pesan error simpan ke Supabase
+  const [dateRaw, setDateRaw] = React.useState(todayISO());   // tanggal transaksi (ISO)
+  const [showPicker, setShowPicker] = React.useState(false);
 
   // Pre-fill saat mode edit atau reset saat modal buka baru
   React.useEffect(() => {
     if (!open) return;
     setPendingCustom(null);
     setSaving(false);
+    setSaveError('');
+    setShowPicker(false);
     if (initial) {
       const t = initial.amount < 0 ? "expense" : "income";
       setType(t);
@@ -176,9 +286,11 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
       setMerchant(initial.merchant === '—' ? '' : (initial.merchant || ''));
       setNote(initial.note || '');
       setRecurring(false);
+      setDateRaw(initial.dateRaw || todayISO());
     } else {
       setType("expense"); setAmount(""); setCat("food");
       setMerchant(""); setNote(""); setRecurring(false);
+      setDateRaw(todayISO());   // default = hari ini
     }
   }, [open, initial]);
 
@@ -201,24 +313,29 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
   const submit = async () => {
     if (!valid || saving) return;
     setSaving(true);
+    setSaveError('');
 
     // Kategori Kustom → simpan dulu ke Supabase, lalu pakai id-nya
     let categoryId = cat;
     if (isCustom) {
       if (!onCreateCustom) { setSaving(false); return; }
       const { category, error } = await onCreateCustom({ name: pendingCustom.name, color: pendingCustom.color });
-      if (error || !category) { setSaving(false); return; }
+      if (error || !category) {
+        setSaveError('Gagal menyimpan kategori kustom. Coba lagi.');
+        setSaving(false);
+        return;
+      }
       categoryId = category.id;
     }
 
     const now = new Date();
-    const months = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
-    const date = `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
+    const d = isoToDate(dateRaw);
+    const date = `${d.getDate()} ${MONTH_SHORT[d.getMonth()]} ${d.getFullYear()}`;
     const time = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
     const tx = {
       id:       initial?.id || "tx-" + Date.now(),
-      date:     initial?.date || date,
-      dateRaw:  initial?.dateRaw,
+      date,                       // string tampil (dibangun ulang dari dateRaw saat reload)
+      dateRaw,                    // ISO tanggal pilihan user → disimpan ke Supabase
       time:     initial?.time || time,
       merchant: merchant.trim() || "—",
       note:     note.trim(),
@@ -226,10 +343,12 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
       method:   initial?.method || "Tunai",
       amount:   type === "expense" ? -(+amount || 0) : (+amount || 0),
     };
-    if (isEdit) {
-      await onUpdate?.(initial.id, tx);
-    } else {
-      await onSave?.(tx);
+    const res = isEdit ? await onUpdate?.(initial.id, tx) : await onSave?.(tx);
+    if (res?.error) {
+      // Simpan gagal → tetap buka modal, beri tahu user (data tidak hilang)
+      setSaveError('Gagal menyimpan transaksi. Periksa koneksi lalu coba lagi.');
+      setSaving(false);
+      return;
     }
     setSaving(false);
     onClose();
@@ -242,10 +361,27 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
           <div>
             <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{isEdit ? "Edit transaksi" : "Entri baru"}</div>
             <div className="serif" style={{ fontSize: 26, marginTop: 4, letterSpacing: "-0.01em" }}>{isEdit ? "Perbarui data" : "Catat transaksi"}</div>
+            <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 4, fontStyle: "italic" }} className="serif">{formatLong(dateRaw)}</div>
           </div>
-          <button onClick={onClose} style={{ width: 36, height: 36, borderRadius: 10, border: "1px solid var(--line-soft)", background: "var(--paper)", display: "grid", placeItems: "center", color: "var(--ink-2)" }}>
-            <IconClose size={14} />
-          </button>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {/* Pilih tanggal */}
+            <div style={{ position: "relative" }}>
+              <button onClick={() => setShowPicker(v => !v)} title="Pilih tanggal" aria-label="Pilih tanggal"
+                style={{ width: 36, height: 36, borderRadius: 10, border: "1px solid var(--line-soft)", background: showPicker ? "var(--ink)" : "var(--paper)", display: "grid", placeItems: "center", color: showPicker ? "var(--cream)" : "var(--ink-2)", cursor: "pointer" }}>
+                <IconCalendar size={15} />
+              </button>
+              {showPicker && (
+                <DatePickerPopup
+                  valueISO={dateRaw}
+                  onConfirm={iso => { setDateRaw(iso); setShowPicker(false); }}
+                  onClose={() => setShowPicker(false)}
+                />
+              )}
+            </div>
+            <button onClick={onClose} style={{ width: 36, height: 36, borderRadius: 10, border: "1px solid var(--line-soft)", background: "var(--paper)", display: "grid", placeItems: "center", color: "var(--ink-2)" }}>
+              <IconClose size={14} />
+            </button>
+          </div>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, padding: 3, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 12, marginTop: 18 }}>
@@ -286,6 +422,12 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
             Tandai sebagai berulang
           </label>
         </div>
+
+        {saveError && (
+          <div role="alert" style={{ marginTop: 16, fontSize: 13, color: "var(--terra)", background: "color-mix(in oklch, var(--terra) 10%, transparent)", border: "1px solid color-mix(in oklch, var(--terra) 25%, transparent)", borderRadius: 10, padding: "10px 12px", lineHeight: 1.4 }}>
+            {saveError}
+          </div>
+        )}
 
         <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
           <button onClick={onClose} style={{ flex: 1, padding: "13px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 12, fontSize: 14, color: "var(--ink-2)" }}>Batal</button>

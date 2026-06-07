@@ -43,6 +43,7 @@ export function useSavings(userId) {
 
   React.useEffect(() => {
     if (!userId) { setLoading(false); return; }
+    let alive = true;
     setLoading(true);
     supabase
       .from('savings')
@@ -50,6 +51,7 @@ export function useSavings(userId) {
       .eq('user_id', userId)
       .order('created_at', { ascending: true })
       .then(({ data, error }) => {
+        if (!alive) return;
         if (error) {
           console.error('[useSavings] fetch error:', error.code, error.message);
         } else {
@@ -57,6 +59,8 @@ export function useSavings(userId) {
         }
         setLoading(false);
       });
+
+    return () => { alive = false; };
   }, [userId]);
 
   async function createGoal(g) {
@@ -71,16 +75,11 @@ export function useSavings(userId) {
       deadline: deadlineToISO(g.deadline),
     };
 
-    console.log('[useSavings] INSERT payload:', basePayload);
-    console.log('[useSavings] userId:', userId);
-
     const { data, error } = await supabase
       .from('savings')
       .insert(basePayload)
       .select()
       .single();
-
-    console.log('[useSavings] INSERT result → data:', data, '| error:', error);
 
     if (error) {
       console.error('[useSavings] createGoal FAILED:', error.code, error.message, error.details);
@@ -105,7 +104,6 @@ export function useSavings(userId) {
   }
 
   async function deleteGoal(id) {
-    console.log('[useSavings] DELETE id:', id);
     const { error } = await supabase
       .from('savings').delete().eq('id', id).eq('user_id', userId);
     if (error) {
@@ -120,7 +118,6 @@ export function useSavings(userId) {
     const goal = goals.find(g => g.id === id);
     if (!goal) return { error: new Error('Goal not found') };
     const newCurrent = goal.current + amount;
-    console.log('[useSavings] DEPOSIT id:', id, 'amount:', amount, '→ newCurrent:', newCurrent);
     const { error } = await supabase
       .from('savings').update({ current: newCurrent }).eq('id', id).eq('user_id', userId);
     if (error) {

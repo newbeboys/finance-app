@@ -50,6 +50,7 @@ export function useBudgets(userId) {
 
   React.useEffect(() => {
     if (!userId) { setLoading(false); return; }
+    let alive = true;
     setLoading(true);
 
     supabase
@@ -58,6 +59,7 @@ export function useBudgets(userId) {
       .eq('user_id', userId)
       .order('created_at', { ascending: true })
       .then(async ({ data, error }) => {
+        if (!alive) return;
         if (error) { setLoading(false); return; }
 
         const existing = (data || []).map(toBudget);
@@ -65,12 +67,15 @@ export function useBudgets(userId) {
         // If Supabase is empty but localStorage has data → migrate once
         if (existing.length === 0 && localStorage.getItem('finance_budgets')) {
           const migrated = await migrateFromLocalStorage(userId);
+          if (!alive) return;
           setBudgets(migrated);
         } else {
           setBudgets(existing);
         }
         setLoading(false);
       });
+
+    return () => { alive = false; };
   }, [userId]);
 
   async function createBudget(row) {

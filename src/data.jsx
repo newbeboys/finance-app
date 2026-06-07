@@ -52,6 +52,7 @@ export const KPI = {
 
 export const CASHFLOW = [];
 
+// Kategori pengeluaran standar — identik di menu Transaksi & Anggaran.
 export const CATEGORIES = [
   { id: "food",          label: "Makanan & Minuman",  amount: 0, color: "var(--terra)" },
   { id: "transport",     label: "Transportasi",       amount: 0, color: "var(--sage)" },
@@ -59,8 +60,6 @@ export const CATEGORIES = [
   { id: "bills",         label: "Tagihan & Utilitas", amount: 0, color: "var(--blush)" },
   { id: "entertainment", label: "Hiburan",            amount: 0, color: "#8C7B5C" },
   { id: "healthcare",    label: "Kesehatan",          amount: 0, color: "#7A8A6E" },
-  { id: "snacking",      label: "Jajan",              amount: 0, color: "#B58263" },
-  { id: "education",     label: "Pendidikan",         amount: 0, color: "#5C6B4C" },
   { id: "crypto",        label: "Crypto",             amount: 0, color: "#9A8A55" },
   { id: "laundry",       label: "Laundry",            amount: 0, color: "#6E8A8C" },
   { id: "cigarette",     label: "Rokok",              amount: 0, color: "#9A6B55" },
