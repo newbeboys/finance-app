@@ -17,7 +17,9 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => (
 ));
 
 // Aggregate transactions → income / expense / net + expense-by-category.
-function aggregate(txs) {
+// `catList` mencakup kategori bawaan + kustom (dari Supabase) agar nama
+// kategori kustom tampil sebagai nama, bukan UUID.
+function aggregate(txs, catList = ALL_CATEGORIES) {
   let income = 0, expense = 0;
   const catMap = {};
   txs.forEach(t => {
@@ -25,16 +27,16 @@ function aggregate(txs) {
     else { const a = -t.amount; expense += a; catMap[t.category] = (catMap[t.category] || 0) + a; }
   });
   const cats = Object.entries(catMap).map(([id, amount]) => {
-    const c = ALL_CATEGORIES.find(x => x.id === id);
+    const c = catList.find(x => x.id === id);
     return { id, label: c?.label || id, color: c?.color || '#8C7B5C', amount };
   }).sort((a, b) => b.amount - a.amount);
   return { income, expense, net: income - expense, cats };
 }
 
 // Attach a human-readable category label to each tx (for the Excel detail sheet).
-function withLabels(txs) {
+function withLabels(txs, catList = ALL_CATEGORIES) {
   return txs.map(t => {
-    const c = ALL_CATEGORIES.find(x => x.id === t.category);
+    const c = catList.find(x => x.id === t.category);
     return { ...t, catLabel: c?.label || t.category || '—' };
   });
 }
@@ -80,10 +82,11 @@ function yearsIndex(months) {
 }
 
 // Full payload consumed by BOTH the PDF (buildReportDoc) and Excel (downloadExcel).
-function buildPayload(transactions, kind, key) {
+function buildPayload(transactions, kind, key, customCategories = []) {
+  const catList = [...ALL_CATEGORIES, ...customCategories];
   if (kind === "month") {
     const periodTx = sortDesc(transactions.filter(t => (t.dateRaw || '').slice(0, 7) === key));
-    const { income, expense, net, cats } = aggregate(periodTx);
+    const { income, expense, net, cats } = aggregate(periodTx, catList);
     const year = +key.slice(0, 4), month = +key.slice(5, 7) - 1;
     return {
       kind, title: "Laporan Bulanan",
@@ -91,13 +94,13 @@ function buildPayload(transactions, kind, key) {
       filename: `Laporan-${ID_MONTHS_FULL[month]}-${year}`,
       excelFilename: `FinanceApp_Laporan_${ID_MONTHS_FULL[month]}_${year}.xlsx`,
       income, expense, net, cats, months: null,
-      transactions: withLabels(periodTx),
+      transactions: withLabels(periodTx, catList),
     };
   }
   // year
   const y = +key;
   const periodTx = sortDesc(transactions.filter(t => (t.dateRaw || '').slice(0, 4) === String(y)));
-  const { income, expense, net, cats } = aggregate(periodTx);
+  const { income, expense, net, cats } = aggregate(periodTx, catList);
   const months = monthsIndex(periodTx).filter(m => m.year === y).sort((a, b) => a.month - b.month);
   return {
     kind, title: "Laporan Tahunan",
@@ -105,7 +108,7 @@ function buildPayload(transactions, kind, key) {
     filename: `Laporan-Tahunan-${y}`,
     excelFilename: `FinanceApp_Laporan_${y}.xlsx`,
     income, expense, net, cats, months,
-    transactions: withLabels(periodTx),
+    transactions: withLabels(periodTx, catList),
   };
 }
 
@@ -217,6 +220,14 @@ function buildReportDoc({ title, periodLabel, income, expense, net, cats, months
   .hval{width:40px;text-align:right;color:var(--muted);}
   .foot{margin-top:36px;padding-top:18px;border-top:1px solid var(--line);font-size:10.5px;color:var(--muted);display:flex;justify-content:space-between;}
   .badge{display:inline-block;font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--sage);background:rgba(92,107,76,.14);padding:3px 9px;border-radius:999px;}
+  /* ── Kontrol page-break: cegah section/diagram terpotong di tengah halaman ── */
+  .block{page-break-inside:avoid;break-inside:avoid;page-break-before:auto;}
+  h2.sec{page-break-after:avoid;break-after:avoid;}
+  .kpis,.net-strip,.chart-row{page-break-inside:avoid;break-inside:avoid;}
+  .chart-row svg{max-height:240px;height:auto;}      /* diagram tidak melebihi tinggi halaman */
+  table{page-break-inside:auto;}
+  tr{page-break-inside:avoid;break-inside:avoid;}     /* jangan potong di tengah baris */
+  thead{display:table-header-group;}                  /* ulangi header tabel tiap halaman */
   @media print{body{background:#fff;padding:0;}.page{box-shadow:none;max-width:none;padding:40px;}@page{margin:14mm;}}
   @media(max-width:600px){
     body{padding:0;background:var(--paper);}
@@ -245,10 +256,12 @@ function buildReportDoc({ title, periodLabel, income, expense, net, cats, months
   </div>
   <div class="net-strip"><span>Tingkat menabung (savings rate)</span><strong>${savingsRate}%</strong></div>
 
-  ${months ? `<h2 class="sec">Diagram batang — pemasukan vs pengeluaran</h2><div class="chart-legend"><span><span class="sq" style="background:var(--sage)"></span>Pemasukan</span><span><span class="sq" style="background:var(--terra)"></span>Pengeluaran</span></div>${reportBarSVG(months)}` : `<h2 class="sec">Diagram batang — pengeluaran per kategori</h2>${reportCatBarSVG(cats, expense)}`}
+  ${months ? `<section class="block"><h2 class="sec">Diagram batang — pemasukan vs pengeluaran</h2><div class="chart-legend"><span><span class="sq" style="background:var(--sage)"></span>Pemasukan</span><span><span class="sq" style="background:var(--terra)"></span>Pengeluaran</span></div>${reportBarSVG(months)}</section>` : `<section class="block"><h2 class="sec">Diagram batang — pengeluaran per kategori</h2>${reportCatBarSVG(cats, expense)}</section>`}
 
-  <h2 class="sec">Diagram lingkaran — komposisi pengeluaran</h2>
-  ${reportPieSVG(cats, expense)}
+  <section class="block">
+    <h2 class="sec">Diagram lingkaran — komposisi pengeluaran</h2>
+    ${reportPieSVG(cats, expense)}
+  </section>
 
   <h2 class="sec">Tabel — pengeluaran per kategori</h2>
   <table><thead><tr><th>Kategori</th><th class="num">Jumlah</th><th class="num">% dari pengeluaran</th></tr></thead>
@@ -309,14 +322,35 @@ async function downloadPdf(p) {
     const pdfH   = pdf.internal.pageSize.getHeight();
     const imgW   = canvas.width;
     const imgH   = canvas.height;
-    const imgH_mm = (imgH * pdfW) / imgW;     // total PDF height of image
     const pageH_px = (pdfH * imgW) / pdfW;    // canvas pixels per PDF page
 
-    const imgData = canvas.toDataURL('image/png');
-    const pages = Math.ceil(imgH / pageH_px);
-    for (let i = 0; i < pages; i++) {
-      if (i > 0) pdf.addPage();
-      pdf.addImage(imgData, 'PNG', 0, -(i * pdfH), pdfW, imgH_mm);
+    // Potong gambar per halaman, tapi hindari memotong di tengah elemen
+    // penting (diagram/section/baris tabel) yang ditandai di bawah.
+    const scale = imgW / container.offsetWidth;          // canvas px : DOM px
+    const contTop = container.getBoundingClientRect().top;
+    const atomic = Array.from(container.querySelectorAll('.block, .kpis, .net-strip, tr'))
+      .map(el => {
+        const rr = el.getBoundingClientRect();
+        return { top: (rr.top - contTop) * scale, bottom: (rr.bottom - contTop) * scale };
+      })
+      .sort((a, b) => a.top - b.top);
+
+    let y = 0, firstPage = true;
+    while (y < imgH - 1) {
+      let end = Math.min(y + pageH_px, imgH);
+      // Jika batas halaman memotong sebuah elemen, mundurkan ke atas elemen itu
+      for (const a of atomic) {
+        if (a.top > y && a.top < end && a.bottom > end) { end = a.top; break; }
+      }
+      const sliceH = Math.max(1, Math.round(end - y));
+      const sliceCanvas = document.createElement('canvas');
+      sliceCanvas.width = imgW;
+      sliceCanvas.height = sliceH;
+      sliceCanvas.getContext('2d').drawImage(canvas, 0, y, imgW, sliceH, 0, 0, imgW, sliceH);
+      if (!firstPage) pdf.addPage();
+      pdf.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', 0, 0, pdfW, (sliceH * pdfW) / imgW);
+      firstPage = false;
+      y = end;
     }
 
     if (isAndroid) {
@@ -461,7 +495,7 @@ function Spinner() {
 }
 
 // ── Reports page ───────────────────────────────────────────────────
-export function ReportsPage({ transactions = [] }) {
+export function ReportsPage({ transactions = [], customCategories = [] }) {
   const [scope, setScope] = React.useState("month"); // month | year
   const [preview, setPreview] = React.useState(null);         // payload
   const [downloadTarget, setDownloadTarget] = React.useState(null); // payload
@@ -470,8 +504,8 @@ export function ReportsPage({ transactions = [] }) {
   const years = React.useMemo(() => yearsIndex(months), [months]);
   const empty = transactions.length === 0;
 
-  const openPreview = (kind, key) => setPreview(buildPayload(transactions, kind, key));
-  const openDownload = (kind, key) => setDownloadTarget(buildPayload(transactions, kind, key));
+  const openPreview = (kind, key) => setPreview(buildPayload(transactions, kind, key, customCategories));
+  const openDownload = (kind, key) => setDownloadTarget(buildPayload(transactions, kind, key, customCategories));
 
   return (
     <div className="page-wrap" style={{ padding: "16px 32px 48px", maxWidth: 1180, margin: "0 auto" }}>

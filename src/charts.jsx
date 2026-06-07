@@ -1,5 +1,5 @@
 import React from 'react';
-import { CASHFLOW, CATEGORIES, fmtShort } from './data';
+import { fmtShort } from './data';
 
 export function CashflowChart({ data }) {
   const slice = data; // filtering dilakukan di CashflowCard sebelum di-pass ke sini

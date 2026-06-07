@@ -1,5 +1,5 @@
 import React from 'react';
-import { CATEGORIES, fmt, fmtShort, formatNominal, nominalFontSize } from './data';
+import { CATEGORIES, fmtShort, formatNominal, nominalFontSize } from './data';
 import { IconArrowDown } from './icons';
 import { SpendingDonut } from './charts';
 

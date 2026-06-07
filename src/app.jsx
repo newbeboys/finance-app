@@ -224,7 +224,7 @@ function AuthenticatedApp({ session }) {
           <WalletsPage accounts={accounts} onAdd={() => setAddAcct(true)} onSetPrimary={setPrimary} onDelete={deleteAccount} transactions={transactions} />
         )}
 
-        {active === "reports" && <ReportsPage transactions={transactions} />}
+        {active === "reports" && <ReportsPage transactions={transactions} customCategories={customCategories} />}
 
         {active === "analytics" && <AnalyticsPage transactions={transactions} />}
 
