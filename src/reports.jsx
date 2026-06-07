@@ -449,20 +449,20 @@ function FormatPicker({ payload, onClose }) {
     display: "flex", alignItems: "center", gap: 14, width: "100%", textAlign: "left",
     padding: "16px 18px", borderRadius: 14, border: "1px solid var(--line-soft)",
     background: "var(--paper)", cursor: "pointer", fontSize: 14, color: "var(--ink)",
+    boxSizing: "border-box", minWidth: 0,
   };
   const iconWrap = (bg) => ({ width: 44, height: 44, borderRadius: 12, background: bg, color: "#fff", display: "grid", placeItems: "center", flexShrink: 0 });
 
   return (
     <div onClick={() => busy || onClose()} style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(42,44,32,.45)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 24, animation: "rise .2s ease-out" }}>
-      <div onClick={e => e.stopPropagation()} style={{ width: 400, maxWidth: "100%", background: "var(--ivory)", borderRadius: 18, padding: 22, boxShadow: "0 30px 80px -20px rgba(42,44,32,.5)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
-          <div>
-            <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Unduh laporan</div>
-            <div className="serif" style={{ fontSize: 22, letterSpacing: "-0.01em" }}>Pilih format</div>
-          </div>
-          <button onClick={onClose} disabled={!!busy} style={{ width: 32, height: 32, borderRadius: 9, border: "1px solid var(--line-soft)", background: "var(--paper)", display: "grid", placeItems: "center", color: "var(--ink-2)", opacity: busy ? 0.5 : 1 }}>
-            <IconClose size={14} />
-          </button>
+      <div onClick={e => e.stopPropagation()} style={{ position: "relative", width: "min(400px, 90vw)", background: "var(--ivory)", borderRadius: 18, padding: 20, boxSizing: "border-box", boxShadow: "0 30px 80px -20px rgba(42,44,32,.5)" }}>
+        {/* Tombol close — selalu terlihat di pojok kanan atas */}
+        <button onClick={onClose} disabled={!!busy} aria-label="Tutup" style={{ position: "absolute", top: 12, right: 12, zIndex: 1, width: 32, height: 32, borderRadius: 9, border: "1px solid var(--line-soft)", background: "var(--paper)", display: "grid", placeItems: "center", color: "var(--ink-2)", opacity: busy ? 0.5 : 1, cursor: busy ? "default" : "pointer" }}>
+          <IconClose size={14} />
+        </button>
+        <div style={{ marginBottom: 4, paddingRight: 40 }}>
+          <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Unduh laporan</div>
+          <div className="serif" style={{ fontSize: 22, letterSpacing: "-0.01em" }}>Pilih format</div>
         </div>
         <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 16 }}>{payload.periodLabel}</div>
 
