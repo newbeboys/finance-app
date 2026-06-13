@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Warna khusus widget home-screen -->
+    <color name="widget_bg">#1a1a2e</color>
+    <color name="widget_bg_inner">#232342</color>
+    <color name="widget_income">#4ADE80</color>
+    <color name="widget_expense">#F87171</color>
+    <color name="widget_text">#FFFFFF</color>
+    <color name="widget_muted">#9AA0B5</color>
+    <color name="widget_accent">#E0B341</color>
+    <color name="widget_accent_ink">#1a1a2e</color>
+    <color name="widget_track">#33415A</color>
+    <color name="widget_divider">#2E2E4A</color>
+</resources>

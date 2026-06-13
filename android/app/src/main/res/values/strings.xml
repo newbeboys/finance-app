@@ -4,4 +4,7 @@
     <string name="title_activity_main">FinanceApp</string>
     <string name="package_name">com.Financeapp.app</string>
     <string name="custom_url_scheme">com.Financeapp.app</string>
+    <string name="widget_medium_desc">Ringkasan keuangan bulan ini</string>
+    <string name="widget_large_desc">Ringkasan keuangan + transaksi terakhir</string>
+    <string name="widget_catat">+ Catat Transaksi</string>
 </resources>

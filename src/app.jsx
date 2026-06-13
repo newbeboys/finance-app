@@ -15,9 +15,11 @@ import { supabase } from './supabase';
 import { LoginPage } from './pages/Login';
 import { RegisterPage } from './pages/Register';
 import OnboardingScreen from './components/OnboardingScreen';
+import SplashScreen from './components/SplashScreen';
 import { GoalCompleteOverlay } from './components/GoalCompleteOverlay';
 import { isSoundAnimEnabled } from './lib/sound';
 import { checkRecurringTransactions } from './lib/recurringHelper';
+import { syncWidget, consumeWidgetLaunchAction } from './lib/widgetSync';
 import { fmt } from './data';
 import PinLock from './components/PinLock';
 import { isPinActive, isBiometricEnabled, clearPin } from './lib/pin';
@@ -52,6 +54,8 @@ export default function App() {
   const [showOnboarding, setShowOnboarding] = React.useState(false);
   // Kunci PIN: terkunci saat app dibuka jika fitur PIN aktif (lapisan di atas Supabase)
   const [locked, setLocked] = React.useState(() => isPinActive());
+  // Splash screen animasi: lapisan pertama, tampil sekali tiap app dibuka.
+  const [showSplash, setShowSplash] = React.useState(true);
 
   React.useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session ?? null));
@@ -69,32 +73,39 @@ export default function App() {
     try { await supabase.auth.signOut(); } catch {}
   }, []);
 
+  // Konten utama ditentukan oleh logika auth/PIN/onboarding yang SUDAH ADA (tidak diubah),
+  // hanya disimpan ke variabel agar splash bisa menumpuk di atasnya (cross-fade mulus).
+  let content;
   if (session === undefined) {
-    return <div style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', background: 'var(--cream)', color: 'var(--muted)', fontSize: 14 }}>Memuat…</div>;
-  }
-
-  if (!session) {
-    return authView === 'login'
+    content = <div style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', background: 'var(--cream)', color: 'var(--muted)', fontSize: 14 }}>Memuat…</div>;
+  } else if (!session) {
+    content = authView === 'login'
       ? <LoginPage onSwitch={() => setAuthView('register')} onAuthSuccess={() => setShowOnboarding(true)} />
       : <RegisterPage onSwitch={() => setAuthView('login')} onAuthSuccess={() => setShowOnboarding(true)} />;
-  }
-
-  // Sesudah login Supabase, sebelum masuk app: layar kunci PIN (jika aktif)
-  if (locked) {
-    return (
+  } else if (locked) {
+    // Sesudah login Supabase, sebelum masuk app: layar kunci PIN (jika aktif)
+    content = (
       <PinLock
         onUnlock={() => setLocked(false)}
         onForgot={handleForgotPin}
         biometricEnabled={isBiometricEnabled()}
       />
     );
+  } else {
+    content = (
+      <>
+        <AuthenticatedApp session={session} />
+        {/* Overlay onboarding di atas halaman utama setelah register/login berhasil */}
+        {showOnboarding && <OnboardingScreen onDone={() => setShowOnboarding(false)} />}
+      </>
+    );
   }
 
   return (
     <>
-      <AuthenticatedApp session={session} />
-      {/* Overlay onboarding di atas halaman utama setelah register/login berhasil */}
-      {showOnboarding && <OnboardingScreen onDone={() => setShowOnboarding(false)} />}
+      {content}
+      {/* Splash screen: lapisan paling atas, hanya sekali saat app dibuka */}
+      {showSplash && <SplashScreen onDone={() => setShowSplash(false)} />}
     </>
   );
 }
@@ -225,6 +236,29 @@ function AuthenticatedApp({ session }) {
 
   // Budgets — Supabase
   const { budgets, createBudget, updateBudget, deleteBudget } = useBudgets(session.user.id);
+
+  // Sinkronkan ringkasan ke widget home-screen Android (no-op di web/dev).
+  React.useEffect(() => {
+    syncWidget(transactions, budgets);
+  }, [transactions, budgets]);
+
+  // Buka form tambah transaksi bila app diluncurkan dari tombol "Catat Transaksi" pada widget.
+  React.useEffect(() => {
+    let alive = true;
+    const check = async () => {
+      const action = await consumeWidgetLaunchAction();
+      if (alive && action === 'add_tx') setModal(true);
+    };
+    check(); // saat app pertama dibuka
+    const onVisible = () => { if (document.visibilityState === 'visible') check(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      alive = false;
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Kategori kustom — dipakai bersama menu Anggaran & Transaksi (realtime)
   const { customCategories, addCustomCategory } = useCustomCategories(session.user.id);
