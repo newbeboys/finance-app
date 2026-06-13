@@ -4,6 +4,7 @@ import { supabase } from './supabase';
 import PinSetup from './components/PinSetup';
 import { isPinActive, isBiometricEnabled, clearPin, setBiometric } from './lib/pin';
 import { isBiometricAvailable } from './lib/biometric';
+import RecurringTransactionPage from './pages/RecurringTransactionPage';
 
 // ── Halaman Pengaturan (Settings) ──────────────────────────────────
 // Reads & writes the same tweak state (theme, palette, sidebar, showAI,
@@ -114,6 +115,9 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub })
   const [biometric, setBiometricState] = React.useState(() => isBiometricEnabled());
   const [pinSetup, setPinSetup] = React.useState(null); // null | 'create' | 'change'
   const [bioNote, setBioNote] = React.useState('');
+
+  // Halaman "Transaksi Berulang" (overlay penuh)
+  const [showRecurring, setShowRecurring] = React.useState(false);
 
   const handleTogglePin = () => {
     if (pinActive) {
@@ -283,6 +287,21 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub })
           )}
         </SettingCard>
 
+        {/* Transaksi Berulang — navigasi ke halaman */}
+        <SettingCard eyebrow="Otomatis" title="Jadwal">
+          <button
+            onClick={() => setShowRecurring(true)}
+            style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "14px 0 4px", background: "transparent", border: 0, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}
+          >
+            <span style={{ fontSize: 20, width: 40, height: 40, borderRadius: 11, background: "var(--paper)", border: "1px solid var(--line-soft)", display: "grid", placeItems: "center", flexShrink: 0 }} aria-hidden>🔄</span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: "block", fontSize: 13.5, fontWeight: 500, color: "var(--ink)" }}>Transaksi Berulang</span>
+              <span style={{ display: "block", fontSize: 12, color: "var(--muted)", marginTop: 3, lineHeight: 1.45 }}>Jadwalkan pemasukan & pengeluaran agar tercatat otomatis.</span>
+            </span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M9 18l6-6-6-6" /></svg>
+          </button>
+        </SettingCard>
+
         {/* Notifications */}
         <SettingCard eyebrow="Notifikasi" title="Pemberitahuan">
           <SettingRow title="Aktifkan notifikasi" desc="Master switch untuk semua pemberitahuan FinanceApp.">
@@ -324,6 +343,8 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub })
           onCancel={() => setPinSetup(null)}
         />
       )}
+
+      <RecurringTransactionPage open={showRecurring} onClose={() => setShowRecurring(false)} />
     </div>
   );
 }

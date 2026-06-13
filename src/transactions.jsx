@@ -169,7 +169,7 @@ const formatLong = iso => {
 };
 
 // Date picker popup — tema mengikuti CSS variable aplikasi (light/dark)
-function DatePickerPopup({ valueISO, onConfirm, onClose }) {
+export function DatePickerPopup({ valueISO, onConfirm, onClose }) {
   const [sel, setSel] = React.useState(valueISO || todayISO());
   const todayIso = todayISO();
   const selDate = isoToDate(sel);

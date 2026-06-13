@@ -17,6 +17,8 @@ import { RegisterPage } from './pages/Register';
 import OnboardingScreen from './components/OnboardingScreen';
 import { GoalCompleteOverlay } from './components/GoalCompleteOverlay';
 import { isSoundAnimEnabled } from './lib/sound';
+import { checkRecurringTransactions } from './lib/recurringHelper';
+import { fmt } from './data';
 import PinLock from './components/PinLock';
 import { isPinActive, isBiometricEnabled, clearPin } from './lib/pin';
 import { useTransactions } from './hooks/useTransactions';
@@ -204,6 +206,23 @@ function AuthenticatedApp({ session }) {
   // Transactions — sinkron dengan Supabase per user yang login
   const { transactions, loading: txLoading, createTransaction, deleteTransaction, updateTransaction } = useTransactions(session.user.id);
 
+  // Transaksi berulang — saat app dibuka, eksekusi jadwal yang sudah jatuh tempo.
+  // Ref guard memastikan hanya jalan sekali per sesi app.
+  const [recurringToasts, setRecurringToasts] = React.useState([]);
+  const ranRecurringRef = React.useRef(false);
+  React.useEffect(() => {
+    if (ranRecurringRef.current) return;
+    ranRecurringRef.current = true;
+    (async () => {
+      try {
+        const done = await checkRecurringTransactions(createTransaction);
+        if (done.length) {
+          setRecurringToasts(done.map((d, i) => ({ ...d, id: `${Date.now()}-${i}` })));
+        }
+      } catch {}
+    })();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Budgets — Supabase
   const { budgets, createBudget, updateBudget, deleteBudget } = useBudgets(session.user.id);
 
@@ -297,6 +316,16 @@ function AuthenticatedApp({ session }) {
 
       {goalCelebrate && <GoalCompleteOverlay onClose={() => setGoalCelebrate(false)} />}
 
+      {/* Toast hasil eksekusi transaksi berulang otomatis */}
+      {recurringToasts.length > 0 && (
+        <div style={{ position: "fixed", left: "50%", transform: "translateX(-50%)", bottom: "calc(env(safe-area-inset-bottom, 0px) + 88px)", zIndex: 1150, display: "flex", flexDirection: "column", gap: 8, width: "min(420px, calc(100% - 32px))", pointerEvents: "none" }}>
+          {recurringToasts.map(toast => (
+            <RecurringToast key={toast.id} data={toast}
+              onDone={() => setRecurringToasts(prev => prev.filter(x => x.id !== toast.id))} />
+          ))}
+        </div>
+      )}
+
       <TweaksPanel title="Tweaks">
         <TweakSection label="Tampilan">
           <TweakRadio label="Tema" value={t.theme} onChange={v => setTweak("theme", v)} options={[
@@ -315,6 +344,22 @@ function AuthenticatedApp({ session }) {
           <TweakToggle label="Tampilkan wawasan AI" value={t.showAI} onChange={v => setTweak("showAI", v)} />
         </TweakSection>
       </TweaksPanel>
+    </div>
+  );
+}
+
+function RecurringToast({ data, onDone }) {
+  React.useEffect(() => {
+    const t = setTimeout(onDone, 4800);
+    return () => clearTimeout(t);
+  }, [onDone]);
+  return (
+    <div role="status" style={{
+      pointerEvents: "auto", background: "var(--ink)", color: "var(--cream)",
+      borderRadius: 12, padding: "12px 16px", fontSize: 12.5, lineHeight: 1.45,
+      boxShadow: "0 12px 32px -8px rgba(42,44,32,.45)", animation: "rise .25s ease-out",
+    }}>
+      ✅ Transaksi berulang “{data.nama}” sebesar {fmt(data.jumlah)} telah dicatat otomatis
     </div>
   );
 }
