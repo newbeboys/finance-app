@@ -243,7 +243,7 @@ function buildReportDoc({ title, periodLabel, income, expense, net, cats, months
 <div class="page">
   <div class="top">
     <div class="brand"><div class="mark">F</div><div><h1>FinanceApp</h1><div class="tag">Less spending · More living</div></div></div>
-    <div class="meta">Dibuat ${new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}<br/>FinanceApp<br/><span class="badge">Gratis untuk semua</span></div>
+    <div class="meta">Dibuat ${new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}<br/>FinanceApp</div>
   </div>
   <div class="eyebrow">${title}</div>
   <div class="serif title">Laporan Keuangan</div>
@@ -514,7 +514,7 @@ export function ReportsPage({ transactions = [], customCategories = [] }) {
           <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Laporan</div>
           <h2 className="serif" style={{ fontSize: 34, margin: "4px 0 0", letterSpacing: "-0.015em" }}>Laporan keuangan</h2>
           <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 6, maxWidth: 540, lineHeight: 1.5 }}>
-            Setiap periode dirangkum otomatis dari transaksimu — pratinjau, unduh PDF atau Excel, gratis.
+            Setiap periode dirangkum otomatis dari transaksimu — pratinjau, unduh PDF atau Excel.
           </div>
         </div>
         <div style={{ display: "flex", padding: 3, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10 }}>

@@ -1,6 +1,9 @@
 import React from 'react';
 import { IconCheck } from './icons';
 import { supabase } from './supabase';
+import PinSetup from './components/PinSetup';
+import { isPinActive, isBiometricEnabled, clearPin, setBiometric } from './lib/pin';
+import { isBiometricAvailable } from './lib/biometric';
 
 // ── Halaman Pengaturan (Settings) ──────────────────────────────────
 // Reads & writes the same tweak state (theme, palette, sidebar, showAI,
@@ -104,6 +107,42 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub })
       try { localStorage.setItem('animasiSuaraAktif', next.toString()); } catch {}
       return next;
     });
+  };
+
+  // ── Keamanan: PIN & biometrik ──────────────────────────────────
+  const [pinActive, setPinActive] = React.useState(() => isPinActive());
+  const [biometric, setBiometricState] = React.useState(() => isBiometricEnabled());
+  const [pinSetup, setPinSetup] = React.useState(null); // null | 'create' | 'change'
+  const [bioNote, setBioNote] = React.useState('');
+
+  const handleTogglePin = () => {
+    if (pinActive) {
+      clearPin();
+      setPinActive(false);
+      setBiometricState(false);
+    } else {
+      setPinSetup('create'); // buka layar buat PIN; aktif setelah selesai
+    }
+  };
+
+  const handlePinSetupDone = () => {
+    setPinActive(true); // setPin() di dalam PinSetup sudah menyimpan pinAktif
+    setPinSetup(null);
+  };
+
+  const handleToggleBiometric = async () => {
+    // Saat mengaktifkan: pastikan perangkat mendukung biometrik dulu
+    if (!biometric) {
+      const ok = await isBiometricAvailable();
+      if (!ok) {
+        setBioNote('Biometrik tidak tersedia di perangkat ini (hanya berfungsi di APK Android).');
+        return;
+      }
+    }
+    setBioNote('');
+    const next = !biometric;
+    setBiometric(next);       // simpan ke localStorage
+    setBiometricState(next);
   };
 
   const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Pengguna';
@@ -222,6 +261,28 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub })
           </SettingRow>
         </SettingCard>
 
+        {/* Security */}
+        <SettingCard eyebrow="Keamanan" title="Kunci aplikasi">
+          <SettingRow title="Kunci Aplikasi (PIN)" desc="Lindungi aplikasi dengan PIN 6 digit" last={!pinActive}>
+            <Switch on={pinActive} onClick={handleTogglePin} />
+          </SettingRow>
+          {pinActive && (
+            <>
+              <SettingRow title="Gunakan Biometrik" desc={bioNote || "Gunakan sidik jari sebagai pengganti PIN"}>
+                <Switch on={biometric} onClick={handleToggleBiometric} />
+              </SettingRow>
+              <SettingRow title="Ubah PIN" desc="Verifikasi PIN lama, lalu buat PIN baru." last>
+                <button
+                  onClick={() => setPinSetup('change')}
+                  style={{ padding: "9px 16px", fontSize: 13, fontWeight: 500, background: "var(--paper)", color: "var(--ink-2)", border: "1px solid var(--line-soft)", borderRadius: 10, cursor: "pointer", fontFamily: "inherit" }}
+                >
+                  Ubah PIN
+                </button>
+              </SettingRow>
+            </>
+          )}
+        </SettingCard>
+
         {/* Notifications */}
         <SettingCard eyebrow="Notifikasi" title="Pemberitahuan">
           <SettingRow title="Aktifkan notifikasi" desc="Master switch untuk semua pemberitahuan FinanceApp.">
@@ -246,15 +307,23 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub })
 
         {/* AI */}
         <SettingCard eyebrow="Kecerdasan" title="Wawasan AI">
-          <SettingRow title="Tampilkan wawasan AI" desc="Kartu saran cerdas di Beranda — analisis pengeluaran, tips menabung, dan prediksi. Gratis untuk semua." last>
+          <SettingRow title="Tampilkan wawasan AI" desc="Kartu saran cerdas di Beranda — analisis pengeluaran, tips menabung, dan prediksi." last>
             <Switch on={t.showAI !== false} onClick={() => setTweak("showAI", !(t.showAI !== false))} color="var(--gold)" />
           </SettingRow>
         </SettingCard>
 
         <div style={{ fontSize: 11.5, color: "var(--muted)", textAlign: "center", padding: "6px 0", lineHeight: 1.5 }}>
-          FinanceApp · Semua fitur gratis untuk semua pengguna. Preferensi tersimpan di perangkat ini.
+          FinanceApp · Preferensi tersimpan di perangkat ini.
         </div>
       </div>
+
+      {pinSetup && (
+        <PinSetup
+          requireCurrent={pinSetup === 'change'}
+          onComplete={handlePinSetupDone}
+          onCancel={() => setPinSetup(null)}
+        />
+      )}
     </div>
   );
 }

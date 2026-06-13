@@ -56,7 +56,7 @@ export function RegisterPage({ onSwitch, onAuthSuccess }) {
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
           <div style={{ fontSize: 11, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 8 }}>FinanceApp</div>
           <h1 className="serif" style={{ fontSize: 30, margin: 0, letterSpacing: '-0.015em' }}>Buat akun baru</h1>
-          <p style={{ fontSize: 13.5, color: 'var(--muted)', marginTop: 8, lineHeight: 1.5 }}>Gratis selamanya — mulai kelola keuanganmu</p>
+          <p style={{ fontSize: 13.5, color: 'var(--muted)', marginTop: 8, lineHeight: 1.5 }}>Mulai kelola keuanganmu</p>
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>

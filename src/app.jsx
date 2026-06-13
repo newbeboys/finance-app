@@ -17,6 +17,8 @@ import { RegisterPage } from './pages/Register';
 import OnboardingScreen from './components/OnboardingScreen';
 import { GoalCompleteOverlay } from './components/GoalCompleteOverlay';
 import { isSoundAnimEnabled } from './lib/sound';
+import PinLock from './components/PinLock';
+import { isPinActive, isBiometricEnabled, clearPin } from './lib/pin';
 import { useTransactions } from './hooks/useTransactions';
 import { useSavings } from './hooks/useSavings';
 import { useWallets } from './hooks/useWallets';
@@ -46,6 +48,8 @@ export default function App() {
   // Onboarding tampil setiap kali user baru register atau login (fresh session).
   // Bukan disimpan di localStorage: di-trigger dari handler auth, di-reset saat logout.
   const [showOnboarding, setShowOnboarding] = React.useState(false);
+  // Kunci PIN: terkunci saat app dibuka jika fitur PIN aktif (lapisan di atas Supabase)
+  const [locked, setLocked] = React.useState(() => isPinActive());
 
   React.useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session ?? null));
@@ -56,6 +60,13 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Lupa PIN / 5× gagal → reset PIN lalu paksa login ulang Supabase
+  const handleForgotPin = React.useCallback(async () => {
+    clearPin();
+    setLocked(false);
+    try { await supabase.auth.signOut(); } catch {}
+  }, []);
+
   if (session === undefined) {
     return <div style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', background: 'var(--cream)', color: 'var(--muted)', fontSize: 14 }}>Memuat…</div>;
   }
@@ -64,6 +75,17 @@ export default function App() {
     return authView === 'login'
       ? <LoginPage onSwitch={() => setAuthView('register')} onAuthSuccess={() => setShowOnboarding(true)} />
       : <RegisterPage onSwitch={() => setAuthView('login')} onAuthSuccess={() => setShowOnboarding(true)} />;
+  }
+
+  // Sesudah login Supabase, sebelum masuk app: layar kunci PIN (jika aktif)
+  if (locked) {
+    return (
+      <PinLock
+        onUnlock={() => setLocked(false)}
+        onForgot={handleForgotPin}
+        biometricEnabled={isBiometricEnabled()}
+      />
+    );
   }
 
   return (

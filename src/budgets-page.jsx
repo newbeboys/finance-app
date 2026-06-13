@@ -316,7 +316,7 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
           <div style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "4px 6px", color: "var(--muted)", fontSize: isMobile ? 13 : 12.5, lineHeight: 1.5 }}>
             <span style={{ color: "var(--gold)", marginTop: 1 }}><IconSpark size={15} /></span>
             <span>
-              <strong style={{ color: "var(--ink-2)", fontWeight: 500 }}>Tips:</strong> aktifkan reminder agar FinanceApp memberi tahu saat sebuah kategori mencapai 80% dari batasnya. Semua fitur ini gratis.
+              <strong style={{ color: "var(--ink-2)", fontWeight: 500 }}>Tips:</strong> aktifkan reminder agar FinanceApp memberi tahu saat sebuah kategori mencapai 80% dari batasnya.
             </span>
           </div>
         </>
