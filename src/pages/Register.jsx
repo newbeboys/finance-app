@@ -1,7 +1,7 @@
 import React from 'react';
 import { supabase } from '../supabase';
 
-export function RegisterPage({ onSwitch }) {
+export function RegisterPage({ onSwitch, onAuthSuccess }) {
   const [name, setName] = React.useState('');
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
@@ -23,6 +23,7 @@ export function RegisterPage({ onSwitch }) {
       setError(err.message);
     } else {
       setSuccess(true);
+      onAuthSuccess?.(); // register berhasil → tampilkan onboarding (saat session aktif)
     }
   }
 

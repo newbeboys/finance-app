@@ -1,7 +1,7 @@
 import React from 'react';
 import { supabase } from '../supabase';
 
-export function LoginPage({ onSwitch }) {
+export function LoginPage({ onSwitch, onAuthSuccess }) {
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [loading, setLoading] = React.useState(false);
@@ -14,6 +14,7 @@ export function LoginPage({ onSwitch }) {
     const { error: err } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (err) setError(err.message);
+    else onAuthSuccess?.(); // login berhasil → tampilkan onboarding
   }
 
   return (

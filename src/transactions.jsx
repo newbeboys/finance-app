@@ -4,7 +4,9 @@ import { TRANSACTIONS, CATEGORIES, INCOME_CATEGORIES, fmt } from './data';
 import { IconFilter, IconPlus, IconArrowRight, IconClose, IconCalendar, IconChev, CatIcon } from './icons';
 import { ghostBtn } from './widgets';
 import { useIsMobile } from './use-mobile';
-import { CategoryField, CUSTOM_ID, resolveCategory } from './category-field';
+import { CategoryField, CUSTOM_ID, CUSTOM_COLORS, resolveCategory } from './category-field';
+import { playSound } from './lib/sound';
+import incomeSound from './assets/sound/incom-sound.wav';
 
 export function TransactionsCard({ onAdd, limit, onSeeAll, transactions: txProp, loading = false, customCategories = [] }) {
   const transactions = txProp ?? TRANSACTIONS;
@@ -282,7 +284,13 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
       const t = initial.amount < 0 ? "expense" : "income";
       setType(t);
       setAmount(String(Math.abs(initial.amount)));
-      setCat(initial.category);
+      // Pemasukan dengan kategori bebas (kustom) → buka lagi sebagai mode Kustom
+      if (t === "income" && initial.category && !INCOME_CATEGORIES.some(c => c.id === initial.category)) {
+        setCat(CUSTOM_ID);
+        setPendingCustom({ name: initial.category, color: CUSTOM_COLORS[0] });
+      } else {
+        setCat(initial.category);
+      }
       setMerchant(initial.merchant === '—' ? '' : (initial.merchant || ''));
       setNote(initial.note || '');
       setRecurring(false);
@@ -318,14 +326,20 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
     // Kategori Kustom → simpan dulu ke Supabase, lalu pakai id-nya
     let categoryId = cat;
     if (isCustom) {
-      if (!onCreateCustom) { setSaving(false); return; }
-      const { category, error } = await onCreateCustom({ name: pendingCustom.name, color: pendingCustom.color });
-      if (error || !category) {
-        setSaveError('Gagal menyimpan kategori kustom. Coba lagi.');
-        setSaving(false);
-        return;
+      if (type === 'income') {
+        // Pemasukan: simpan nama kustom langsung di transaksi (free text).
+        // Tidak dibuat di custom_categories agar tak bocor ke Pengeluaran/Anggaran.
+        categoryId = pendingCustom.name.trim();
+      } else {
+        if (!onCreateCustom) { setSaving(false); return; }
+        const { category, error } = await onCreateCustom({ name: pendingCustom.name, color: pendingCustom.color });
+        if (error || !category) {
+          setSaveError('Gagal menyimpan kategori kustom. Coba lagi.');
+          setSaving(false);
+          return;
+        }
+        categoryId = category.id;
       }
-      categoryId = category.id;
     }
 
     const now = new Date();
@@ -350,6 +364,8 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
       setSaving(false);
       return;
     }
+    // Sound khusus pemasukan (bukan pengeluaran)
+    if (type === 'income') playSound(incomeSound);
     setSaving(false);
     onClose();
   };
@@ -409,7 +425,7 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
               onChange={setCat}
               categories={activeCats}
               customCategories={activeCustom}
-              allowCustom={type !== "income"}
+              allowCustom
               pending={pendingCustom}
               onPendingChange={setPendingCustom}
             />

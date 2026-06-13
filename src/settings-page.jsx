@@ -94,6 +94,18 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub })
   const toggleSub = onToggleNotifSub ?? (() => {});
   const [loggingOut, setLoggingOut] = React.useState(false);
 
+  // Toggle "Animasi & Suara" — preferensi terpisah di localStorage (default ON)
+  const [animasiSuara, setAnimasiSuara] = React.useState(() => {
+    try { return localStorage.getItem('animasiSuaraAktif') !== 'false'; } catch { return true; }
+  });
+  const toggleAnimasiSuara = () => {
+    setAnimasiSuara(prev => {
+      const next = !prev;
+      try { localStorage.setItem('animasiSuaraAktif', next.toString()); } catch {}
+      return next;
+    });
+  };
+
   const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Pengguna';
 
   async function handleLogout() {
@@ -219,7 +231,7 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub })
             { k: "budget", title: "Peringatan anggaran", desc: "Saat sebuah kategori mencapai 80% atau melebihi batas." },
             { k: "income", title: "Transaksi masuk", desc: "Beri tahu setiap kali ada dana masuk." },
             { k: "weekly", title: "Ringkasan mingguan", desc: "Rangkuman pengeluaran tiap Senin pagi." },
-            { k: "bills",  title: "Pengingat tagihan", desc: "Ingatkan tagihan berulang sebelum jatuh tempo.", last: true },
+            { k: "bills",  title: "Pengingat tagihan", desc: "Ingatkan tagihan berulang sebelum jatuh tempo." },
           ].map(row => (
             <SettingRow key={row.k} title={row.title} desc={row.desc} last={row.last}>
               <div style={{ opacity: notifOn ? 1 : 0.4, pointerEvents: notifOn ? "auto" : "none" }}>
@@ -227,6 +239,9 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub })
               </div>
             </SettingRow>
           ))}
+          <SettingRow title="Animasi & Suara" desc="Aktifkan efek suara dan animasi pada aplikasi" last>
+            <Switch on={animasiSuara} onClick={toggleAnimasiSuara} />
+          </SettingRow>
         </SettingCard>
 
         {/* AI */}

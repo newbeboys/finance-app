@@ -14,6 +14,9 @@ import { BudgetsPage } from './budgets-page';
 import { supabase } from './supabase';
 import { LoginPage } from './pages/Login';
 import { RegisterPage } from './pages/Register';
+import OnboardingScreen from './components/OnboardingScreen';
+import { GoalCompleteOverlay } from './components/GoalCompleteOverlay';
+import { isSoundAnimEnabled } from './lib/sound';
 import { useTransactions } from './hooks/useTransactions';
 import { useSavings } from './hooks/useSavings';
 import { useWallets } from './hooks/useWallets';
@@ -40,10 +43,16 @@ const FONT_THEMES = {
 export default function App() {
   const [session, setSession] = React.useState(undefined); // undefined = loading
   const [authView, setAuthView] = React.useState('login');
+  // Onboarding tampil setiap kali user baru register atau login (fresh session).
+  // Bukan disimpan di localStorage: di-trigger dari handler auth, di-reset saat logout.
+  const [showOnboarding, setShowOnboarding] = React.useState(false);
 
   React.useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session ?? null));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => setSession(s ?? null));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s ?? null);
+      if (!s) setShowOnboarding(false); // logout → bersihkan flag onboarding
+    });
     return () => subscription.unsubscribe();
   }, []);
 
@@ -53,11 +62,17 @@ export default function App() {
 
   if (!session) {
     return authView === 'login'
-      ? <LoginPage onSwitch={() => setAuthView('register')} />
-      : <RegisterPage onSwitch={() => setAuthView('login')} />;
+      ? <LoginPage onSwitch={() => setAuthView('register')} onAuthSuccess={() => setShowOnboarding(true)} />
+      : <RegisterPage onSwitch={() => setAuthView('login')} onAuthSuccess={() => setShowOnboarding(true)} />;
   }
 
-  return <AuthenticatedApp session={session} />;
+  return (
+    <>
+      <AuthenticatedApp session={session} />
+      {/* Overlay onboarding di atas halaman utama setelah register/login berhasil */}
+      {showOnboarding && <OnboardingScreen onDone={() => setShowOnboarding(false)} />}
+    </>
+  );
 }
 
 const TWEAKS_KEY = 'finance_tweaks';
@@ -180,6 +195,18 @@ function AuthenticatedApp({ session }) {
   const { goals, createGoal, deleteGoal, depositToGoal } = useSavings(session.user.id);
   const [addGoal, setAddGoal] = React.useState(false);
   const [depositGoal, setDepositGoal] = React.useState(null);
+  const [goalCelebrate, setGoalCelebrate] = React.useState(false);
+
+  // Deposit + deteksi goal mencapai 100% (dari belum tercapai) → overlay perayaan
+  const handleDeposit = React.useCallback(async (id, amount) => {
+    const goal = goals.find(g => g.id === id);
+    const wasComplete = goal ? goal.current >= goal.target : false;
+    const res = await depositToGoal(id, amount);
+    if (!res?.error && goal && !wasComplete && goal.target > 0 && (goal.current + amount) >= goal.target && isSoundAnimEnabled()) {
+      setGoalCelebrate(true);
+    }
+    return res;
+  }, [goals, depositToGoal]);
 
   return (
     <div className="app" data-screen-label="Dashboard">
@@ -244,7 +271,9 @@ function AuthenticatedApp({ session }) {
       <AddTransactionModal open={modal} onClose={() => setModal(false)} onSave={createTransaction} customCategories={customCategories} onCreateCustom={addCustomCategory} />
       <AddAccountModal open={addAcct} onClose={() => setAddAcct(false)} onCreate={createAccount} />
       <AddGoalModal open={addGoal} onClose={() => setAddGoal(false)} onCreate={createGoal} />
-      <DepositModal goal={depositGoal} onClose={() => setDepositGoal(null)} onConfirm={depositToGoal} />
+      <DepositModal goal={depositGoal} onClose={() => setDepositGoal(null)} onConfirm={handleDeposit} />
+
+      {goalCelebrate && <GoalCompleteOverlay onClose={() => setGoalCelebrate(false)} />}
 
       <TweaksPanel title="Tweaks">
         <TweakSection label="Tampilan">

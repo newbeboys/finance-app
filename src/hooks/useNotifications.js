@@ -1,5 +1,7 @@
 import React from 'react';
 import { formatNominal } from '../data';
+import { playSound } from '../lib/sound';
+import notifSound from '../assets/sound/notification-sound.mp3';
 
 const NOTIF_KEY    = 'notif_data';
 const PREFS_KEY    = 'notif_prefs';
@@ -191,6 +193,10 @@ export function useNotifications(transactions, prefs, budgets) {
       const updated = [...fresh, ...existing].slice(0, MAX_NOTIFS);
       setNotifs(updated);
       save(NOTIF_KEY, updated);
+      // Sound notifikasi — volume pelan & hanya saat tab di foreground
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        playSound(notifSound, 0.5);
+      }
     }
   }, [transactions, resolvedPrefs, budgets]);
 
