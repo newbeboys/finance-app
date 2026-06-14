@@ -4,6 +4,7 @@ import { TRANSACTIONS, CATEGORIES, INCOME_CATEGORIES, fmt } from './data';
 import { IconFilter, IconPlus, IconArrowRight, IconClose, IconCalendar, IconChev, CatIcon } from './icons';
 import { ghostBtn } from './widgets';
 import { useIsMobile } from './use-mobile';
+import { useScrollLock } from './hooks/useScrollLock';
 import { CategoryField, CUSTOM_ID, CUSTOM_COLORS, resolveCategory } from './category-field';
 import { playSound } from './lib/sound';
 import incomeSound from './assets/sound/incom-sound.wav';
@@ -260,6 +261,7 @@ export function DatePickerPopup({ valueISO, onConfirm, onClose }) {
 }
 
 export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial = null, customCategories = [], onCreateCustom }) {
+  useScrollLock(open);   // kunci scroll latar saat modal terbuka
   const isEdit = !!initial;
   const [type, setType] = React.useState("expense");
   const [amount, setAmount] = React.useState("");

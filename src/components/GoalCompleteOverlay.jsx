@@ -3,11 +3,13 @@ import Lottie from 'lottie-react';
 import goalsAnim from '../assets/animation/goals-animation.json';
 import goalsSound from '../assets/sound/goals-sound.wav';
 import { playSound } from '../lib/sound';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 // Overlay perayaan saat sebuah goal mencapai 100%.
 // Animasi diputar sekali (loop:false) + sound berbarengan, lalu hilang
 // otomatis saat animasi selesai (onComplete). Tombol "Tutup" untuk skip.
 export function GoalCompleteOverlay({ onClose }) {
+  useScrollLock(true);   // overlay ini di-mount hanya saat tampil → kunci scroll latar
   React.useEffect(() => {
     playSound(goalsSound);
   }, []);

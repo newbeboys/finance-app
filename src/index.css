@@ -68,6 +68,13 @@ body {
   font-variant-numeric: tabular-nums;
   transition: background-color .35s ease, color .35s ease;
 }
+/* Scroll-lock saat modal/popup terbuka — latar tidak bisa di-scroll.
+   Posisi scroll dipertahankan via body.style.top (lihat useScrollLock). */
+body.modal-open {
+  position: fixed;
+  width: 100%;
+  overflow: hidden;
+}
 .serif { font-family: var(--font-heading); font-weight: 400; letter-spacing: -0.01em; }
 .mono  { font-family: var(--font-mono); }
 .tnum  { font-variant-numeric: tabular-nums; }

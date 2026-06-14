@@ -3,6 +3,7 @@ import {
   IconDashboard, IconTx, IconSave, IconBudget,
   IconChart, IconReport, IconWallet, IconSettings,
 } from '../icons';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 const IconMore = ({ size = 22 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -31,6 +32,7 @@ const BLUE = "#3B7BF8";
 
 export function BottomNav({ active, onNav }) {
   const [showMore, setShowMore] = React.useState(false);
+  useScrollLock(showMore);   // kunci scroll latar saat drawer "Lainnya" terbuka
   const moreActive = MORE_IDS.includes(active);
 
   React.useEffect(() => {

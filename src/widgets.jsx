@@ -3,6 +3,7 @@ import { CATEGORIES, ALL_CATEGORIES, fmtShort, fmt, formatNominal, nominalFontSi
 import { IconArrowUp, IconArrowDown, IconArrowRight, IconSpark, CatIcon } from './icons';
 import { CashflowChart, SpendingDonut, Spark, Ring } from './charts';
 import { useIsMobile } from './use-mobile';
+import { useScrollLock } from './hooks/useScrollLock';
 
 export function KpiCards({ balanceVisible, onToggleVisible, totalBalance, accountCount, transactions = [] }) {
   const isMobile = useIsMobile();
@@ -129,6 +130,7 @@ export function CashflowCard({ transactions = [] }) {
   const [range, setRange] = React.useState("6M");
   const [pickedMonth, setPickedMonth] = React.useState(null); // { year, month }
   const [sheetOpen, setSheetOpen] = React.useState(false);
+  useScrollLock(sheetOpen);   // kunci scroll latar saat bottom-sheet "Pilih Bulan" terbuka
 
   const cashflowData = React.useMemo(
     () => computeCashflow(transactions, range, pickedMonth),
@@ -241,6 +243,7 @@ const SP_MONTHS_ID = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt
 export function SpendingCard({ transactions = [] }) {
   const [hover, setHover] = React.useState(null);
   const [sheetOpen, setSheetOpen] = React.useState(false);
+  useScrollLock(sheetOpen);   // kunci scroll latar saat bottom-sheet "Pilih Bulan" terbuka
   const now = new Date();
   const [sel, setSel] = React.useState({ year: now.getFullYear(), month: now.getMonth() });
 

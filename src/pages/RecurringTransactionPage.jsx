@@ -4,6 +4,7 @@ import {
   loadRecurring, addRecurring, updateRecurring, deleteRecurring, toggleRecurring, fromISO,
 } from '../lib/recurringHelper';
 import RecurringTransactionForm from '../components/RecurringTransactionForm';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 const MONTH_NAMES = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 
@@ -114,6 +115,7 @@ function ConfirmDelete({ item, onConfirm, onCancel }) {
 
 // ── Halaman utama ───────────────────────────────────────────────────
 export default function RecurringTransactionPage({ open, onClose }) {
+  useScrollLock(open);   // kunci scroll latar saat halaman/modal terbuka
   const [items, setItems] = React.useState([]);
   const [formOpen, setFormOpen] = React.useState(false);
   const [editing, setEditing] = React.useState(null);

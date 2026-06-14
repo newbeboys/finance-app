@@ -135,9 +135,11 @@ export function CategoryField({
             {allowCustom && (
               <button type="button" onClick={() => pick(CUSTOM_ID)}
                 style={{
+                  position: 'sticky', bottom: 0,
                   width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '10px 14px', background: isCustom ? 'var(--ivory)' : 'transparent',
-                  border: 0, fontSize: 14, color: 'var(--ink-2)', cursor: 'pointer',
+                  padding: '10px 14px', background: isCustom ? 'var(--ivory)' : 'var(--paper)',
+                  border: 0, borderTop: '1px solid var(--line-soft)',
+                  fontSize: 14, color: 'var(--ink-2)', cursor: 'pointer',
                   textAlign: 'left', fontFamily: 'inherit',
                 }}>
                 <PlusDot />

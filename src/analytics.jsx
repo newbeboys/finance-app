@@ -2,6 +2,7 @@ import React from 'react';
 import { CATEGORIES, INCOME_CATEGORIES, fmtShort, formatNominal, nominalFontSize } from './data';
 import { IconArrowDown } from './icons';
 import { SpendingDonut } from './charts';
+import { useScrollLock } from './hooks/useScrollLock';
 
 const MONTHS_ID = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
 
@@ -160,6 +161,7 @@ export function AnalyticsPage({ transactions = [], customCategories = [] }) {
   const [scope, setScope] = React.useState("year"); // "year" | "month"
   const [pickedMonth, setPickedMonth] = React.useState(null);
   const [sheetOpen, setSheetOpen] = React.useState(false);
+  useScrollLock(sheetOpen);   // kunci scroll latar saat bottom-sheet "Pilih Bulan" terbuka
   const [hoverCat, setHoverCat] = React.useState(null);
   const [hoverIncomeCat, setHoverIncomeCat] = React.useState(null);
 
@@ -282,7 +284,7 @@ export function AnalyticsPage({ transactions = [], customCategories = [] }) {
             <div className="card rise analytics-income-donut" style={{ padding: 22 }}>
               <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Diagram lingkaran</div>
               <div className="serif" style={{ fontSize: 24, letterSpacing: "-0.01em", marginTop: 2, marginBottom: 6 }}>Komposisi pemasukan</div>
-              <SpendingDonut data={incomeCats} active={hoverIncomeCat} onHover={setHoverIncomeCat} fmtFn={formatNominal} />
+              <SpendingDonut data={incomeCats} active={hoverIncomeCat} onHover={setHoverIncomeCat} fmtFn={fmtShort} />
               <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", marginTop: 10, justifyContent: "center" }}>
                 {incomeCats.slice(0, 6).map((c, i) => (
                   <span key={c.id} onMouseEnter={() => setHoverIncomeCat(i)} onMouseLeave={() => setHoverIncomeCat(null)}

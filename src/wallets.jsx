@@ -1,6 +1,7 @@
 import React from 'react';
 import { ACCOUNT_TYPES, ALL_CATEGORIES, fmtShort, fmt, formatNominal, nominalFontSize } from './data';
 import { IconBudget, IconPlus, IconChev, IconClose, CatIcon } from './icons';
+import { useScrollLock } from './hooks/useScrollLock';
 
 const WALLET_GLYPH = {
   bank:       <><rect x="3" y="6" width="18" height="13" rx="2" /><path d="M3 10h18" /><path d="M7 15h4" /></>,
@@ -218,6 +219,7 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
 }
 
 function AccountTxSheet({ account, transactions, onClose }) {
+  useScrollLock(true);   // sheet ini di-mount hanya saat terbuka → kunci scroll latar
   return (
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(42,44,32,.45)", zIndex: 150 }} />
@@ -271,6 +273,7 @@ const cardFootBtn = { flex: 1, padding: "11px 0", background: "transparent", bor
 const ACCOUNT_COLORS = ["#2A6FDB", "#1FA8A0", "#1B8A3F", "#9A6BD9", "#B26A4A", "#B68A3E", "#8C7B5C", "#C9886D"];
 
 export function AddAccountModal({ open, onClose, onCreate }) {
+  useScrollLock(open);   // kunci scroll latar saat modal terbuka
   const [name, setName] = React.useState("");
   const [type, setType] = React.useState("bank");
   const [institution, setInstitution] = React.useState("");

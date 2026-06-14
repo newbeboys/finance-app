@@ -2,6 +2,7 @@ import React from 'react';
 import { CATEGORIES, INCOME_CATEGORIES } from '../data';
 import { CategoryField, CUSTOM_ID, CUSTOM_COLORS } from '../category-field';
 import { DatePickerPopup } from '../transactions';
+import { useScrollLock } from '../hooks/useScrollLock';
 import { todayISO, fromISO } from '../lib/recurringHelper';
 
 const DAY_OPTIONS   = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
@@ -105,6 +106,7 @@ const BUILTIN_IDS = new Set([...CATEGORIES, ...INCOME_CATEGORIES].map((c) => c.i
 
 // Modal form untuk menambah / mengubah satu jadwal transaksi berulang.
 export default function RecurringTransactionForm({ initial = null, onSave, onCancel }) {
+  useScrollLock(true);   // form ini di-mount hanya saat terbuka → kunci scroll latar
   const isEdit = !!initial;
 
   const [nama, setNama]         = React.useState('');

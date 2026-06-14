@@ -3,6 +3,7 @@ import { fmt, fmtShort, formatNominal, nominalFontSize, CATEGORIES } from './dat
 import { IconPlus, IconSpark, IconClose, CatIcon } from './icons';
 import { useIsMobile } from './use-mobile';
 import { CategoryField, CUSTOM_ID } from './category-field';
+import { useScrollLock } from './hooks/useScrollLock';
 
 export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, onDelete, customCategories = [], onCreateCustom }) {
   const isMobile = useIsMobile();
@@ -337,6 +338,7 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
 }
 
 function AddBudgetModal({ onClose, onAdd, defaultPeriod = "monthly", existingCategoryIds = [], customCategories = [], onCreateCustom }) {
+  useScrollLock(true);   // modal ini di-mount hanya saat terbuka → kunci scroll latar
   const [selectedCatId, setSelectedCatId] = React.useState("");
   const [pendingCustom, setPendingCustom] = React.useState(null); // { name, color } saat pilih Kustom
   const [limit, setLimit]                 = React.useState("");

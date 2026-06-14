@@ -5,6 +5,7 @@ import PinSetup from './components/PinSetup';
 import { isPinActive, isBiometricEnabled, clearPin, enableBiometricOnly } from './lib/pin';
 import { isBiometricAvailable } from './lib/biometric';
 import RecurringTransactionPage from './pages/RecurringTransactionPage';
+import { useScrollLock } from './hooks/useScrollLock';
 
 // ── Halaman Pengaturan (Settings) ──────────────────────────────────
 // Reads & writes the same tweak state (theme, palette, sidebar, showAI,
@@ -148,6 +149,7 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub })
   const [pinSetup, setPinSetup] = React.useState(null); // null | 'create' | 'change'
   const [bioNote, setBioNote] = React.useState('');
   const [confirmNone, setConfirmNone] = React.useState(false);
+  useScrollLock(confirmNone || !!pinSetup);   // kunci scroll latar saat dialog konfirmasi / setup PIN terbuka
 
   // Halaman "Transaksi Berulang" (overlay penuh)
   const [showRecurring, setShowRecurring] = React.useState(false);

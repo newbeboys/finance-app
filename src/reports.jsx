@@ -2,6 +2,7 @@ import React from 'react';
 import { ALL_CATEGORIES, fmtShort } from './data';
 import { IconReport, IconArrowDown, IconClose } from './icons';
 import { downloadExcel } from './report-excel';
+import { useScrollLock } from './hooks/useScrollLock';
 
 // ── Halaman Laporan (Reports) ──────────────────────────────────────
 // Generates monthly & yearly financial reports as downloadable, print-ready
@@ -338,11 +339,13 @@ async function downloadPdf(p) {
   const isAndroid = window.Capacitor?.getPlatform?.() === 'android';
 
   // Dynamic import keeps the initial bundle small
-  const [{ default: html2canvas }, jspdfMod] = await Promise.all([
+  const [{ default: html2canvas }, jspdfMod, autoTableMod] = await Promise.all([
     import('html2canvas'),
     import('jspdf'),
+    import('jspdf-autotable'),
   ]);
   const jsPDF = jspdfMod.jsPDF ?? jspdfMod.default?.jsPDF ?? jspdfMod.default;
+  const autoTable = autoTableMod.default ?? autoTableMod;
 
   const resolvedHtml = resolveCssVars(buildReportDoc(p));
   const parsed = new DOMParser().parseFromString(resolvedHtml, 'text/html');
@@ -355,6 +358,10 @@ async function downloadPdf(p) {
   container.appendChild(styleEl);
   const page = parsed.querySelector('.page');
   if (page) container.appendChild(page);
+  // Tabel & penutup dirender ulang secara native (autotable) di bawah agar
+  // header kolom berulang tiap halaman → buang dari porsi yang diraster.
+  // (Judul diagram di dalam <section.block> aman karena bukan anak langsung .page.)
+  container.querySelectorAll('.page > h2.sec, .page > table, .page > .foot').forEach(el => el.remove());
   document.body.appendChild(container);
 
   try {
@@ -370,13 +377,24 @@ async function downloadPdf(p) {
     const pdfH   = pdf.internal.pageSize.getHeight();
     const imgW   = canvas.width;
     const imgH   = canvas.height;
-    const pageH_px = (pdfH * imgW) / pdfW;    // canvas pixels per PDF page
 
-    // Potong gambar per halaman, tapi hindari memotong di tengah elemen
-    // penting (diagram/section/baris tabel) yang ditandai di bawah.
+    // Margin tetap untuk header & footer yang digambar di SETIAP halaman PDF.
+    const HEADER_MM = 18, FOOTER_MM = 14, SIDE_MM = 14;
+    const PAPER = [251, 248, 238];   // #FBF8EE
+    const INK   = [42, 44, 32];      // #2A2C20
+    const MUTED = [110, 107, 88];    // #6E6B58
+    const LINE  = [216, 210, 190];   // #D8D2BE
+    const TW    = pdfW - 2 * SIDE_MM; // lebar area tabel
+    const tableMargin = { top: HEADER_MM, bottom: FOOTER_MM, left: SIDE_MM, right: SIDE_MM };
+
+    // ── Bagian 1: porsi visual (kop, KPI, diagram) diraster lalu dipotong ──
+    const contentH_mm = pdfH - HEADER_MM - FOOTER_MM;
+    const pageContentH_px = (contentH_mm * imgW) / pdfW;
+
+    // Elemen yang tak boleh terpotong saat ganti halaman (diagram, KPI, judul).
     const scale = imgW / container.offsetWidth;          // canvas px : DOM px
     const contTop = container.getBoundingClientRect().top;
-    const atomic = Array.from(container.querySelectorAll('.block, .kpis, .net-strip, tr'))
+    const atomic = Array.from(container.querySelectorAll('.block, .kpis, .net-strip, h2.sec'))
       .map(el => {
         const rr = el.getBoundingClientRect();
         return { top: (rr.top - contTop) * scale, bottom: (rr.bottom - contTop) * scale };
@@ -385,10 +403,12 @@ async function downloadPdf(p) {
 
     let y = 0, firstPage = true;
     while (y < imgH - 1) {
-      let end = Math.min(y + pageH_px, imgH);
-      // Jika batas halaman memotong sebuah elemen, mundurkan ke atas elemen itu
-      for (const a of atomic) {
-        if (a.top > y && a.top < end && a.bottom > end) { end = a.top; break; }
+      let end = Math.min(y + pageContentH_px, imgH);
+      if (end < imgH) {
+        for (const a of atomic) {
+          if (a.top > y && a.top < end && a.bottom > end) { end = a.top; break; }
+        }
+        if (end <= y) end = Math.min(y + pageContentH_px, imgH); // pengaman elemen tinggi
       }
       const sliceH = Math.max(1, Math.round(end - y));
       const sliceCanvas = document.createElement('canvas');
@@ -396,9 +416,195 @@ async function downloadPdf(p) {
       sliceCanvas.height = sliceH;
       sliceCanvas.getContext('2d').drawImage(canvas, 0, y, imgW, sliceH, 0, 0, imgW, sliceH);
       if (!firstPage) pdf.addPage();
-      pdf.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', 0, 0, pdfW, (sliceH * pdfW) / imgW);
+      pdf.setFillColor(...PAPER);
+      pdf.rect(0, 0, pdfW, pdfH, 'F');
+      pdf.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', 0, HEADER_MM, pdfW, (sliceH * pdfW) / imgW);
       firstPage = false;
       y = end;
+    }
+
+    // ── Bagian 2: tabel native via autotable (header kolom berulang otomatis) ──
+    const rupiah = (n) => "Rp " + new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(Math.round(n));
+    const fmtDay = (iso) => { const a = (iso || '').split('-'); return a[2] && a[1] ? `${a[2]}/${a[1]}` : '—'; };
+    const txName = (t) => [t.merchant, t.note].filter(Boolean).join(' · ') || '—';
+    const hexToRgb = (hex) => {
+      const m = hex.replace('#', '');
+      const n = m.length === 3 ? m.split('').map(c => c + c).join('') : m;
+      return [parseInt(n.slice(0, 2), 16), parseInt(n.slice(2, 4), 16), parseInt(n.slice(4, 6), 16)];
+    };
+    const resolveColor = (c, fb = '#8C7B5C') => {
+      if (typeof c !== 'string') return hexToRgb(fb);
+      if (c.startsWith('var(')) return hexToRgb(PDF_COLORS[c.slice(4, -1).trim()] || fb);
+      if (c.startsWith('#')) return hexToRgb(c);
+      return hexToRgb(fb);
+    };
+
+    let cursorY = HEADER_MM;
+    const fillPaper = () => { pdf.setFillColor(...PAPER); pdf.rect(0, 0, pdfW, pdfH, 'F'); };
+    const addPaperPage = () => { pdf.addPage(); fillPaper(); cursorY = HEADER_MM; };
+    addPaperPage();                // tabel selalu mulai di halaman baru (latar krem konsisten)
+
+    const ensureRoom = (need) => {
+      if (cursorY > pdfH - FOOTER_MM - need) addPaperPage();
+    };
+    const drawTitle = (text, big = false) => {
+      ensureRoom(big ? 16 : 26);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(big ? 13 : 11);
+      pdf.setTextColor(...INK);
+      pdf.text(text, SIDE_MM, cursorY + 4);
+      cursorY += big ? 9 : 7;
+    };
+    const runTable = ({ head, body, foot, columnStyles, colors = null }) => {
+      autoTable(pdf, {
+        head, body, foot,
+        startY: cursorY,
+        margin: tableMargin,
+        theme: 'plain',
+        showHead: 'everyPage',          // ← header kolom berulang di setiap halaman
+        showFoot: foot ? 'lastPage' : 'never',
+        rowPageBreak: 'avoid',          // ← jangan potong baris di tengah
+        willDrawPage: (data) => { if (data.pageNumber > 1) fillPaper(); }, // latar krem halaman lanjutan
+        styles: { font: 'helvetica', fontSize: 9, textColor: INK, cellPadding: { top: 2.2, bottom: 2.2, left: 1.5, right: 1.5 }, valign: 'middle', overflow: 'linebreak' },
+        headStyles: { fontStyle: 'bold', fontSize: 7.5, textColor: MUTED, cellPadding: { top: 1, bottom: 2.8, left: 1.5, right: 1.5 } },
+        footStyles: { fontStyle: 'bold', fontSize: 9, textColor: INK },
+        columnStyles,
+        didDrawCell: (data) => {
+          const { x, y: cy, width, height } = data.cell;
+          if (data.section === 'head') {
+            pdf.setDrawColor(...INK); pdf.setLineWidth(0.4);
+            pdf.line(x, cy + height, x + width, cy + height);
+          } else if (data.section === 'body') {
+            pdf.setDrawColor(...LINE); pdf.setLineWidth(0.1);
+            pdf.line(x, cy + height, x + width, cy + height);
+            if (colors && data.column.index === 0 && colors[data.row.index]) {
+              pdf.setFillColor(...colors[data.row.index]);
+              pdf.roundedRect(x + 1.6, cy + height / 2 - 1.4, 2.8, 2.8, 0.6, 0.6, 'F');
+            }
+          } else if (data.section === 'foot') {
+            pdf.setDrawColor(...INK); pdf.setLineWidth(0.5);
+            pdf.line(x, cy, x + width, cy);
+          }
+        },
+      });
+      cursorY = pdf.lastAutoTable.finalY + 11;
+    };
+
+    const catCols = {
+      0: { halign: 'left',  cellWidth: TW * 0.5, cellPadding: { left: 5.8, top: 2.2, bottom: 2.2, right: 1.5 } },
+      1: { halign: 'right', cellWidth: TW * 0.3 },
+      2: { halign: 'right', cellWidth: TW * 0.2 },
+    };
+    const txCols = {
+      0: { halign: 'left',  cellWidth: TW * 0.15 },
+      1: { halign: 'left',  cellWidth: TW * 0.35 },
+      2: { halign: 'left',  cellWidth: TW * 0.30 },
+      3: { halign: 'right', cellWidth: TW * 0.20 },
+    };
+    const moCols = {
+      0: { halign: 'left',  cellWidth: TW * 0.40 },
+      1: { halign: 'right', cellWidth: TW * 0.20 },
+      2: { halign: 'right', cellWidth: TW * 0.20 },
+      3: { halign: 'right', cellWidth: TW * 0.20 },
+    };
+
+    // Tabel pemasukan per kategori
+    if (p.incomeCats?.length) {
+      drawTitle('Tabel — Pemasukan per kategori');
+      runTable({
+        head: [['KATEGORI', 'JUMLAH', '% DARI PEMASUKAN']],
+        body: p.incomeCats.map(c => [c.label, rupiah(c.amount), (p.income ? Math.round(c.amount / p.income * 100) : 0) + '%']),
+        foot: [['Total pemasukan', rupiah(p.income), '100%']],
+        columnStyles: catCols,
+        colors: p.incomeCats.map(c => resolveColor(c.color, '#5C6B4C')),
+      });
+    }
+
+    // Tabel pengeluaran per kategori
+    if (p.cats?.length) {
+      drawTitle('Tabel — Pengeluaran per kategori');
+      runTable({
+        head: [['KATEGORI', 'JUMLAH', '% DARI PENGELUARAN']],
+        body: p.cats.map(c => [c.label, rupiah(c.amount), (p.expense ? Math.round(c.amount / p.expense * 100) : 0) + '%']),
+        foot: [['Total pengeluaran', rupiah(p.expense), '100%']],
+        columnStyles: catCols,
+        colors: p.cats.map(c => resolveColor(c.color, '#8C7B5C')),
+      });
+    }
+
+    // Tabel rincian bulanan (hanya laporan tahunan)
+    if (p.months?.length) {
+      drawTitle('Tabel — Rincian bulanan');
+      runTable({
+        head: [['BULAN', 'MASUK', 'KELUAR', 'BERSIH']],
+        body: p.months.map(m => [`${m.full} ${m.year}`, rupiah(m.income), rupiah(m.expense), rupiah(m.net)]),
+        columnStyles: moCols,
+      });
+    }
+
+    // Rincian transaksi (pemasukan & pengeluaran)
+    const incomeTx  = (p.transactions || []).filter(t => t.amount >= 0);
+    const expenseTx = (p.transactions || []).filter(t => t.amount < 0);
+    if (incomeTx.length || expenseTx.length) {
+      drawTitle('Bagian 4 — Rincian Transaksi', true);
+      if (incomeTx.length) {
+        drawTitle('Transaksi Pemasukan');
+        runTable({
+          head: [['TANGGAL', 'NAMA', 'KATEGORI', 'JUMLAH']],
+          body: incomeTx.map(t => [fmtDay(t.dateRaw), txName(t), t.catLabel || '—', rupiah(Math.abs(t.amount))]),
+          foot: [[{ content: 'Total Pemasukan', colSpan: 3, styles: { halign: 'right' } }, rupiah(p.income)]],
+          columnStyles: txCols,
+        });
+      }
+      if (expenseTx.length) {
+        drawTitle('Transaksi Pengeluaran');
+        runTable({
+          head: [['TANGGAL', 'NAMA', 'KATEGORI', 'JUMLAH']],
+          body: expenseTx.map(t => [fmtDay(t.dateRaw), txName(t), t.catLabel || '—', rupiah(Math.abs(t.amount))]),
+          foot: [[{ content: 'Total Pengeluaran', colSpan: 3, styles: { halign: 'right' } }, rupiah(p.expense)]],
+          columnStyles: txCols,
+        });
+      }
+    }
+
+    // ── Penutup ──
+    ensureRoom(30);
+    cursorY += 4;
+    pdf.setDrawColor(...LINE); pdf.setLineWidth(0.3);
+    pdf.line(SIDE_MM, cursorY, pdfW - SIDE_MM, cursorY);
+    cursorY += 7;
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.setTextColor(...INK);
+    pdf.text('Penutup', SIDE_MM, cursorY); cursorY += 6;
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(...MUTED);
+    pdf.text('Dokumen ini bersifat informatif, bukan dokumen pajak resmi.', SIDE_MM, cursorY); cursorY += 5;
+    pdf.text(`Laporan dibuat otomatis oleh FinanceApp pada ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}.`, SIDE_MM, cursorY);
+
+    // ── Header + footer + nomor halaman di SETIAP halaman (pass terakhir) ──
+    const headerRight = `Laporan ${p.periodLabel}`;
+    const total = pdf.getNumberOfPages();
+    for (let i = 1; i <= total; i++) {
+      pdf.setPage(i);
+      if (i > 1) {  // halaman 1 sudah punya kop lengkap di isinya
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(11);
+        pdf.setTextColor(...INK);
+        pdf.text('FinanceApp', SIDE_MM, 11);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(9.5);
+        pdf.setTextColor(...MUTED);
+        pdf.text(headerRight, pdfW - SIDE_MM, 11, { align: 'right' });
+        pdf.setDrawColor(...LINE);
+        pdf.setLineWidth(0.3);
+        pdf.line(SIDE_MM, 14, pdfW - SIDE_MM, 14);
+      }
+      pdf.setDrawColor(...LINE);
+      pdf.setLineWidth(0.3);
+      pdf.line(SIDE_MM, pdfH - 10, pdfW - SIDE_MM, pdfH - 10);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(8.5);
+      pdf.setTextColor(...MUTED);
+      pdf.text('FinanceApp — Laporan dibuat otomatis', SIDE_MM, pdfH - 5);
+      pdf.text(`Hal. ${i} dari ${total}`, pdfW - SIDE_MM, pdfH - 5, { align: 'right' });
     }
 
     if (isAndroid) {
@@ -431,6 +637,7 @@ function printReport(p) {
 
 // ── Preview modal ──────────────────────────────────────────────────
 function ReportPreview({ payload, onClose, onDownload }) {
+  useScrollLock(!!payload);   // kunci scroll latar saat pratinjau terbuka
   const ref = React.useRef(null);
   React.useEffect(() => {
     if (payload && ref.current) ref.current.srcdoc = buildReportDoc(payload);
@@ -478,6 +685,7 @@ const IconExcel = ({ size = 22 }) => (
 );
 
 function FormatPicker({ payload, onClose }) {
+  useScrollLock(!!payload);   // kunci scroll latar saat pemilih format terbuka
   const [busy, setBusy] = React.useState(null); // 'pdf' | 'excel' | null
   if (!payload) return null;
 

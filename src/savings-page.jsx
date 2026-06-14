@@ -3,6 +3,7 @@ import { fmtShort, formatNominal, nominalFontSize } from './data';
 import { IconPlus, IconClose } from './icons';
 import { Ring } from './charts';
 import { useIsMobile } from './use-mobile';
+import { useScrollLock } from './hooks/useScrollLock';
 
 const GOAL_ICONS = {
   emergency: <><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z" /><path d="m9 12 2 2 4-4" /></>,
@@ -136,6 +137,7 @@ export function SavingsPage({ goals, onAdd, onDeposit, onDelete }) {
 }
 
 export function AddGoalModal({ open, onClose, onCreate }) {
+  useScrollLock(open);   // kunci scroll latar saat modal terbuka
   const [label, setLabel] = React.useState("");
   const [icon, setIcon] = React.useState("star");
   const [target, setTarget] = React.useState("");
@@ -229,6 +231,7 @@ export function AddGoalModal({ open, onClose, onCreate }) {
 }
 
 export function DepositModal({ goal, onClose, onConfirm }) {
+  useScrollLock(!!goal);   // kunci scroll latar saat modal setor terbuka
   const [amount, setAmount] = React.useState("");
   React.useEffect(() => { setAmount(""); }, [goal]);
   if (!goal) return null;
