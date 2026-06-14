@@ -20,31 +20,40 @@ public class WidgetLarge extends AppWidgetProvider {
 
     @Override
     public void onUpdate(Context ctx, AppWidgetManager mgr, int[] ids) {
-        for (int id : ids) render(ctx, mgr, id);
+        for (int id : ids) {
+            // Lindungi tiap widget: kegagalan satu instance tak boleh memicu
+            // "Tidak dapat memuat widget" pada seluruh widget.
+            try { render(ctx, mgr, id); } catch (Exception ignored) {}
+        }
     }
 
     static void render(Context ctx, AppWidgetManager mgr, int id) {
-        SharedPreferences p = WidgetRenderer.prefs(ctx);
-        RemoteViews v = new RemoteViews(ctx.getPackageName(), R.layout.widget_large);
+        try {
+            SharedPreferences p = WidgetRenderer.prefs(ctx);
+            RemoteViews v = new RemoteViews(ctx.getPackageName(), R.layout.widget_large);
 
-        v.setTextViewText(R.id.tv_month,   p.getString(WidgetRenderer.K_MONTH_SHORT, "—"));
-        v.setTextViewText(R.id.tv_income,  p.getString(WidgetRenderer.K_MASUK,  "Rp 0"));
-        v.setTextViewText(R.id.tv_expense, p.getString(WidgetRenderer.K_KELUAR, "Rp 0"));
-        v.setTextViewText(R.id.tv_net,     "Saldo Bersih: " + p.getString(WidgetRenderer.K_BERSIH, "Rp 0"));
+            v.setTextViewText(R.id.tv_month,   p.getString(WidgetRenderer.K_MONTH_SHORT, "—"));
+            v.setTextViewText(R.id.tv_income,  p.getString(WidgetRenderer.K_MASUK,  "Rp 0"));
+            v.setTextViewText(R.id.tv_expense, p.getString(WidgetRenderer.K_KELUAR, "Rp 0"));
+            // Nilai murni; label "Bersih" kini statis di layout (dua kolom rapi).
+            v.setTextViewText(R.id.tv_net,     p.getString(WidgetRenderer.K_BERSIH, "Rp 0"));
 
-        int percent = p.getInt(WidgetRenderer.K_PERSEN, 0);
-        v.setProgressBar(R.id.pb_budget, 100, Math.max(0, Math.min(100, percent)), false);
-        v.setTextViewText(R.id.tv_percent, p.getString(WidgetRenderer.K_PERSEN_LBL, ""));
+            int percent = p.getInt(WidgetRenderer.K_PERSEN, 0);
+            v.setProgressBar(R.id.pb_budget, 100, Math.max(0, Math.min(100, percent)), false);
+            v.setTextViewText(R.id.tv_percent, p.getString(WidgetRenderer.K_PERSEN_LBL, ""));
 
-        int charId = WidgetRenderer.charDrawable(ctx, p.getString(WidgetRenderer.K_CHAR, "char_happy"));
-        if (charId != 0) v.setImageViewResource(R.id.iv_char, charId);
+            int charId = WidgetRenderer.charDrawable(ctx, p.getString(WidgetRenderer.K_CHAR, "char_happy"));
+            if (charId != 0) v.setImageViewResource(R.id.iv_char, charId);
 
-        bindTransactions(ctx, v, p.getString(WidgetRenderer.K_TX, "[]"));
+            bindTransactions(ctx, v, p.getString(WidgetRenderer.K_TX, "[]"));
 
-        v.setOnClickPendingIntent(R.id.widget_root, WidgetRenderer.openApp(ctx));
-        v.setOnClickPendingIntent(R.id.btn_add,     WidgetRenderer.addTx(ctx));
+            v.setOnClickPendingIntent(R.id.widget_root, WidgetRenderer.openApp(ctx));
+            v.setOnClickPendingIntent(R.id.btn_add,     WidgetRenderer.addTx(ctx));
 
-        mgr.updateAppWidget(id, v);
+            mgr.updateAppWidget(id, v);
+        } catch (Exception ignored) {
+            // Jangan biarkan exception merambat ke AppWidgetHost → cegah error "can't load".
+        }
     }
 
     private static void bindTransactions(Context ctx, RemoteViews v, String json) {

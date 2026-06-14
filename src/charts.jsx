@@ -125,7 +125,7 @@ export function CashflowChart({ data }) {
   );
 }
 
-export function SpendingDonut({ data, active, onHover }) {
+export function SpendingDonut({ data, active, onHover, fmtFn = fmtShort }) {
   const total = data.reduce((s, d) => s + d.amount, 0);
   const R = 78, r = 56, cx = 100, cy = 100;
   let acc = 0;
@@ -159,7 +159,7 @@ export function SpendingDonut({ data, active, onHover }) {
         {top ? top.label.toUpperCase() : "BULAN INI"}
       </text>
       <text x={cx} y={cy + 18} textAnchor="middle" fontFamily="'Instrument Serif', serif" fontSize="24" fill="var(--ink)">
-        {fmtShort(top ? top.amount : total)}
+        {fmtFn(top ? top.amount : total)}
       </text>
       {!top && (
         <text x={cx} y={cy + 34} textAnchor="middle" fontSize="10.5" fill="var(--muted)" fontFamily="Geist, sans-serif">

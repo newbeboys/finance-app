@@ -2,7 +2,7 @@ import React from 'react';
 import { IconCheck } from './icons';
 import { supabase } from './supabase';
 import PinSetup from './components/PinSetup';
-import { isPinActive, isBiometricEnabled, clearPin, setBiometric } from './lib/pin';
+import { isPinActive, isBiometricEnabled, clearPin, enableBiometricOnly } from './lib/pin';
 import { isBiometricAvailable } from './lib/biometric';
 import RecurringTransactionPage from './pages/RecurringTransactionPage';
 
@@ -32,6 +32,36 @@ function SettingRow({ title, desc, children, last }) {
       </div>
       <div className="setting-widget" style={{ flexShrink: 0 }}>{children}</div>
     </div>
+  );
+}
+
+// Baris pilihan radio (metode keamanan: Tidak ada / PIN / Biometrik)
+function RadioOption({ label, desc, checked, onSelect, last }) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={checked}
+      onClick={onSelect}
+      style={{
+        width: "100%", display: "flex", alignItems: "center", gap: 14,
+        padding: "14px 0", borderBottom: last ? 0 : "1px solid var(--line-soft)",
+        background: "transparent", border: "none", borderTop: 0, borderLeft: 0, borderRight: 0,
+        cursor: "pointer", textAlign: "left", fontFamily: "inherit",
+      }}
+    >
+      <span style={{
+        width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
+        border: `2px solid ${checked ? "var(--sage)" : "var(--line)"}`,
+        display: "grid", placeItems: "center", transition: "border-color .15s",
+      }}>
+        {checked && <span style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--sage)" }} />}
+      </span>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: "block", fontSize: 13.5, fontWeight: 500, color: "var(--ink)" }}>{label}</span>
+        {desc && <span style={{ display: "block", fontSize: 12, color: "var(--muted)", marginTop: 3, lineHeight: 1.45 }}>{desc}</span>}
+      </span>
+    </button>
   );
 }
 
@@ -110,43 +140,50 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub })
     });
   };
 
-  // ── Keamanan: PIN & biometrik ──────────────────────────────────
-  const [pinActive, setPinActive] = React.useState(() => isPinActive());
-  const [biometric, setBiometricState] = React.useState(() => isBiometricEnabled());
+  // ── Keamanan: metode tunggal (Tidak ada / PIN / Biometrik) ──────
+  // PIN & biometrik saling eksklusif — hanya satu yang boleh aktif.
+  const [securityMethod, setSecurityMethod] = React.useState(
+    () => (isPinActive() ? 'pin' : isBiometricEnabled() ? 'biometric' : 'none')
+  );
   const [pinSetup, setPinSetup] = React.useState(null); // null | 'create' | 'change'
   const [bioNote, setBioNote] = React.useState('');
+  const [confirmNone, setConfirmNone] = React.useState(false);
 
   // Halaman "Transaksi Berulang" (overlay penuh)
   const [showRecurring, setShowRecurring] = React.useState(false);
 
-  const handleTogglePin = () => {
-    if (pinActive) {
-      clearPin();
-      setPinActive(false);
-      setBiometricState(false);
-    } else {
-      setPinSetup('create'); // buka layar buat PIN; aktif setelah selesai
+  // Pilih metode keamanan via radio
+  const selectMethod = async (m) => {
+    if (m === securityMethod) return;
+    setBioNote('');
+    if (m === 'none') {
+      setConfirmNone(true);             // konfirmasi dulu sebelum mematikan
+      return;
     }
-  };
-
-  const handlePinSetupDone = () => {
-    setPinActive(true); // setPin() di dalam PinSetup sudah menyimpan pinAktif
-    setPinSetup(null);
-  };
-
-  const handleToggleBiometric = async () => {
-    // Saat mengaktifkan: pastikan perangkat mendukung biometrik dulu
-    if (!biometric) {
+    if (m === 'pin') {
+      setPinSetup('create');            // buka flow buat PIN; tercentang setelah selesai
+      return;
+    }
+    if (m === 'biometric') {
       const ok = await isBiometricAvailable();
       if (!ok) {
         setBioNote('Biometrik tidak tersedia di perangkat ini (hanya berfungsi di APK Android).');
         return;
       }
+      enableBiometricOnly();            // aktifkan biometrik + hapus PIN
+      setSecurityMethod('biometric');
     }
-    setBioNote('');
-    const next = !biometric;
-    setBiometric(next);       // simpan ke localStorage
-    setBiometricState(next);
+  };
+
+  const handlePinSetupDone = () => {
+    setSecurityMethod('pin'); // setPin() sudah menyimpan pinAktif & mematikan biometrik
+    setPinSetup(null);
+  };
+
+  const confirmDisableSecurity = () => {
+    clearPin();               // hapus PIN + matikan biometrik
+    setSecurityMethod('none');
+    setConfirmNone(false);
   };
 
   const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Pengguna';
@@ -265,25 +302,39 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub })
           </SettingRow>
         </SettingCard>
 
-        {/* Security */}
+        {/* Security — metode tunggal via radio (Tidak ada / PIN / Biometrik) */}
         <SettingCard eyebrow="Keamanan" title="Kunci aplikasi">
-          <SettingRow title="Kunci Aplikasi (PIN)" desc="Lindungi aplikasi dengan PIN 6 digit" last={!pinActive}>
-            <Switch on={pinActive} onClick={handleTogglePin} />
-          </SettingRow>
-          {pinActive && (
-            <>
-              <SettingRow title="Gunakan Biometrik" desc={bioNote || "Gunakan sidik jari sebagai pengganti PIN"}>
-                <Switch on={biometric} onClick={handleToggleBiometric} />
-              </SettingRow>
-              <SettingRow title="Ubah PIN" desc="Verifikasi PIN lama, lalu buat PIN baru." last>
-                <button
-                  onClick={() => setPinSetup('change')}
-                  style={{ padding: "9px 16px", fontSize: 13, fontWeight: 500, background: "var(--paper)", color: "var(--ink-2)", border: "1px solid var(--line-soft)", borderRadius: 10, cursor: "pointer", fontFamily: "inherit" }}
-                >
-                  Ubah PIN
-                </button>
-              </SettingRow>
-            </>
+          <div style={{ fontSize: 12.5, color: "var(--muted)", margin: "8px 0 2px", lineHeight: 1.5 }}>
+            Pilih metode keamanan aplikasi. Hanya satu yang dapat aktif.
+          </div>
+          <RadioOption
+            label="Tidak ada"
+            desc="Aplikasi terbuka tanpa kunci."
+            checked={securityMethod === 'none'}
+            onSelect={() => selectMethod('none')}
+          />
+          <RadioOption
+            label="PIN (6 digit)"
+            desc="Buka aplikasi dengan PIN 6 digit."
+            checked={securityMethod === 'pin'}
+            onSelect={() => selectMethod('pin')}
+          />
+          <RadioOption
+            label="Biometrik (Sidik Jari)"
+            desc={bioNote || "Buka aplikasi dengan sidik jari."}
+            checked={securityMethod === 'biometric'}
+            onSelect={() => selectMethod('biometric')}
+            last
+          />
+          {securityMethod === 'pin' && (
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--line-soft)" }}>
+              <button
+                onClick={() => setPinSetup('change')}
+                style={{ padding: "10px 18px", fontSize: 13, fontWeight: 500, background: "var(--paper)", color: "var(--ink-2)", border: "1px solid var(--line-soft)", borderRadius: 10, cursor: "pointer", fontFamily: "inherit" }}
+              >
+                Ubah PIN
+              </button>
+            </div>
           )}
         </SettingCard>
 
@@ -342,6 +393,25 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub })
           onComplete={handlePinSetupDone}
           onCancel={() => setPinSetup(null)}
         />
+      )}
+
+      {confirmNone && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(0,0,0,.5)", display: "grid", placeItems: "center", padding: 24 }}>
+          <div className="card" style={{ padding: 24, maxWidth: 360, width: "100%", textAlign: "center" }}>
+            <div className="serif" style={{ fontSize: 20, marginBottom: 8 }}>Nonaktifkan keamanan?</div>
+            <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.5, marginBottom: 20 }}>
+              Yakin ingin menonaktifkan keamanan? PIN akan dihapus dan biometrik dimatikan.
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setConfirmNone(false)} style={{ flex: 1, padding: "11px", fontSize: 13.5, fontWeight: 500, background: "var(--paper)", color: "var(--ink)", border: "1px solid var(--line-soft)", borderRadius: 10, cursor: "pointer", fontFamily: "inherit" }}>
+                Batal
+              </button>
+              <button onClick={confirmDisableSecurity} style={{ flex: 1, padding: "11px", fontSize: 13.5, fontWeight: 500, background: "var(--terra)", color: "#fff", border: 0, borderRadius: 10, cursor: "pointer", fontFamily: "inherit" }}>
+                Ya, nonaktifkan
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <RecurringTransactionPage open={showRecurring} onClose={() => setShowRecurring(false)} />

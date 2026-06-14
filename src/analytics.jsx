@@ -1,5 +1,5 @@
 import React from 'react';
-import { CATEGORIES, fmtShort, formatNominal, nominalFontSize } from './data';
+import { CATEGORIES, INCOME_CATEGORIES, fmtShort, formatNominal, nominalFontSize } from './data';
 import { IconArrowDown } from './icons';
 import { SpendingDonut } from './charts';
 
@@ -57,6 +57,33 @@ function computeCatData(transactions, scope, pickedMonth) {
   return CATEGORIES
     .filter(c => map[c.id])
     .map(c => ({ ...c, amount: map[c.id] }))
+    .sort((a, b) => b.amount - a.amount);
+}
+
+function computeIncomeData(transactions, scope, pickedMonth, customCategories = []) {
+  const now = new Date();
+  let txs;
+  if (scope === "month") {
+    const yr  = pickedMonth?.year  ?? now.getFullYear();
+    const mo  = pickedMonth?.month ?? now.getMonth();
+    const pfx = `${yr}-${String(mo + 1).padStart(2, '0')}`;
+    txs = transactions.filter(t => t.amount > 0 && t.dateRaw && t.dateRaw.startsWith(pfx));
+  } else {
+    const oldest = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+    const cutoff = `${oldest.getFullYear()}-${String(oldest.getMonth() + 1).padStart(2, '0')}`;
+    txs = transactions.filter(t => t.amount > 0 && t.dateRaw && t.dateRaw.slice(0, 7) >= cutoff);
+  }
+  // Lookup dari semua kategori (bawaan + kustom) agar nama/warna terbaca;
+  // build dari map entries (bukan filter allCats) supaya kategori custom
+  // dengan UUID tak hilang meski tidak ada di INCOME_CATEGORIES.
+  const allCats = [...CATEGORIES, ...INCOME_CATEGORIES, ...customCategories];
+  const map = {};
+  txs.forEach(t => { map[t.category] = (map[t.category] || 0) + t.amount; });
+  return Object.entries(map)
+    .map(([id, amount]) => {
+      const c = allCats.find(x => x.id === id);
+      return { id, label: c?.label || id, color: c?.color || 'var(--sage)', amount };
+    })
     .sort((a, b) => b.amount - a.amount);
 }
 
@@ -129,11 +156,12 @@ function BarChart({ data }) {
 
 // ── Analytics Page ────────────────────────────────────────────────────
 
-export function AnalyticsPage({ transactions = [] }) {
+export function AnalyticsPage({ transactions = [], customCategories = [] }) {
   const [scope, setScope] = React.useState("year"); // "year" | "month"
   const [pickedMonth, setPickedMonth] = React.useState(null);
   const [sheetOpen, setSheetOpen] = React.useState(false);
   const [hoverCat, setHoverCat] = React.useState(null);
+  const [hoverIncomeCat, setHoverIncomeCat] = React.useState(null);
 
   const now = new Date();
   const activePicked = pickedMonth || { year: now.getFullYear(), month: now.getMonth() };
@@ -151,6 +179,9 @@ export function AnalyticsPage({ transactions = [] }) {
   const avgLabel       = scope === "year" ? "Rata-rata/bulan" : "Rata-rata/hari";
 
   const catTotal = cats.reduce((s, c) => s + (c.amount || 0), 0);
+
+  const incomeCats = React.useMemo(() => computeIncomeData(transactions, scope, scope === "month" ? activePicked : null, customCategories), [transactions, scope, activePicked, customCategories]);
+  const incomeCatTotal = incomeCats.reduce((s, c) => s + (c.amount || 0), 0);
 
   const stats = [
     { l: "Total pemasukan",  v: totalIncome  || 0, c: "var(--sage)" },
@@ -243,9 +274,76 @@ export function AnalyticsPage({ transactions = [] }) {
           )}
         </div>
 
-        {/* Donut + table */}
+        {/* ── Diagram lingkaran + Tabel: Pemasukan & Pengeluaran ── */}
         <div style={{ display: "grid", gridTemplateColumns: "minmax(300px, 0.9fr) 1.4fr", gap: 16 }} className="analytics-chart-grid">
-          <div className="card rise" style={{ padding: 22 }}>
+
+          {/* Donut pemasukan — mobile: order 1 */}
+          {incomeCats.length > 0 && (
+            <div className="card rise analytics-income-donut" style={{ padding: 22 }}>
+              <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Diagram lingkaran</div>
+              <div className="serif" style={{ fontSize: 24, letterSpacing: "-0.01em", marginTop: 2, marginBottom: 6 }}>Komposisi pemasukan</div>
+              <SpendingDonut data={incomeCats} active={hoverIncomeCat} onHover={setHoverIncomeCat} fmtFn={formatNominal} />
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", marginTop: 10, justifyContent: "center" }}>
+                {incomeCats.slice(0, 6).map((c, i) => (
+                  <span key={c.id} onMouseEnter={() => setHoverIncomeCat(i)} onMouseLeave={() => setHoverIncomeCat(null)}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "var(--ink-2)", cursor: "default" }}>
+                    <span style={{ width: 9, height: 9, borderRadius: 3, background: c.color }} /> {c.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Tabel pemasukan — mobile: order 3 */}
+          {incomeCats.length > 0 && (
+            <div className="card rise analytics-income-table" style={{ padding: "22px 22px 8px" }}>
+              <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Tabel statistik</div>
+              <div className="serif" style={{ fontSize: 24, letterSpacing: "-0.01em", marginTop: 2, marginBottom: 12 }}>Pemasukan per kategori</div>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>
+                    <th style={{ textAlign: "left", padding: "0 0 10px", borderBottom: "1px solid var(--line-soft)", fontWeight: 500 }}>Kategori</th>
+                    <th style={{ textAlign: "right", padding: "0 0 10px", borderBottom: "1px solid var(--line-soft)", fontWeight: 500 }}>Jumlah</th>
+                    <th style={{ textAlign: "right", padding: "0 0 10px 16px", borderBottom: "1px solid var(--line-soft)", fontWeight: 500, width: 90 }}>Porsi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {incomeCats.map((c, i) => {
+                    const pct = incomeCatTotal > 0 ? Math.round((c.amount / incomeCatTotal) * 100) : 0;
+                    return (
+                      <tr key={c.id} onMouseEnter={() => setHoverIncomeCat(i)} onMouseLeave={() => setHoverIncomeCat(null)}
+                        style={{ background: hoverIncomeCat === i ? "var(--paper)" : "transparent" }}>
+                        <td style={{ padding: "10px 0", borderBottom: i < incomeCats.length - 1 ? "1px solid var(--line-soft)" : 0 }}>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 9 }}>
+                            <span style={{ width: 9, height: 9, borderRadius: 3, background: c.color }} /> {c.label}
+                          </span>
+                        </td>
+                        <td className="tnum" style={{ textAlign: "right", padding: "10px 0", borderBottom: i < incomeCats.length - 1 ? "1px solid var(--line-soft)" : 0, fontWeight: 500 }}>{fmtShort(c.amount)}</td>
+                        <td style={{ textAlign: "right", padding: "10px 0 10px 16px", borderBottom: i < incomeCats.length - 1 ? "1px solid var(--line-soft)" : 0 }}>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 8, justifyContent: "flex-end" }}>
+                            <span style={{ width: 36, height: 5, background: "var(--line-soft)", borderRadius: 99, overflow: "hidden", display: "inline-block" }}>
+                              <span style={{ display: "block", height: "100%", width: `${pct}%`, background: c.color }} />
+                            </span>
+                            <span className="tnum" style={{ color: "var(--muted)", minWidth: 28, textAlign: "right" }}>{pct}%</span>
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td style={{ padding: "12px 0", borderTop: "2px solid var(--ink)", fontWeight: 600 }}>Total</td>
+                    <td className="tnum" style={{ textAlign: "right", padding: "12px 0", borderTop: "2px solid var(--ink)", fontWeight: 600 }}>{fmtShort(incomeCatTotal)}</td>
+                    <td style={{ textAlign: "right", padding: "12px 0 12px 16px", borderTop: "2px solid var(--ink)", fontWeight: 600 }}>100%</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+
+          {/* Donut pengeluaran — mobile: order 2 */}
+          <div className="card rise analytics-expense-donut" style={{ padding: 22 }}>
             <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Diagram lingkaran</div>
             <div className="serif" style={{ fontSize: 24, letterSpacing: "-0.01em", marginTop: 2, marginBottom: 6 }}>Komposisi pengeluaran</div>
             {cats.length === 0 ? (
@@ -268,7 +366,8 @@ export function AnalyticsPage({ transactions = [] }) {
             )}
           </div>
 
-          <div className="card rise" style={{ padding: "22px 22px 8px" }}>
+          {/* Tabel pengeluaran — mobile: order 4 */}
+          <div className="card rise analytics-expense-table" style={{ padding: "22px 22px 8px" }}>
             <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Tabel statistik</div>
             <div className="serif" style={{ fontSize: 24, letterSpacing: "-0.01em", marginTop: 2, marginBottom: 12 }}>Rincian per kategori</div>
             {cats.length === 0 ? (
@@ -316,6 +415,7 @@ export function AnalyticsPage({ transactions = [] }) {
               </table>
             )}
           </div>
+
         </div>
       </div>
 

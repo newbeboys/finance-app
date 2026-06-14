@@ -19,11 +19,22 @@ export function verifyPin(pin) {
   try { return !!pin && localStorage.getItem(PIN_KEY) === hash(pin); } catch { return false; }
 }
 
-// Simpan PIN baru + aktifkan kunci aplikasi
+// Simpan PIN baru + aktifkan kunci aplikasi.
+// PIN & biometrik saling eksklusif → mengaktifkan PIN otomatis mematikan biometrik.
 export function setPin(pin) {
   try {
     localStorage.setItem(PIN_KEY, hash(pin));
     localStorage.setItem(ACTIVE_KEY, 'true');
+    localStorage.setItem(BIO_KEY, 'false');
+  } catch {}
+}
+
+// Aktifkan biometrik sebagai SATU-SATUNYA metode → hapus PIN bila ada.
+export function enableBiometricOnly() {
+  try {
+    localStorage.removeItem(PIN_KEY);
+    localStorage.setItem(ACTIVE_KEY, 'false');
+    localStorage.setItem(BIO_KEY, 'true');
   } catch {}
 }
 

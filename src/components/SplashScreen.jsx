@@ -2,9 +2,10 @@ import React from 'react';
 import logo from '../assets/animation/splash-screen.png';
 
 /**
- * Splash screen animasi — lapisan pertama saat app dibuka.
+ * Splash screen animasi — tampil SETELAH verifikasi keamanan (PIN/biometrik)
+ * berhasil, atau langsung saat app dibuka bila tak ada keamanan aktif.
  * Urutan: logo drop+bounce (0.9s) → nama app slide-up+fade (delay 0.9s)
- *         → tagline fade (delay 1.2s). Total tahan 2.5s lalu fade-out 0.3s.
+ *         → tagline fade (delay 1.2s). Total tahan 3 detik lalu fade-out 0.3s.
  *
  * onDone() dipanggil tepat saat fade-out selesai → parent melepas splash
  * dan halaman berikutnya (sudah ter-mount di belakang) tampil mulus.
@@ -13,8 +14,8 @@ export default function SplashScreen({ onDone }) {
   const [leaving, setLeaving] = React.useState(false);
 
   React.useEffect(() => {
-    const tFade = setTimeout(() => setLeaving(true), 2200); // mulai fade-out
-    const tDone = setTimeout(() => { if (onDone) onDone(); }, 2500); // selesai
+    const tFade = setTimeout(() => setLeaving(true), 2700); // mulai fade-out
+    const tDone = setTimeout(() => { if (onDone) onDone(); }, 3000); // selesai (3 detik)
     return () => { clearTimeout(tFade); clearTimeout(tDone); };
   }, [onDone]);
 

@@ -292,10 +292,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
     -webkit-overflow-scrolling: touch;
   }
 
-  /* Analytics donut+table side-by-side → stacked */
+  /* Analytics donut+table side-by-side → stacked, reorder: donuts first then tables */
   .analytics-chart-grid {
     grid-template-columns: 1fr !important;
   }
+  .analytics-income-donut  { order: 1; }
+  .analytics-expense-donut { order: 2; }
+  .analytics-income-table  { order: 3; }
+  .analytics-expense-table { order: 4; }
 
   /* Savings goals: single column */
   .goals-grid {

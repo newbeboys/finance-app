@@ -335,6 +335,49 @@ function buildCategorySheet(wb, p, refs) {
   }
 }
 
+function buildIncomeCategorySheet(wb, p, refs) {
+  const ws = wb.addWorksheet('Pemasukan per Kategori', { views: [{ showGridLines: false }] });
+  const hr = ws.addRow(['Kategori', 'Total', 'Persentase']);
+  hr.eachCell(styleHeaderCell);
+  hr.height = 22;
+
+  const dn = refs.detailLast;
+  const incomeCats = p.incomeCats || [];
+  const firstRow = 2;
+  incomeCats.forEach((cat, i) => {
+    const rowIdx = firstRow + i;
+    const totalF = dn >= 2
+      ? { formula: `SUMIFS('Detail Transaksi'!$F$2:$F$${dn},'Detail Transaksi'!$C$2:$C$${dn},A${rowIdx},'Detail Transaksi'!$E$2:$E$${dn},"Pemasukan")`, result: cat.amount }
+      : cat.amount;
+    const row = ws.addRow([safeText(cat.label), totalF, null]);
+    row.getCell(2).numFmt = RP_FMT;
+    row.getCell(2).alignment = { horizontal: 'right' };
+    row.getCell(3).value = { formula: `IF(B${rowIdx}=0,0,B${rowIdx}/$B$${firstRow + incomeCats.length})`, result: p.income ? cat.amount / p.income : 0 };
+    row.getCell(3).numFmt = PCT_FMT;
+    row.getCell(3).alignment = { horizontal: 'right' };
+    borderRow(row);
+  });
+
+  const totalRowIdx = firstRow + incomeCats.length;
+  const tr = ws.addRow(['Total Pemasukan',
+    incomeCats.length ? { formula: `SUM(B${firstRow}:B${totalRowIdx - 1})`, result: p.income } : 0,
+    incomeCats.length ? { formula: `SUM(C${firstRow}:C${totalRowIdx - 1})`, result: 1 } : 1]);
+  tr.getCell(1).font = { bold: true, color: { argb: argb('--sage') } };
+  tr.getCell(2).numFmt = RP_FMT; tr.getCell(2).alignment = { horizontal: 'right' }; tr.getCell(2).font = { bold: true, color: { argb: argb('--sage') } };
+  tr.getCell(3).numFmt = PCT_FMT; tr.getCell(3).alignment = { horizontal: 'right' }; tr.getCell(3).font = { bold: true };
+  fillRow(tr, ROW_INCOME); borderRow(tr);
+
+  autoWidth(ws, { 1: 24 });
+
+  if (incomeCats.length) {
+    const anchorRow = totalRowIdx + 2;
+    ws.getCell(`A${anchorRow}`).value = 'Diagram lingkaran — komposisi pemasukan';
+    ws.getCell(`A${anchorRow}`).font = { bold: true, size: 12, color: { argb: argb(INK) } };
+    const img = wb.addImage({ base64: pieChartPNG(incomeCats).split(',')[1], extension: 'png' });
+    ws.addImage(img, { tl: { col: 0, row: anchorRow }, ext: { width: 460, height: 260 } });
+  }
+}
+
 function buildTrendSheet(wb, p) {
   const ws = wb.addWorksheet('Tren Bulanan', { views: [{ showGridLines: false }] });
   const hr = ws.addRow(['Bulan', 'Pemasukan', 'Pengeluaran', 'Selisih']);
@@ -383,12 +426,13 @@ async function buildWorkbook(p) {
   // Detail first so its row count is known to formula refs on other sheets…
   buildDetailSheet(wb, p, refs);
   buildSummarySheet(wb, p, refs);
+  buildIncomeCategorySheet(wb, p, refs);
   buildCategorySheet(wb, p, refs);
   if (p.kind === 'year' && p.months && p.months.length) buildTrendSheet(wb, p);
 
   // …then reorder so Ringkasan opens first (Excel honors worksheet order)
   wb.worksheets.forEach((ws, i) => { ws.orderNo = i; });
-  const order = ['Ringkasan', 'Detail Transaksi', 'Per Kategori', 'Tren Bulanan'];
+  const order = ['Ringkasan', 'Detail Transaksi', 'Pemasukan per Kategori', 'Per Kategori', 'Tren Bulanan'];
   wb.worksheets.sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name))
     .forEach((ws, i) => { ws.orderNo = i; });
 

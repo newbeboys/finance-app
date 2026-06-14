@@ -347,7 +347,7 @@ export function SpendingCard({ transactions = [] }) {
   );
 }
 
-function buildInsights(transactions) {
+function buildInsights(transactions, customCategories = []) {
   const now = new Date();
   const pfx = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const monthName = now.toLocaleDateString('id-ID', { month: 'long' });
@@ -362,7 +362,8 @@ function buildInsights(transactions) {
   expTx.forEach(t => { catMap[t.category] = (catMap[t.category] || 0) + Math.abs(t.amount); });
   const sorted = Object.entries(catMap).sort((a, b) => b[1] - a[1]);
   const topId  = sorted[0][0];
-  const topCat = ALL_CATEGORIES.find(c => c.id === topId) || { label: topId };
+  const allCats = [...ALL_CATEGORIES, ...customCategories];
+  const topCat = allCats.find(c => c.id === topId) || { label: topId };
   const topPct = Math.round((sorted[0][1] / totalExp) * 100);
 
   const insights = [
@@ -394,9 +395,9 @@ function buildInsights(transactions) {
   return insights;
 }
 
-export function InsightsCard({ transactions = [] }) {
+export function InsightsCard({ transactions = [], customCategories = [] }) {
   const [idx, setIdx] = React.useState(0);
-  const insights = React.useMemo(() => buildInsights(transactions), [transactions]);
+  const insights = React.useMemo(() => buildInsights(transactions, customCategories), [transactions, customCategories]);
   React.useEffect(() => { setIdx(0); }, [insights.length]);
 
   if (insights.length === 0) {

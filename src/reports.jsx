@@ -21,16 +21,20 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => (
 // kategori kustom tampil sebagai nama, bukan UUID.
 function aggregate(txs, catList = ALL_CATEGORIES) {
   let income = 0, expense = 0;
-  const catMap = {};
+  const catMap = {}, incomeMap = {};
   txs.forEach(t => {
-    if (t.amount >= 0) { income += t.amount; }
+    if (t.amount >= 0) { income += t.amount; incomeMap[t.category] = (incomeMap[t.category] || 0) + t.amount; }
     else { const a = -t.amount; expense += a; catMap[t.category] = (catMap[t.category] || 0) + a; }
   });
   const cats = Object.entries(catMap).map(([id, amount]) => {
     const c = catList.find(x => x.id === id);
     return { id, label: c?.label || id, color: c?.color || '#8C7B5C', amount };
   }).sort((a, b) => b.amount - a.amount);
-  return { income, expense, net: income - expense, cats };
+  const incomeCats = Object.entries(incomeMap).map(([id, amount]) => {
+    const c = catList.find(x => x.id === id);
+    return { id, label: c?.label || id, color: c?.color || '#5C6B4C', amount };
+  }).sort((a, b) => b.amount - a.amount);
+  return { income, expense, net: income - expense, cats, incomeCats };
 }
 
 // Attach a human-readable category label to each tx (for the Excel detail sheet).
@@ -86,28 +90,28 @@ function buildPayload(transactions, kind, key, customCategories = []) {
   const catList = [...ALL_CATEGORIES, ...customCategories];
   if (kind === "month") {
     const periodTx = sortDesc(transactions.filter(t => (t.dateRaw || '').slice(0, 7) === key));
-    const { income, expense, net, cats } = aggregate(periodTx, catList);
+    const { income, expense, net, cats, incomeCats } = aggregate(periodTx, catList);
     const year = +key.slice(0, 4), month = +key.slice(5, 7) - 1;
     return {
       kind, title: "Laporan Bulanan",
       periodLabel: `${ID_MONTHS_FULL[month]} ${year}`,
       filename: `Laporan-${ID_MONTHS_FULL[month]}-${year}`,
       excelFilename: `FinanceApp_Laporan_${ID_MONTHS_FULL[month]}_${year}.xlsx`,
-      income, expense, net, cats, months: null,
+      income, expense, net, cats, incomeCats, months: null,
       transactions: withLabels(periodTx, catList),
     };
   }
   // year
   const y = +key;
   const periodTx = sortDesc(transactions.filter(t => (t.dateRaw || '').slice(0, 4) === String(y)));
-  const { income, expense, net, cats } = aggregate(periodTx, catList);
+  const { income, expense, net, cats, incomeCats } = aggregate(periodTx, catList);
   const months = monthsIndex(periodTx).filter(m => m.year === y).sort((a, b) => a.month - b.month);
   return {
     kind, title: "Laporan Tahunan",
     periodLabel: `Tahun ${y}`,
     filename: `Laporan-Tahunan-${y}`,
     excelFilename: `FinanceApp_Laporan_${y}.xlsx`,
-    income, expense, net, cats, months,
+    income, expense, net, cats, incomeCats, months,
     transactions: withLabels(periodTx, catList),
   };
 }
@@ -160,7 +164,7 @@ function reportCatBarSVG(cats, expense) {
 }
 
 // ── Build the standalone report document (returns an HTML string) ──
-function buildReportDoc({ title, periodLabel, income, expense, net, cats, months }) {
+function buildReportDoc({ title, periodLabel, income, expense, net, cats, months, incomeCats = [], transactions = [] }) {
   const savingsRate = income ? Math.round((net / income) * 100) : 0;
   const rupiah = (n) => "Rp " + new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(Math.round(n));
   const catRows = cats.map(c => {
@@ -171,6 +175,20 @@ function buildReportDoc({ title, periodLabel, income, expense, net, cats, months
   const monthRows = (months || []).map(m =>
     `<tr><td>${m.full} ${m.year}</td><td class="num pos">${rupiah(m.income)}</td><td class="num neg">${rupiah(m.expense)}</td><td class="num">${rupiah(m.net)}</td></tr>`
   ).join("");
+
+  const incomeRows = incomeCats.map(c => {
+    const pct = income ? Math.round((c.amount / income) * 100) : 0;
+    const bg = c.color && !c.color.startsWith('var') ? c.color : '#5C6B4C';
+    return `<tr><td><span class="dot" style="background:${bg}"></span>${esc(c.label)}</td><td class="num">${rupiah(c.amount)}</td><td class="num muted">${pct}%</td></tr>`;
+  }).join("");
+
+  const fmtDay = (iso) => { const p = (iso || '').split('-'); return p[2] && p[1] ? `${p[2]}/${p[1]}` : '—'; };
+  const mkTxRow = (t) => {
+    const name = [t.merchant, t.note].filter(Boolean).join(' · ') || '—';
+    return `<tr><td class="muted" style="white-space:nowrap;padding-right:14px;min-width:44px">${fmtDay(t.dateRaw)}</td><td style="word-break:break-word">${esc(name)}</td><td style="padding-right:14px">${esc(t.catLabel || '—')}</td><td class="num">${rupiah(Math.abs(t.amount))}</td></tr>`;
+  };
+  const incomeTxRows = transactions.filter(t => t.amount >= 0).map(mkTxRow).join("");
+  const expenseTxRows = transactions.filter(t => t.amount < 0).map(mkTxRow).join("");
 
   return `<!doctype html><html lang="id"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>${title} — FinanceApp</title>
@@ -258,10 +276,24 @@ function buildReportDoc({ title, periodLabel, income, expense, net, cats, months
 
   ${months ? `<section class="block"><h2 class="sec">Diagram batang — pemasukan vs pengeluaran</h2><div class="chart-legend"><span><span class="sq" style="background:var(--sage)"></span>Pemasukan</span><span><span class="sq" style="background:var(--terra)"></span>Pengeluaran</span></div>${reportBarSVG(months)}</section>` : `<section class="block"><h2 class="sec">Diagram batang — pengeluaran per kategori</h2>${reportCatBarSVG(cats, expense)}</section>`}
 
+  ${incomeCats.length ? `
+  <section class="block">
+    <h2 class="sec">Diagram lingkaran — komposisi pemasukan</h2>
+    ${reportPieSVG(incomeCats, income)}
+  </section>
+  ` : ''}
+
   <section class="block">
     <h2 class="sec">Diagram lingkaran — komposisi pengeluaran</h2>
     ${reportPieSVG(cats, expense)}
   </section>
+
+  ${incomeCats.length ? `
+  <h2 class="sec">Tabel — pemasukan per kategori</h2>
+  <table><thead><tr><th>Kategori</th><th class="num">Jumlah</th><th class="num">% dari pemasukan</th></tr></thead>
+  <tbody>${incomeRows}</tbody>
+  <tfoot><tr><td>Total pemasukan</td><td class="num pos">${rupiah(income)}</td><td class="num">100%</td></tr></tfoot></table>
+  ` : ''}
 
   <h2 class="sec">Tabel — pengeluaran per kategori</h2>
   <table><thead><tr><th>Kategori</th><th class="num">Jumlah</th><th class="num">% dari pengeluaran</th></tr></thead>
@@ -269,6 +301,22 @@ function buildReportDoc({ title, periodLabel, income, expense, net, cats, months
   <tfoot><tr><td>Total pengeluaran</td><td class="num">${rupiah(expense)}</td><td class="num">100%</td></tr></tfoot></table>
 
   ${monthRows ? `<h2 class="sec">Tabel — rincian bulanan</h2><table><thead><tr><th>Bulan</th><th class="num">Masuk</th><th class="num">Keluar</th><th class="num">Bersih</th></tr></thead><tbody>${monthRows}</tbody></table>` : ""}
+
+  ${transactions.length ? `
+  <h2 class="sec">Bagian 4 — Rincian Transaksi</h2>
+  ${incomeTxRows ? `
+  <h2 class="sec" style="font-size:18px">Transaksi Pemasukan</h2>
+  <table><thead><tr><th>Tanggal</th><th>Nama</th><th>Kategori</th><th class="num">Jumlah</th></tr></thead>
+  <tbody>${incomeTxRows}</tbody>
+  <tfoot><tr><td colspan="3">Total Pemasukan</td><td class="num pos">${rupiah(income)}</td></tr></tfoot></table>
+  ` : ''}
+  ${expenseTxRows ? `
+  <h2 class="sec" style="font-size:18px">Transaksi Pengeluaran</h2>
+  <table><thead><tr><th>Tanggal</th><th>Nama</th><th>Kategori</th><th class="num">Jumlah</th></tr></thead>
+  <tbody>${expenseTxRows}</tbody>
+  <tfoot><tr><td colspan="3">Total Pengeluaran</td><td class="num neg">${rupiah(expense)}</td></tr></tfoot></table>
+  ` : ''}
+  ` : ''}
 
   <div class="foot"><span>FinanceApp — Laporan dibuat otomatis</span><span>Dokumen ini bersifat informatif, bukan dokumen pajak resmi.</span></div>
 </div></body></html>`;
@@ -480,7 +528,7 @@ function FormatPicker({ payload, onClose }) {
             <span style={iconWrap("var(--sage)")}><IconExcel size={22} /></span>
             <span style={{ flex: 1 }}>
               <span style={{ display: "block", fontWeight: 500 }}>Excel</span>
-              <span style={{ display: "block", fontSize: 12, color: "var(--muted)" }}>4 sheet, formula aktif, grafik & warna</span>
+              <span style={{ display: "block", fontSize: 12, color: "var(--muted)" }}>5 sheet, formula aktif, grafik & warna</span>
             </span>
             {busy === "excel" && <Spinner />}
           </button>

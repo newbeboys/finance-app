@@ -22,6 +22,7 @@ import { checkRecurringTransactions } from './lib/recurringHelper';
 import { syncWidget, consumeWidgetLaunchAction } from './lib/widgetSync';
 import { fmt } from './data';
 import PinLock from './components/PinLock';
+import BiometricLock from './components/BiometricLock';
 import { isPinActive, isBiometricEnabled, clearPin } from './lib/pin';
 import { useTransactions } from './hooks/useTransactions';
 import { useSavings } from './hooks/useSavings';
@@ -52,10 +53,24 @@ export default function App() {
   // Onboarding tampil setiap kali user baru register atau login (fresh session).
   // Bukan disimpan di localStorage: di-trigger dari handler auth, di-reset saat logout.
   const [showOnboarding, setShowOnboarding] = React.useState(false);
-  // Kunci PIN: terkunci saat app dibuka jika fitur PIN aktif (lapisan di atas Supabase)
-  const [locked, setLocked] = React.useState(() => isPinActive());
-  // Splash screen animasi: lapisan pertama, tampil sekali tiap app dibuka.
-  const [showSplash, setShowSplash] = React.useState(true);
+
+  // ── Gerbang keamanan → splash → konten ──────────────────────────────
+  // Urutan: verifikasi keamanan (PIN/biometrik) DULU, baru splash 3 detik,
+  // baru konten. Bila tak ada keamanan aktif → langsung splash.
+  const [showPin, setShowPin] = React.useState(false);
+  const [showBiometric, setShowBiometric] = React.useState(false);
+  const [showSplash, setShowSplash] = React.useState(false);
+
+  // Tentukan gerbang saat app pertama dibuka (PIN & biometrik saling eksklusif)
+  React.useEffect(() => {
+    if (isPinActive()) {
+      setShowPin(true);          // PIN dulu, splash menyusul setelah benar
+    } else if (isBiometricEnabled()) {
+      setShowBiometric(true);    // biometrik dulu, splash menyusul setelah berhasil
+    } else {
+      setShowSplash(true);       // tanpa keamanan → langsung splash
+    }
+  }, []);
 
   React.useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session ?? null));
@@ -66,15 +81,43 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Lupa PIN / 5× gagal → reset PIN lalu paksa login ulang Supabase
+  // Verifikasi berhasil → lepas gerbang, tampilkan splash 3 detik
+  const onPinSuccess = React.useCallback(() => {
+    setShowPin(false);
+    setShowSplash(true);
+  }, []);
+  const onBiometricSuccess = React.useCallback(() => {
+    setShowBiometric(false);
+    setShowSplash(true);
+  }, []);
+  const onSplashFinish = React.useCallback(() => setShowSplash(false), []);
+
+  // Lupa PIN / 5× gagal → reset keamanan, lanjut splash, paksa login ulang Supabase
   const handleForgotPin = React.useCallback(async () => {
     clearPin();
-    setLocked(false);
+    setShowPin(false);
+    setShowSplash(true);
     try { await supabase.auth.signOut(); } catch {}
   }, []);
 
-  // Konten utama ditentukan oleh logika auth/PIN/onboarding yang SUDAH ADA (tidak diubah),
-  // hanya disimpan ke variabel agar splash bisa menumpuk di atasnya (cross-fade mulus).
+  // Biometrik gagal total / tak tersedia → reset keamanan, lanjut splash, login ulang
+  const handleBiometricEscape = React.useCallback(async () => {
+    clearPin();
+    setShowBiometric(false);
+    setShowSplash(true);
+    try { await supabase.auth.signOut(); } catch {}
+  }, []);
+
+  // 1) Gerbang keamanan: tampil paling depan, SEBELUM splash & konten.
+  //    Tidak ada batas waktu — user bebas selama apa pun memasukkan PIN/sidik jari.
+  if (showPin) {
+    return <PinLock onUnlock={onPinSuccess} onForgot={handleForgotPin} biometricEnabled={false} />;
+  }
+  if (showBiometric) {
+    return <BiometricLock onSuccess={onBiometricSuccess} onEscape={handleBiometricEscape} />;
+  }
+
+  // 2) Konten utama (auth/onboarding) — di-mount di belakang splash agar transisi mulus.
   let content;
   if (session === undefined) {
     content = <div style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', background: 'var(--cream)', color: 'var(--muted)', fontSize: 14 }}>Memuat…</div>;
@@ -82,15 +125,6 @@ export default function App() {
     content = authView === 'login'
       ? <LoginPage onSwitch={() => setAuthView('register')} onAuthSuccess={() => setShowOnboarding(true)} />
       : <RegisterPage onSwitch={() => setAuthView('login')} onAuthSuccess={() => setShowOnboarding(true)} />;
-  } else if (locked) {
-    // Sesudah login Supabase, sebelum masuk app: layar kunci PIN (jika aktif)
-    content = (
-      <PinLock
-        onUnlock={() => setLocked(false)}
-        onForgot={handleForgotPin}
-        biometricEnabled={isBiometricEnabled()}
-      />
-    );
   } else {
     content = (
       <>
@@ -101,11 +135,11 @@ export default function App() {
     );
   }
 
+  // 3) Splash screen menumpuk di atas konten (3 detik) setelah keamanan lolos.
   return (
     <>
       {content}
-      {/* Splash screen: lapisan paling atas, hanya sekali saat app dibuka */}
-      {showSplash && <SplashScreen onDone={() => setShowSplash(false)} />}
+      {showSplash && <SplashScreen onDone={onSplashFinish} />}
     </>
   );
 }
@@ -312,7 +346,7 @@ function AuthenticatedApp({ session }) {
             <CashflowCard transactions={transactions} />
             <SpendingCard transactions={transactions} />
 
-            {t.showAI && <InsightsCard transactions={transactions} />}
+            {t.showAI && <InsightsCard transactions={transactions} customCategories={customCategories} />}
 
             <TransactionsCard onAdd={() => setModal(true)} limit={8} onSeeAll={() => setActive("transactions")} transactions={transactions} loading={txLoading} customCategories={customCategories} />
             <SavingsCard goals={goals} onManage={() => setActive("savings")} />
@@ -328,7 +362,7 @@ function AuthenticatedApp({ session }) {
 
         {active === "reports" && <ReportsPage transactions={transactions} customCategories={customCategories} />}
 
-        {active === "analytics" && <AnalyticsPage transactions={transactions} />}
+        {active === "analytics" && <AnalyticsPage transactions={transactions} customCategories={customCategories} />}
 
         {active === "savings" && (
           <SavingsPage goals={goals} onAdd={() => setAddGoal(true)} onDeposit={setDepositGoal} onDelete={deleteGoal} />

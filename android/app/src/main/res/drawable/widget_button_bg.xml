@@ -2,6 +2,6 @@
 <!-- Tombol "Catat Transaksi" pada widget large -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
-    <solid android:color="@color/widget_accent" />
-    <corners android:radius="12dp" />
+    <solid android:color="@color/widget_accent_green" />
+    <corners android:radius="20dp" />
 </shape>
