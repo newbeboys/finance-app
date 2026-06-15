@@ -5,7 +5,7 @@ import { useIsMobile } from './use-mobile';
 import { AddTransactionModal } from './transactions';
 import { resolveCategory } from './category-field';
 
-export function TransactionsPage({ accounts, onAdd, transactions: txProp, loading = false, onDelete, onUpdate, customCategories = [], onCreateCustom }) {
+export function TransactionsPage({ accounts, onAdd, onScan, transactions: txProp, loading = false, onDelete, onUpdate, customCategories = [], onCreateCustom }) {
   const transactions = txProp ?? TRANSACTIONS;
   const isMobile = useIsMobile();
   const [q, setQ] = React.useState("");
@@ -59,9 +59,16 @@ export function TransactionsPage({ accounts, onAdd, transactions: txProp, loadin
             </div>
           )}
         </div>
-        <button onClick={onAdd} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500 }}>
-          <IconPlus size={15} /> Tambah transaksi
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          {onScan && (
+            <button onClick={onScan} title="Scan struk belanja" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, cursor: "pointer" }}>
+              📷 Scan
+            </button>
+          )}
+          <button onClick={onAdd} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500 }}>
+            <IconPlus size={15} /> Tambah transaksi
+          </button>
+        </div>
       </div>
 
       <div className="tx-stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: 16 }}>
