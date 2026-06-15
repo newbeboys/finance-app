@@ -9,6 +9,7 @@ import { AnalyticsPage } from './analytics';
 import { SavingsPage, AddGoalModal, DepositModal } from './savings-page';
 import { TransactionsPage } from './transactions-page';
 import { TransactionsCard, AddTransactionModal } from './transactions';
+import { ScanStrukSheet } from './components/ScanStruk';
 import { SettingsPage } from './settings-page';
 import { BudgetsPage } from './budgets-page';
 import { supabase } from './supabase';
@@ -227,6 +228,24 @@ function AuthenticatedApp({ session }) {
   const [balanceVisible, setBalanceVisible] = React.useState(true);
   const [modal, setModal] = React.useState(false);
 
+  // Scan Struk → form transaksi terprefill (lihat ScanStruk.jsx + AddTransactionModal)
+  const [scanOpen, setScanOpen] = React.useState(false);
+  const [scanPrefill, setScanPrefill] = React.useState(null);
+  const [scanNotice, setScanNotice] = React.useState(null);
+  const [scanPreview, setScanPreview] = React.useState(null);
+
+  const closeAddModal = React.useCallback(() => {
+    setModal(false);
+    setScanPrefill(null); setScanNotice(null); setScanPreview(null);
+  }, []);
+
+  const handleScanResult = React.useCallback(({ prefill, notice, previewImage }) => {
+    setScanPrefill(prefill || null);
+    setScanNotice(notice || null);
+    setScanPreview(previewImage || null);
+    setModal(true);   // buka form transaksi yang sudah terisi otomatis
+  }, []);
+
   // Multi-wallet state — sinkron dengan Supabase
   const { accounts, createAccount, setPrimary, deleteAccount: _deleteAccount } = useWallets(session.user.id);
   const [selectedAcct, setSelectedAcct] = React.useState("all");
@@ -348,7 +367,7 @@ function AuthenticatedApp({ session }) {
 
             {t.showAI && <InsightsCard transactions={transactions} customCategories={customCategories} />}
 
-            <TransactionsCard onAdd={() => setModal(true)} limit={8} onSeeAll={() => setActive("transactions")} transactions={transactions} loading={txLoading} customCategories={customCategories} />
+            <TransactionsCard onAdd={() => setModal(true)} onScan={() => setScanOpen(true)} limit={8} onSeeAll={() => setActive("transactions")} transactions={transactions} loading={txLoading} customCategories={customCategories} />
             <SavingsCard goals={goals} onManage={() => setActive("savings")} />
             <BudgetsCard onManage={() => setActive("budgets")} transactions={transactions} budgets={budgets} />
           </div>
@@ -377,7 +396,8 @@ function AuthenticatedApp({ session }) {
         {active !== "dashboard" && active !== "budgets" && active !== "wallets" && active !== "reports" && active !== "analytics" && active !== "savings" && active !== "transactions" && active !== "settings" && <Placeholder section={active} />}
       </main>
 
-      <AddTransactionModal open={modal} onClose={() => setModal(false)} onSave={createTransaction} customCategories={customCategories} onCreateCustom={addCustomCategory} />
+      <AddTransactionModal open={modal} onClose={closeAddModal} onSave={createTransaction} customCategories={customCategories} onCreateCustom={addCustomCategory} prefill={scanPrefill} notice={scanNotice} previewImage={scanPreview} />
+      <ScanStrukSheet open={scanOpen} onClose={() => setScanOpen(false)} onResult={handleScanResult} />
       <AddAccountModal open={addAcct} onClose={() => setAddAcct(false)} onCreate={createAccount} />
       <AddGoalModal open={addGoal} onClose={() => setAddGoal(false)} onCreate={createGoal} />
       <DepositModal goal={depositGoal} onClose={() => setDepositGoal(null)} onConfirm={handleDeposit} />

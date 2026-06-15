@@ -9,8 +9,9 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        // Daftarkan plugin widget sebelum bridge diinisialisasi.
+        // Daftarkan plugin native sebelum bridge diinisialisasi.
         registerPlugin(WidgetBridge.class);
+        registerPlugin(MlkitOcrPlugin.class);
         super.onCreate(savedInstanceState);
         captureWidgetAction(getIntent());
     }

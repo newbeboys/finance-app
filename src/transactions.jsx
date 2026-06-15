@@ -3,13 +3,14 @@ import { TRANSACTIONS, CATEGORIES, INCOME_CATEGORIES, fmt } from './data';
 
 import { IconFilter, IconPlus, IconArrowRight, IconClose, IconCalendar, IconChev, CatIcon } from './icons';
 import { ghostBtn } from './widgets';
+import { ScanStrukButton } from './components/ScanStruk';
 import { useIsMobile } from './use-mobile';
 import { useScrollLock } from './hooks/useScrollLock';
 import { CategoryField, CUSTOM_ID, CUSTOM_COLORS, resolveCategory } from './category-field';
 import { playSound } from './lib/sound';
 import incomeSound from './assets/sound/incom-sound.wav';
 
-export function TransactionsCard({ onAdd, limit, onSeeAll, transactions: txProp, loading = false, customCategories = [] }) {
+export function TransactionsCard({ onAdd, onScan, limit, onSeeAll, transactions: txProp, loading = false, customCategories = [] }) {
   const transactions = txProp ?? TRANSACTIONS;
   const isMobile = useIsMobile();
   const [filter, setFilter] = React.useState("all");
@@ -51,6 +52,7 @@ export function TransactionsCard({ onAdd, limit, onSeeAll, transactions: txProp,
             ))}
           </div>
           {!isMobile && <button style={ghostBtn}><IconFilter size={13} /></button>}
+          {onScan && <ScanStrukButton onClick={onScan} isMobile={isMobile} />}
           <button onClick={onAdd} style={{ padding: isMobile ? "8px 12px" : "7px 12px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 10, fontSize: 12.5, display: "inline-flex", alignItems: "center", gap: 6 }}>
             <IconPlus size={13} /> Tambah
           </button>
@@ -260,7 +262,7 @@ export function DatePickerPopup({ valueISO, onConfirm, onClose }) {
   );
 }
 
-export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial = null, customCategories = [], onCreateCustom }) {
+export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial = null, customCategories = [], onCreateCustom, prefill = null, notice = null, previewImage = null }) {
   useScrollLock(open);   // kunci scroll latar saat modal terbuka
   const isEdit = !!initial;
   const [type, setType] = React.useState("expense");
@@ -297,12 +299,21 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
       setNote(initial.note || '');
       setRecurring(false);
       setDateRaw(initial.dateRaw || todayISO());
+    } else if (prefill) {
+      // Prefill dari Scan Struk — tetap mode tambah (bukan edit) & sepenuhnya bisa diedit user.
+      setType(prefill.type || "expense");
+      setAmount(prefill.amount != null && prefill.amount !== "" ? String(prefill.amount) : "");
+      setCat(prefill.category || (prefill.type === "income" ? INCOME_CATEGORIES[0].id : "food"));
+      setMerchant(prefill.merchant || "");
+      setNote(prefill.note || "");
+      setRecurring(false);
+      setDateRaw(prefill.dateRaw || todayISO());   // tanggal tak terdeteksi → hari ini
     } else {
       setType("expense"); setAmount(""); setCat("food");
       setMerchant(""); setNote(""); setRecurring(false);
       setDateRaw(todayISO());   // default = hari ini
     }
-  }, [open, initial]);
+  }, [open, initial, prefill]);
 
   if (!open) return null;
 
@@ -401,6 +412,26 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
             </button>
           </div>
         </div>
+
+        {/* Hasil Scan Struk: preview foto + status baca (success/warning) */}
+        {(previewImage || notice) && (
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 16 }}>
+            {previewImage && (
+              <img src={previewImage} alt="Pratinjau struk"
+                style={{ width: 52, height: 52, objectFit: "cover", borderRadius: 10, border: "1px solid var(--line-soft)", flexShrink: 0 }} />
+            )}
+            {notice && (
+              <div role="status" style={{
+                flex: 1, fontSize: 12.5, lineHeight: 1.4, borderRadius: 10, padding: "10px 12px",
+                color: notice.type === "success" ? "var(--sage)" : "var(--gold)",
+                background: `color-mix(in oklch, ${notice.type === "success" ? "var(--sage)" : "var(--gold)"} 12%, transparent)`,
+                border: `1px solid color-mix(in oklch, ${notice.type === "success" ? "var(--sage)" : "var(--gold)"} 28%, transparent)`,
+              }}>
+                {notice.text}
+              </div>
+            )}
+          </div>
+        )}
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, padding: 3, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 12, marginTop: 18 }}>
           {[{ id: "expense", label: "Pengeluaran" }, { id: "income", label: "Pemasukan" }].map(opt => (

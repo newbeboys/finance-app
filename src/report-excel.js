@@ -455,13 +455,26 @@ export async function downloadExcel(p) {
 
   if (isAndroid) {
     const { Filesystem, Directory } = await import('@capacitor/filesystem');
-    await Filesystem.writeFile({
-      path: `Download/${filename}`,
+    const { Share } = await import('@capacitor/share');
+    // Android 10+ (scoped storage) melarang tulis langsung ke /Download →
+    // EACCES. Simpan ke cache app (tanpa izin), lalu buka dialog Android
+    // agar user bisa simpan ke Files / bagikan ke WhatsApp, email, dll.
+    const { uri } = await Filesystem.writeFile({
+      path: filename,
       data: bufToBase64(buf),
-      directory: Directory.ExternalStorage,
+      directory: Directory.Cache,
       recursive: true,
     });
-    alert(`Excel berhasil disimpan!\nBuka folder Download di HP kamu.\n${filename}`);
+    try {
+      await Share.share({
+        title: filename,
+        url: uri,
+        dialogTitle: 'Simpan atau bagikan laporan',
+      });
+    } catch (err) {
+      // User menutup dialog bagikan — bukan kegagalan.
+      if (!/cancel/i.test(err?.message || '')) throw err;
+    }
   } else {
     const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
