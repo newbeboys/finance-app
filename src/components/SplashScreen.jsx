@@ -72,6 +72,7 @@ export default function SplashScreen({ onDone }) {
       >
         Less Spending · More Living
       </div>
+
     </div>
   );
 }

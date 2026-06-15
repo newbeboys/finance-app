@@ -1,37 +1,24 @@
 import React from 'react';
 import Lottie from 'lottie-react';
+import { useTranslation } from 'react-i18next';
 import firstAnim from '../assets/animation/first-onboarding.json';
 import secondAnim from '../assets/animation/second-boarding.json';
 import lastAnim from '../assets/animation/kucing_tidur.json';
 
-const SLIDES = [
-  {
-    anim: firstAnim,
-    title: 'Hei, Uangmu Minta Diperhatikan! 👋',
-    desc: 'Udah lama uangmu pergi entah ke mana? Saatnya kamu kenali ke mana mereka kabur.',
-  },
-  {
-    anim: secondAnim,
-    title: 'Kontrol Penuh Atas Keuanganmu',
-    desc: 'Laporan lengkap, kategori custom, dan anggaran real-time ada di genggamanmu.',
-  },
-  {
-    anim: lastAnim,
-    title: 'Santai Aja, Duitmu Nggak Kabur 😸',
-    desc: 'FinanceApp merekam semua transaksimu. Tidur nyenyak, bangun tenang.',
-  },
-];
+const SLIDE_ANIMS = [firstAnim, secondAnim, lastAnim];
+const SLIDE_KEYS = ['slide1', 'slide2', 'slide3'];
 
 const SWIPE_THRESHOLD = 50; // px geseran minimal untuk pindah layar
 
 export default function OnboardingScreen({ onDone }) {
+  const { t } = useTranslation();
   const [index, setIndex] = React.useState(0);
   const [drag, setDrag] = React.useState(0);      // offset jari saat menggeser (px)
   const dragging = React.useRef(false);
   const startX = React.useRef(0);
   const widthRef = React.useRef(1);
 
-  const isLast = index === SLIDES.length - 1;
+  const isLast = index === SLIDE_KEYS.length - 1;
 
   const goTo = React.useCallback((i) => {
     setIndex((cur) => Math.max(0, Math.min(SLIDES.length - 1, i ?? cur)));
@@ -62,6 +49,7 @@ export default function OnboardingScreen({ onDone }) {
     dragging.current = false;
     if (drag <= -SWIPE_THRESHOLD) goTo(index + 1);
     else if (drag >= SWIPE_THRESHOLD) goTo(index - 1);
+
     setDrag(0);
   };
 
@@ -77,8 +65,8 @@ export default function OnboardingScreen({ onDone }) {
   return (
     <div style={pageStyle}>
       {/* Tombol Lewati (pojok kanan atas) */}
-      <button type="button" onClick={onDone} style={skipStyle} aria-label="Lewati onboarding">
-        Lewati
+      <button type="button" onClick={onDone} style={skipStyle} aria-label={t('onboarding.lewati')}>
+        {t('onboarding.lewati')}
       </button>
 
       {/* ── Tengah: animasi + judul + deskripsi (flex:1, terpusat) ── */}
@@ -90,19 +78,19 @@ export default function OnboardingScreen({ onDone }) {
         onTouchCancel={onTouchEnd}
       >
         <div style={trackStyle}>
-          {SLIDES.map((s, i) => (
+          {SLIDE_KEYS.map((key, i) => (
             <div key={i} style={slideStyle}>
               <div style={animWrapStyle}>
                 <Lottie
-                  animationData={s.anim}
+                  animationData={SLIDE_ANIMS[i]}
                   loop={true}
                   autoplay={true}
                   style={{ width: '100%', height: '100%' }}
                   rendererSettings={{ preserveAspectRatio: 'xMidYMid meet' }}
                 />
               </div>
-              <h1 className="serif" style={titleStyle}>{s.title}</h1>
-              <p style={descStyle}>{s.desc}</p>
+              <h1 className="serif" style={titleStyle}>{t(`onboarding.${key}Judul`)}</h1>
+              <p style={descStyle}>{t(`onboarding.${key}Teks`)}</p>
             </div>
           ))}
         </div>
@@ -111,12 +99,12 @@ export default function OnboardingScreen({ onDone }) {
       {/* ── Bawah: dot indicator + tombol aksi ── */}
       <div style={footerStyle}>
         <div style={dotsStyle}>
-          {SLIDES.map((_, i) => (
+          {SLIDE_KEYS.map((_, i) => (
             <button
               key={i}
               type="button"
               onClick={() => goTo(i)}
-              aria-label={`Ke layar ${i + 1}`}
+              aria-label={`${i + 1}`}
               style={{
                 ...dotStyle,
                 background: i === index ? 'var(--sage)' : 'var(--line)',
@@ -127,7 +115,7 @@ export default function OnboardingScreen({ onDone }) {
         </div>
 
         <button type="button" onClick={handleNext} style={ctaStyle}>
-          {isLast ? 'Mulai' : 'Lanjut'}
+          {isLast ? t('onboarding.mulai') : t('onboarding.lanjut')}
         </button>
       </div>
     </div>

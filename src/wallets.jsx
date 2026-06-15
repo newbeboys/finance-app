@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { ACCOUNT_TYPES, ALL_CATEGORIES, fmtShort, fmt, formatNominal, nominalFontSize } from './data';
 import { IconBudget, IconPlus, IconChev, IconClose, CatIcon } from './icons';
 import { useScrollLock } from './hooks/useScrollLock';
@@ -22,6 +23,7 @@ export function WalletGlyph({ type, size = 16 }) {
 const typeLabel = (id) => (ACCOUNT_TYPES.find(t => t.id === id) || {}).label || id;
 
 export function AccountSwitcher({ accounts, selected, onSelect, onAdd }) {
+  const { t } = useTranslation();
   const [open, setOpen] = React.useState(false);
   const total = accounts.reduce((s, a) => s + a.balance, 0);
   const current = selected === "all" ? null : accounts.find(a => a.id === selected);
@@ -43,7 +45,7 @@ export function AccountSwitcher({ accounts, selected, onSelect, onAdd }) {
         </span>
         <span style={{ textAlign: "left", lineHeight: 1.15 }}>
           <span style={{ display: "block", fontSize: 12.5, fontWeight: 500 }}>
-            {current ? current.name : "Semua akun"}
+            {current ? current.name : t('dompet.semuaAkun')}
           </span>
           <span className="tnum" style={{ display: "block", fontSize: 10.5, color: "var(--muted)" }}>
             {fmtShort(current ? current.balance : total)}
@@ -61,8 +63,8 @@ export function AccountSwitcher({ accounts, selected, onSelect, onAdd }) {
                 <IconBudget size={15} />
               </span>
               <span style={{ flex: 1, textAlign: "left" }}>
-                <span style={{ display: "block", fontSize: 13, fontWeight: 500 }}>Semua akun</span>
-                <span style={{ display: "block", fontSize: 11, color: "var(--muted)" }}>{accounts.length} dompet gabungan</span>
+                <span style={{ display: "block", fontSize: 13, fontWeight: 500 }}>{t('dompet.semuaAkun')}</span>
+                <span style={{ display: "block", fontSize: 11, color: "var(--muted)" }}>{t('dompet.dompetGabungan', { count: accounts.length })}</span>
               </span>
               <span className="tnum" style={{ fontSize: 12.5, fontWeight: 500 }}>{fmtShort(total)}</span>
             </button>
@@ -90,7 +92,7 @@ export function AccountSwitcher({ accounts, selected, onSelect, onAdd }) {
               <span style={{ width: 30, height: 30, borderRadius: 8, background: "var(--ink)", color: "var(--cream)", display: "grid", placeItems: "center" }}>
                 <IconPlus size={15} />
               </span>
-              Tambah akun
+              {t('dompet.tambahAkun')}
             </button>
           </div>
         </>
@@ -116,7 +118,8 @@ function txForAccount(account, transactions) {
 }
 
 export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transactions = [] }) {
-  const [txSheet, setTxSheet] = React.useState(null); // account object or null
+  const { t } = useTranslation();
+  const [txSheet, setTxSheet] = React.useState(null);
   const total = accounts.reduce((s, a) => s + a.balance, 0);
   const byType = ACCOUNT_TYPES.map(t => ({
     ...t, sum: accounts.filter(a => a.type === t.id).reduce((s, a) => s + a.balance, 0),
@@ -129,23 +132,23 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 22 }}>
         <div>
           <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>
-            Dompet · {accounts.length} akun
+            {t('dompet.eyebrow', { count: accounts.length })}
           </div>
           <h2 className="serif" style={{ fontSize: 34, margin: "4px 0 0", letterSpacing: "-0.015em" }}>
-            Semua akunmu, satu tempat
+            {t('dompet.judulHalaman')}
           </h2>
           <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 6, maxWidth: 540, lineHeight: 1.5 }}>
-            Catat saldo rekening bank, e-wallet, tunai, atau investasi. Tambahkan akun sebanyak yang kamu mau dan lacak semuanya di satu tempat.
+            {t('dompet.deskripsi')}
           </div>
         </div>
         <button onClick={onAdd} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500 }}>
-          <IconPlus size={15} /> Tambah akun
+          <IconPlus size={15} /> {t('dompet.tambahAkun')}
         </button>
       </div>
 
       <div className="card rise" style={{ padding: 24, marginBottom: 20, display: "flex", alignItems: "center", gap: 28, flexWrap: "wrap" }}>
         <div style={{ flex: "0 0 auto" }}>
-          <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Total kekayaan bersih</div>
+          <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{t('dompet.totalKekayaanBersih')}</div>
           <div className="serif tnum kpi-nominal" style={{ fontSize: nominalFontSize(total, { hero: true }), letterSpacing: "-0.02em", marginTop: 6 }}>{formatNominal(total)}</div>
         </div>
         <div style={{ flex: 1, display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
@@ -168,8 +171,8 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
                   <WalletGlyph type={a.type} size={19} />
                 </span>
                 {a.primary
-                  ? <span style={{ fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--sage)", background: "rgba(92,107,76,.14)", padding: "3px 8px", borderRadius: 999, fontWeight: 500 }}>Utama</span>
-                  : <button onClick={() => onSetPrimary(a.id)} title="Jadikan utama" style={{ fontSize: 11, color: "var(--muted)", background: "transparent", border: "1px solid var(--line-soft)", borderRadius: 999, padding: "3px 9px" }}>Set utama</button>}
+                  ? <span style={{ fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--sage)", background: "rgba(92,107,76,.14)", padding: "3px 8px", borderRadius: 999, fontWeight: 500 }}>{t('dompet.utama')}</span>
+                  : <button onClick={() => onSetPrimary(a.id)} title={t('dompet.setUtama')} style={{ fontSize: 11, color: "var(--muted)", background: "transparent", border: "1px solid var(--line-soft)", borderRadius: 999, padding: "3px 9px" }}>{t('dompet.setUtama')}</button>}
               </div>
               <div style={{ marginTop: 16 }}>
                 <div style={{ fontSize: 14.5, fontWeight: 500 }}>{a.name}</div>
@@ -178,12 +181,12 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
                 </div>
               </div>
               <div style={{ marginTop: "auto", paddingTop: 18 }}>
-                <div style={{ fontSize: 10.5, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--muted)" }}>Saldo</div>
+                <div style={{ fontSize: 10.5, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--muted)" }}>{t('dompet.saldo')}</div>
                 <div className="serif tnum wallet-balance-val" style={{ fontSize: 26, letterSpacing: "-0.01em", marginTop: 2 }}>{fmt(a.balance)}</div>
               </div>
             </div>
             <div className="hairline" style={{ display: "flex" }}>
-              <button onClick={() => setTxSheet(a)} style={{ ...cardFootBtn, flex: 1 }}>Transaksi</button>
+              <button onClick={() => setTxSheet(a)} style={{ ...cardFootBtn, flex: 1 }}>{t('dompet.transaksi')}</button>
               {!a.primary && accounts.length > 1 && (
                 <div className="wallet-card-delete-wrap" style={{ display: "flex", flexShrink: 0 }}>
                   <div style={{ width: 1, background: "var(--line-soft)" }} />
@@ -200,8 +203,8 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
           <span style={{ width: 48, height: 48, borderRadius: 14, background: "var(--paper)", border: "1px solid var(--line-soft)", display: "grid", placeItems: "center", color: "var(--sage)" }}>
             <IconPlus size={22} />
           </span>
-          <span style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink-2)" }}>Tambah akun baru</span>
-          <span style={{ fontSize: 12, maxWidth: 190, textAlign: "center", lineHeight: 1.4 }}>Rekening bank, e-wallet, tunai, atau investasi</span>
+          <span style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink-2)" }}>{t('dompet.tambahAkunBaru')}</span>
+          <span style={{ fontSize: 12, maxWidth: 190, textAlign: "center", lineHeight: 1.4 }}>{t('dompet.rekBankEwallet')}</span>
         </button>
       </div>
     </div>
@@ -219,7 +222,8 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
 }
 
 function AccountTxSheet({ account, transactions, onClose }) {
-  useScrollLock(true);   // sheet ini di-mount hanya saat terbuka → kunci scroll latar
+  const { t } = useTranslation();
+  useScrollLock(true);
   return (
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(42,44,32,.45)", zIndex: 150 }} />
@@ -227,8 +231,8 @@ function AccountTxSheet({ account, transactions, onClose }) {
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 18px 14px", borderBottom: "1px solid var(--line-soft)", position: "sticky", top: 0, background: "var(--ivory)", zIndex: 1 }}>
           <div>
-            <div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Riwayat</div>
-            <div className="serif" style={{ fontSize: 20, letterSpacing: "-0.01em", marginTop: 2 }}>Transaksi · {account.name}</div>
+            <div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{t('dompet.riwayat')}</div>
+            <div className="serif" style={{ fontSize: 20, letterSpacing: "-0.01em", marginTop: 2 }}>{t('dompet.transaksiAkun', { nama: account.name })}</div>
           </div>
           <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: 10, border: "1px solid var(--line-soft)", background: "var(--paper)", display: "grid", placeItems: "center", color: "var(--ink-2)", flexShrink: 0 }}>
             <IconClose size={14} />
@@ -239,7 +243,7 @@ function AccountTxSheet({ account, transactions, onClose }) {
         <div style={{ padding: "8px 16px" }}>
           {transactions.length === 0 ? (
             <div style={{ padding: "40px 0", textAlign: "center", color: "var(--muted)", fontSize: 14 }}>
-              Belum ada transaksi untuk akun ini.
+              {t('dompet.belumAdaTransaksi')}
             </div>
           ) : (
             transactions.map((t, i) => {
@@ -273,7 +277,8 @@ const cardFootBtn = { flex: 1, padding: "11px 0", background: "transparent", bor
 const ACCOUNT_COLORS = ["#2A6FDB", "#1FA8A0", "#1B8A3F", "#9A6BD9", "#B26A4A", "#B68A3E", "#8C7B5C", "#C9886D"];
 
 export function AddAccountModal({ open, onClose, onCreate }) {
-  useScrollLock(open);   // kunci scroll latar saat modal terbuka
+  const { t } = useTranslation();
+  useScrollLock(open);
   const [name, setName] = React.useState("");
   const [type, setType] = React.useState("bank");
   const [institution, setInstitution] = React.useState("");
@@ -308,8 +313,8 @@ export function AddAccountModal({ open, onClose, onCreate }) {
       <div className="card modal-sheet" onClick={e => e.stopPropagation()} style={{ width: 500, padding: 28, animation: "rise .3s ease-out", boxShadow: "0 30px 80px -20px rgba(42,44,32,.4)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
-            <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Dompet baru</div>
-            <div className="serif" style={{ fontSize: 28, marginTop: 4, letterSpacing: "-0.01em" }}>Tambah akun</div>
+            <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{t('dompet.dompetBaru')}</div>
+            <div className="serif" style={{ fontSize: 28, marginTop: 4, letterSpacing: "-0.01em" }}>{t('dompet.tambahAkunModal')}</div>
           </div>
           <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 10, border: "1px solid var(--line-soft)", background: "var(--paper)", display: "grid", placeItems: "center", color: "var(--ink-2)" }}>
             <IconClose size={14} />
@@ -317,7 +322,7 @@ export function AddAccountModal({ open, onClose, onCreate }) {
         </div>
 
         <div style={{ marginTop: 20 }}>
-          <span style={fieldLabel}>Jenis akun</span>
+          <span style={fieldLabel}>{t('dompet.jenisAkun')}</span>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
             {ACCOUNT_TYPES.map(t => (
               <button key={t.id} onClick={() => setType(t.id)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 7, padding: "12px 6px", borderRadius: 12, background: type === t.id ? "var(--ivory)" : "var(--paper)", border: "1px solid " + (type === t.id ? "var(--ink)" : "var(--line-soft)"), color: "var(--ink)" }}>
@@ -330,19 +335,19 @@ export function AddAccountModal({ open, onClose, onCreate }) {
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 16 }}>
           <label style={{ gridColumn: "span 2" }}>
-            <span style={fieldLabel}>Nama akun</span>
+            <span style={fieldLabel}>{t('dompet.namaAkun')}</span>
             <input value={name} onChange={e => setName(e.target.value)} placeholder="contoh: BCA Tabungan" style={modalInput} />
           </label>
           <label>
-            <span style={fieldLabel}>Bank / penyedia</span>
+            <span style={fieldLabel}>{t('dompet.bankPenyedia')}</span>
             <input value={institution} onChange={e => setInstitution(e.target.value)} placeholder="contoh: Bank Central Asia" style={modalInput} />
           </label>
           <label>
-            <span style={fieldLabel}>4 digit terakhir (opsional)</span>
+            <span style={fieldLabel}>{t('dompet.empatDigitTerakhir')}</span>
             <input value={last4} onChange={e => setLast4(e.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="4421" style={modalInput} />
           </label>
           <label style={{ gridColumn: "span 2" }}>
-            <span style={fieldLabel}>Saldo awal</span>
+            <span style={fieldLabel}>{t('dompet.saldoAwal')}</span>
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 12px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10 }}>
               <span style={{ color: "var(--muted)", fontSize: 13 }}>Rp</span>
               <input value={balance ? (+String(balance).replace(/\D/g, "")).toLocaleString("id-ID") : ""}
@@ -354,7 +359,7 @@ export function AddAccountModal({ open, onClose, onCreate }) {
         </div>
 
         <div style={{ marginTop: 16 }}>
-          <span style={fieldLabel}>Warna</span>
+          <span style={fieldLabel}>{t('dompet.warna')}</span>
           <div style={{ display: "flex", gap: 8 }}>
             {ACCOUNT_COLORS.map(c => (
               <button key={c} onClick={() => setColor(c)} style={{ width: 28, height: 28, borderRadius: 8, background: c, border: 0, outline: color === c ? "2px solid var(--ink)" : "2px solid transparent", outlineOffset: 2, cursor: "pointer" }} />
@@ -363,8 +368,8 @@ export function AddAccountModal({ open, onClose, onCreate }) {
         </div>
 
         <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
-          <button onClick={onClose} style={{ flex: 1, padding: "11px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 12, fontSize: 13.5, color: "var(--ink-2)" }}>Batal</button>
-          <button onClick={submit} disabled={!valid} style={{ flex: 2, padding: "11px", background: valid ? "var(--ink)" : "var(--line)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, cursor: valid ? "pointer" : "default" }}>Buat akun</button>
+          <button onClick={onClose} style={{ flex: 1, padding: "11px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 12, fontSize: 13.5, color: "var(--ink-2)" }}>{t('umum.batal')}</button>
+          <button onClick={submit} disabled={!valid} style={{ flex: 2, padding: "11px", background: valid ? "var(--ink)" : "var(--line)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, cursor: valid ? "pointer" : "default" }}>{t('dompet.buatAkun')}</button>
         </div>
       </div>
     </div>

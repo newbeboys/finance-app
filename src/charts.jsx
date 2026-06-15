@@ -1,7 +1,9 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { fmtShort } from './data';
 
 export function CashflowChart({ data }) {
+  const { t } = useTranslation();
   const slice = data; // filtering dilakukan di CashflowCard sebelum di-pass ke sini
 
   const W = 720, H = 240, P = { t: 20, r: 16, b: 28, l: 40 };
@@ -110,11 +112,11 @@ export function CashflowChart({ data }) {
                 </text>
                 <circle cx="14" cy="30" r="3" fill="var(--sage)" />
                 <text x="22" y="33" fontSize="11" fill="var(--ink)" fontFamily="Geist, sans-serif">
-                  Masuk <tspan fontWeight="600">{fmtShort(slice[hover].income)}</tspan>
+                  {t('transaksi.masuk')} <tspan fontWeight="600">{fmtShort(slice[hover].income)}</tspan>
                 </text>
                 <circle cx="14" cy="46" r="3" fill="var(--terra)" />
                 <text x="22" y="49" fontSize="11" fill="var(--ink)" fontFamily="Geist, sans-serif">
-                  Keluar <tspan fontWeight="600">{fmtShort(slice[hover].expense)}</tspan>
+                  {t('transaksi.keluar')} <tspan fontWeight="600">{fmtShort(slice[hover].expense)}</tspan>
                 </text>
               </g>
             );
@@ -126,6 +128,7 @@ export function CashflowChart({ data }) {
 }
 
 export function SpendingDonut({ data, active, onHover, fmtFn = fmtShort }) {
+  const { t } = useTranslation();
   const total = data.reduce((s, d) => s + d.amount, 0);
   const R = 78, r = 56, cx = 100, cy = 100;
   let acc = 0;
@@ -156,14 +159,14 @@ export function SpendingDonut({ data, active, onHover, fmtFn = fmtShort }) {
       ))}
       <circle cx={cx} cy={cy} r={r - 1} fill="var(--ivory)" pointerEvents="none" />
       <text x={cx} y={cy - 6} textAnchor="middle" fontSize="10.5" fill="var(--muted)" fontFamily="Geist, sans-serif" letterSpacing="0.05em">
-        {top ? top.label.toUpperCase() : "BULAN INI"}
+        {top ? top.label.toUpperCase() : t('beranda.bulanIni').toUpperCase()}
       </text>
       <text x={cx} y={cy + 18} textAnchor="middle" fontFamily="'Instrument Serif', serif" fontSize="24" fill="var(--ink)">
         {fmtFn(top ? top.amount : total)}
       </text>
       {!top && (
         <text x={cx} y={cy + 34} textAnchor="middle" fontSize="10.5" fill="var(--muted)" fontFamily="Geist, sans-serif">
-          dari {data.length} kategori
+          {t('beranda.dariNKategori', { count: data.length })}
         </text>
       )}
     </svg>

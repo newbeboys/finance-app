@@ -1,15 +1,18 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { CATEGORIES, INCOME_CATEGORIES, fmtShort, formatNominal, nominalFontSize } from './data';
 import { IconArrowDown } from './icons';
 import { SpendingDonut } from './charts';
 import { useScrollLock } from './hooks/useScrollLock';
 
 const MONTHS_ID = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
+const MONTHS_EN = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
-function computeBarData(transactions, scope, pickedMonth) {
+function computeBarData(transactions, scope, pickedMonth, monthsArr) {
   const now = new Date();
+  const months = monthsArr || MONTHS_ID;
 
   if (scope === "month") {
     const yr = pickedMonth?.year  ?? now.getFullYear();
@@ -26,7 +29,6 @@ function computeBarData(transactions, scope, pickedMonth) {
     });
   }
 
-  // "year" → last 12 months grouped by month
   return Array.from({ length: 12 }, (_, i) => {
     const d  = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1);
     const yr = d.getFullYear(), mo = d.getMonth();
@@ -34,7 +36,7 @@ function computeBarData(transactions, scope, pickedMonth) {
     const txs = transactions.filter(t => t.dateRaw && t.dateRaw.startsWith(pfx));
     const income  = txs.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
     const expense = txs.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
-    return { m: MONTHS_ID[mo], income, expense, year: yr, month: mo };
+    return { m: months[mo], income, expense, year: yr, month: mo };
   });
 }
 
@@ -91,6 +93,7 @@ function computeIncomeData(transactions, scope, pickedMonth, customCategories = 
 // ── Bar Chart ─────────────────────────────────────────────────────────
 
 function BarChart({ data }) {
+  const { t } = useTranslation();
   const [hover, setHover] = React.useState(null);
   if (!data || data.length === 0) return null;
 
@@ -145,9 +148,9 @@ function BarChart({ data }) {
               {d.m}{data.length > 12 ? ` ${MONTHS_ID[d.month]} ${d.year}` : ` ${d.year || ""}`}
             </text>
             <circle cx="14" cy="30" r="3" fill="var(--sage)" />
-            <text x="22" y="33" fontSize="11" fill="var(--ink)" fontFamily="Geist, sans-serif">Masuk <tspan fontWeight="600">{fmtShort(d.income)}</tspan></text>
+            <text x="22" y="33" fontSize="11" fill="var(--ink)" fontFamily="Geist, sans-serif">{t('analitik.masuk')} <tspan fontWeight="600">{fmtShort(d.income)}</tspan></text>
             <circle cx="14" cy="46" r="3" fill="var(--terra)" />
-            <text x="22" y="49" fontSize="11" fill="var(--ink)" fontFamily="Geist, sans-serif">Keluar <tspan fontWeight="600">{fmtShort(d.expense)}</tspan></text>
+            <text x="22" y="49" fontSize="11" fill="var(--ink)" fontFamily="Geist, sans-serif">{t('analitik.keluar')} <tspan fontWeight="600">{fmtShort(d.expense)}</tspan></text>
           </g>
         );
       })()}
@@ -158,17 +161,19 @@ function BarChart({ data }) {
 // ── Analytics Page ────────────────────────────────────────────────────
 
 export function AnalyticsPage({ transactions = [], customCategories = [] }) {
-  const [scope, setScope] = React.useState("year"); // "year" | "month"
+  const { t, i18n } = useTranslation();
+  const monthsArr = i18n.language === 'en' ? MONTHS_EN : MONTHS_ID;
+  const [scope, setScope] = React.useState("year");
   const [pickedMonth, setPickedMonth] = React.useState(null);
   const [sheetOpen, setSheetOpen] = React.useState(false);
-  useScrollLock(sheetOpen);   // kunci scroll latar saat bottom-sheet "Pilih Bulan" terbuka
+  useScrollLock(sheetOpen);
   const [hoverCat, setHoverCat] = React.useState(null);
   const [hoverIncomeCat, setHoverIncomeCat] = React.useState(null);
 
   const now = new Date();
   const activePicked = pickedMonth || { year: now.getFullYear(), month: now.getMonth() };
 
-  const bars = React.useMemo(() => computeBarData(transactions, scope, scope === "month" ? activePicked : null), [transactions, scope, activePicked]);
+  const bars = React.useMemo(() => computeBarData(transactions, scope, scope === "month" ? activePicked : null, monthsArr), [transactions, scope, activePicked, monthsArr]);
   const cats = React.useMemo(() => computeCatData(transactions, scope, scope === "month" ? activePicked : null), [transactions, scope, activePicked]);
 
   const totalIncome  = bars.reduce((s, d) => s + (d.income  || 0), 0);
@@ -178,7 +183,7 @@ export function AnalyticsPage({ transactions = [], customCategories = [] }) {
   // Avg: for year = total/12, for month = total/days
   const avgDenominator = scope === "year" ? 12 : new Date(activePicked.year, activePicked.month + 1, 0).getDate();
   const avgExpense     = avgDenominator > 0 ? Math.round(totalExpense / avgDenominator) : 0;
-  const avgLabel       = scope === "year" ? "Rata-rata/bulan" : "Rata-rata/hari";
+  const avgLabel       = scope === "year" ? t('analitik.rataBulan') : t('analitik.rataHari');
 
   const catTotal = cats.reduce((s, c) => s + (c.amount || 0), 0);
 
@@ -186,10 +191,10 @@ export function AnalyticsPage({ transactions = [], customCategories = [] }) {
   const incomeCatTotal = incomeCats.reduce((s, c) => s + (c.amount || 0), 0);
 
   const stats = [
-    { l: "Total pemasukan",  v: totalIncome  || 0, c: "var(--sage)" },
-    { l: "Total pengeluaran",v: totalExpense || 0, c: "var(--terra)" },
-    { l: "Selisih bersih",   v: net          || 0, c: net >= 0 ? "var(--ink)" : "var(--terra)" },
-    { l: avgLabel,           v: avgExpense   || 0, c: "var(--muted)" },
+    { l: t('analitik.totalPemasukan'),  v: totalIncome  || 0, c: "var(--sage)" },
+    { l: t('analitik.totalPengeluaran'), v: totalExpense || 0, c: "var(--terra)" },
+    { l: t('analitik.selisihBersih'),   v: net          || 0, c: net >= 0 ? "var(--ink)" : "var(--terra)" },
+    { l: avgLabel,                       v: avgExpense   || 0, c: "var(--muted)" },
   ];
 
   // Available months for picker
@@ -211,8 +216,8 @@ export function AnalyticsPage({ transactions = [], customCategories = [] }) {
   const byYear = {};
   availableMonths.forEach(m => { (byYear[m.year] ||= []).push(m); });
 
-  const pickedLabel = `${MONTHS_ID[activePicked.month]} ${activePicked.year}`;
-  const rangeLabel  = scope === "year" ? "1 Tahun terakhir" : pickedLabel;
+  const pickedLabel = `${monthsArr[activePicked.month]} ${activePicked.year}`;
+  const rangeLabel  = scope === "year" ? t('analitik.sataTahunTerakhir') : pickedLabel;
 
   const hasData = totalIncome > 0 || totalExpense > 0;
 
@@ -222,24 +227,24 @@ export function AnalyticsPage({ transactions = [], customCategories = [] }) {
         {/* Header */}
         <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 22 }}>
           <div>
-            <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Analitik · {rangeLabel}</div>
-            <h2 className="serif" style={{ fontSize: 34, margin: "4px 0 0", letterSpacing: "-0.015em" }}>Statistik keuangan</h2>
+            <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{t('analitik.eyebrow', { range: rangeLabel })}</div>
+            <h2 className="serif" style={{ fontSize: 34, margin: "4px 0 0", letterSpacing: "-0.015em" }}>{t('analitik.judulHalaman')}</h2>
             <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 6, maxWidth: 560, lineHeight: 1.5 }}>
-              Diagram batang, diagram lingkaran, dan tabel rinci. Semua visual ini juga ikut tercetak di laporan yang bisa kamu unduh.
+              {t('analitik.deskripsi')}
             </div>
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             {/* Scope filter */}
             <div style={{ display: "flex", padding: 3, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10 }}>
               <button onClick={() => setScope("year")} style={{ padding: "8px 16px", fontSize: 12.5, background: scope === "year" ? "var(--ivory)" : "transparent", border: scope === "year" ? "1px solid var(--line-soft)" : "1px solid transparent", borderRadius: 8, color: scope === "year" ? "var(--ink)" : "var(--muted)", fontWeight: scope === "year" ? 500 : 400 }}>
-                1 Tahun
+                {t('analitik.saTahun')}
               </button>
               <button onClick={() => { setScope("month"); setSheetOpen(true); }} style={{ padding: "8px 16px", fontSize: 12.5, background: scope === "month" ? "var(--ivory)" : "transparent", border: scope === "month" ? "1px solid var(--line-soft)" : "1px solid transparent", borderRadius: 8, color: scope === "month" ? "var(--ink)" : "var(--muted)", fontWeight: scope === "month" ? 500 : 400 }}>
-                {scope === "month" ? pickedLabel : "1 Bulan"} ▾
+                {scope === "month" ? pickedLabel : t('analitik.saBulan')} ▾
               </button>
             </div>
             <button onClick={() => { if (window.buildPayload && window.downloadPdf) window.downloadPdf(window.buildPayload(transactions, "year", String(now.getFullYear()))); }} style={{ padding: "10px 14px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 10, fontSize: 12.5, display: "inline-flex", gap: 7, alignItems: "center" }}>
-              <IconArrowDown size={14} /> Unduh laporan
+              <IconArrowDown size={14} /> {t('analitik.unduhLaporan')}
             </button>
           </div>
         </div>
@@ -258,18 +263,18 @@ export function AnalyticsPage({ transactions = [], customCategories = [] }) {
         <div className="card rise" style={{ padding: 22, marginBottom: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
             <div>
-              <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Diagram batang</div>
-              <div className="serif" style={{ fontSize: 24, letterSpacing: "-0.01em", marginTop: 2 }}>Pemasukan vs pengeluaran</div>
+              <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{t('analitik.diagramBatang')}</div>
+              <div className="serif" style={{ fontSize: 24, letterSpacing: "-0.01em", marginTop: 2 }}>{t('analitik.pemasukVsKeluar')}</div>
             </div>
             <div style={{ display: "flex", gap: 16, fontSize: 12, color: "var(--muted)" }}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: "var(--sage)" }} /> Masuk</span>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: "var(--terra)" }} /> Keluar</span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: "var(--sage)" }} /> {t('analitik.masuk')}</span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: "var(--terra)" }} /> {t('analitik.keluar')}</span>
             </div>
           </div>
           {!hasData ? (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, height: 160, color: "var(--muted)" }}>
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--line)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="4" height="18" rx="1"/><rect x="10" y="8" width="4" height="13" rx="1"/><rect x="17" y="13" width="4" height="8" rx="1"/></svg>
-              <div style={{ fontSize: 13 }}>Belum ada data untuk periode ini</div>
+              <div style={{ fontSize: 13 }}>{t('analitik.belumAdaData')}</div>
             </div>
           ) : (
             <BarChart data={bars} />
@@ -282,8 +287,8 @@ export function AnalyticsPage({ transactions = [], customCategories = [] }) {
           {/* Donut pemasukan — mobile: order 1 */}
           {incomeCats.length > 0 && (
             <div className="card rise analytics-income-donut" style={{ padding: 22 }}>
-              <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Diagram lingkaran</div>
-              <div className="serif" style={{ fontSize: 24, letterSpacing: "-0.01em", marginTop: 2, marginBottom: 6 }}>Komposisi pemasukan</div>
+              <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{t('analitik.diagramLingkaran')}</div>
+              <div className="serif" style={{ fontSize: 24, letterSpacing: "-0.01em", marginTop: 2, marginBottom: 6 }}>{t('analitik.komposisiPemasukan')}</div>
               <SpendingDonut data={incomeCats} active={hoverIncomeCat} onHover={setHoverIncomeCat} fmtFn={fmtShort} />
               <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", marginTop: 10, justifyContent: "center" }}>
                 {incomeCats.slice(0, 6).map((c, i) => (
@@ -299,14 +304,14 @@ export function AnalyticsPage({ transactions = [], customCategories = [] }) {
           {/* Tabel pemasukan — mobile: order 3 */}
           {incomeCats.length > 0 && (
             <div className="card rise analytics-income-table" style={{ padding: "22px 22px 8px" }}>
-              <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Tabel statistik</div>
-              <div className="serif" style={{ fontSize: 24, letterSpacing: "-0.01em", marginTop: 2, marginBottom: 12 }}>Pemasukan per kategori</div>
+              <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{t('analitik.tabelStatistik')}</div>
+              <div className="serif" style={{ fontSize: 24, letterSpacing: "-0.01em", marginTop: 2, marginBottom: 12 }}>{t('analitik.pemasukPerKategori')}</div>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>
-                    <th style={{ textAlign: "left", padding: "0 0 10px", borderBottom: "1px solid var(--line-soft)", fontWeight: 500 }}>Kategori</th>
-                    <th style={{ textAlign: "right", padding: "0 0 10px", borderBottom: "1px solid var(--line-soft)", fontWeight: 500 }}>Jumlah</th>
-                    <th style={{ textAlign: "right", padding: "0 0 10px 16px", borderBottom: "1px solid var(--line-soft)", fontWeight: 500, width: 90 }}>Porsi</th>
+                    <th style={{ textAlign: "left", padding: "0 0 10px", borderBottom: "1px solid var(--line-soft)", fontWeight: 500 }}>{t('analitik.kategori')}</th>
+                    <th style={{ textAlign: "right", padding: "0 0 10px", borderBottom: "1px solid var(--line-soft)", fontWeight: 500 }}>{t('analitik.jumlah')}</th>
+                    <th style={{ textAlign: "right", padding: "0 0 10px 16px", borderBottom: "1px solid var(--line-soft)", fontWeight: 500, width: 90 }}>{t('analitik.porsi')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -335,7 +340,7 @@ export function AnalyticsPage({ transactions = [], customCategories = [] }) {
                 </tbody>
                 <tfoot>
                   <tr>
-                    <td style={{ padding: "12px 0", borderTop: "2px solid var(--ink)", fontWeight: 600 }}>Total</td>
+                    <td style={{ padding: "12px 0", borderTop: "2px solid var(--ink)", fontWeight: 600 }}>{t('analitik.total')}</td>
                     <td className="tnum" style={{ textAlign: "right", padding: "12px 0", borderTop: "2px solid var(--ink)", fontWeight: 600 }}>{fmtShort(incomeCatTotal)}</td>
                     <td style={{ textAlign: "right", padding: "12px 0 12px 16px", borderTop: "2px solid var(--ink)", fontWeight: 600 }}>100%</td>
                   </tr>
@@ -346,12 +351,12 @@ export function AnalyticsPage({ transactions = [], customCategories = [] }) {
 
           {/* Donut pengeluaran — mobile: order 2 */}
           <div className="card rise analytics-expense-donut" style={{ padding: 22 }}>
-            <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Diagram lingkaran</div>
-            <div className="serif" style={{ fontSize: 24, letterSpacing: "-0.01em", marginTop: 2, marginBottom: 6 }}>Komposisi pengeluaran</div>
+            <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{t('analitik.diagramLingkaran')}</div>
+            <div className="serif" style={{ fontSize: 24, letterSpacing: "-0.01em", marginTop: 2, marginBottom: 6 }}>{t('analitik.komposisiPengeluaran')}</div>
             {cats.length === 0 ? (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 180, color: "var(--muted)" }}>
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--line)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
-                <div style={{ fontSize: 13 }}>Belum ada pengeluaran</div>
+                <div style={{ fontSize: 13 }}>{t('analitik.belumAdaPengeluaran')}</div>
               </div>
             ) : (
               <>
@@ -370,17 +375,17 @@ export function AnalyticsPage({ transactions = [], customCategories = [] }) {
 
           {/* Tabel pengeluaran — mobile: order 4 */}
           <div className="card rise analytics-expense-table" style={{ padding: "22px 22px 8px" }}>
-            <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Tabel statistik</div>
-            <div className="serif" style={{ fontSize: 24, letterSpacing: "-0.01em", marginTop: 2, marginBottom: 12 }}>Rincian per kategori</div>
+            <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{t('analitik.tabelStatistik')}</div>
+            <div className="serif" style={{ fontSize: 24, letterSpacing: "-0.01em", marginTop: 2, marginBottom: 12 }}>{t('analitik.rincianPerKategori')}</div>
             {cats.length === 0 ? (
-              <div style={{ padding: "32px 0", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>Belum ada data kategori untuk periode ini.</div>
+              <div style={{ padding: "32px 0", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>{t('analitik.belumAdaKategori')}</div>
             ) : (
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>
-                    <th style={{ textAlign: "left", padding: "0 0 10px", borderBottom: "1px solid var(--line-soft)", fontWeight: 500 }}>Kategori</th>
-                    <th style={{ textAlign: "right", padding: "0 0 10px", borderBottom: "1px solid var(--line-soft)", fontWeight: 500 }}>Jumlah</th>
-                    <th style={{ textAlign: "right", padding: "0 0 10px 16px", borderBottom: "1px solid var(--line-soft)", fontWeight: 500, width: 90 }}>Porsi</th>
+                    <th style={{ textAlign: "left", padding: "0 0 10px", borderBottom: "1px solid var(--line-soft)", fontWeight: 500 }}>{t('analitik.kategori')}</th>
+                    <th style={{ textAlign: "right", padding: "0 0 10px", borderBottom: "1px solid var(--line-soft)", fontWeight: 500 }}>{t('analitik.jumlah')}</th>
+                    <th style={{ textAlign: "right", padding: "0 0 10px 16px", borderBottom: "1px solid var(--line-soft)", fontWeight: 500, width: 90 }}>{t('analitik.porsi')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -409,7 +414,7 @@ export function AnalyticsPage({ transactions = [], customCategories = [] }) {
                 </tbody>
                 <tfoot>
                   <tr>
-                    <td style={{ padding: "12px 0", borderTop: "2px solid var(--ink)", fontWeight: 600 }}>Total</td>
+                    <td style={{ padding: "12px 0", borderTop: "2px solid var(--ink)", fontWeight: 600 }}>{t('analitik.total')}</td>
                     <td className="tnum" style={{ textAlign: "right", padding: "12px 0", borderTop: "2px solid var(--ink)", fontWeight: 600 }}>{fmtShort(catTotal)}</td>
                     <td style={{ textAlign: "right", padding: "12px 0 12px 16px", borderTop: "2px solid var(--ink)", fontWeight: 600 }}>100%</td>
                   </tr>
@@ -427,7 +432,7 @@ export function AnalyticsPage({ transactions = [], customCategories = [] }) {
           <div onClick={() => setSheetOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(42,44,32,.45)", zIndex: 150, animation: "rise .2s ease-out" }} />
           <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "var(--ivory)", borderRadius: "16px 16px 0 0", padding: "20px 16px 80px", zIndex: 200, maxHeight: "55vh", overflowY: "auto", boxShadow: "0 -8px 32px -8px rgba(42,44,32,.2)", animation: "rise .25s ease-out" }}>
             <div style={{ width: 36, height: 4, borderRadius: 99, background: "var(--line)", margin: "-8px auto 16px" }} />
-            <div style={{ fontSize: 11, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 14 }}>Pilih bulan</div>
+            <div style={{ fontSize: 11, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 14 }}>{t('analitik.pilihBulan')}</div>
             {Object.entries(byYear).sort((a, b) => b[0] - a[0]).map(([yr, months]) => (
               <div key={yr} style={{ marginBottom: 20 }}>
                 <div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 10 }}>{yr}</div>

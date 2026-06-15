@@ -1,11 +1,14 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { TRANSACTIONS, ALL_CATEGORIES, fmt, fmtShort, formatNominal, nominalFontSize } from './data';
 import { IconSearch, IconPlus, IconClose, CatIcon } from './icons';
 import { useIsMobile } from './use-mobile';
 import { AddTransactionModal } from './transactions';
-import { resolveCategory } from './category-field';
+import { resolveCategory, categoryLabel } from './category-field';
 
 export function TransactionsPage({ accounts, onAdd, onScan, transactions: txProp, loading = false, onDelete, onUpdate, customCategories = [], onCreateCustom }) {
+  const { t: tr, i18n } = useTranslation();
+  const locale = i18n.language === 'en' ? 'en-US' : 'id-ID';
   const transactions = txProp ?? TRANSACTIONS;
   const isMobile = useIsMobile();
   const [q, setQ] = React.useState("");
@@ -50,36 +53,36 @@ export function TransactionsPage({ accounts, onAdd, onScan, transactions: txProp
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 20 }}>
         <div>
           <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>
-            Transaksi · {new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }).toUpperCase()}
+            {tr('transaksi.transaksiBulan', { bulan: new Date().toLocaleDateString(locale, { month: 'long', year: 'numeric' }).toUpperCase() })}
           </div>
-          <h2 className="serif" style={{ fontSize: isMobile ? 26 : 34, margin: "4px 0 0", letterSpacing: "-0.015em" }}>Riwayat transaksi</h2>
+          <h2 className="serif" style={{ fontSize: isMobile ? 26 : 34, margin: "4px 0 0", letterSpacing: "-0.015em" }}>{tr('transaksi.riwayatTransaksi')}</h2>
           {!isMobile && (
             <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 6, maxWidth: 540, lineHeight: 1.5 }}>
-              Semua transaksi yang sudah kamu lakukan, dikelompokkan per hari.
+              {tr('transaksi.deskripsiHalaman')}
             </div>
           )}
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           {onScan && (
-            <button onClick={onScan} title="Scan struk belanja" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, cursor: "pointer" }}>
-              📷 Scan
+            <button onClick={onScan} title={tr('transaksi.scanStruk')} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, cursor: "pointer" }}>
+              📷 {tr('transaksi.scan')}
             </button>
           )}
           <button onClick={onAdd} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500 }}>
-            <IconPlus size={15} /> Tambah transaksi
+            <IconPlus size={15} /> {tr('transaksi.tambahTransaksi')}
           </button>
         </div>
       </div>
 
       <div className="tx-stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: 16 }}>
         {[
-          { l: "Pemasukan",   v: income,         c: "var(--sage)",  n: filtered.filter(t => t.amount > 0).length },
-          { l: "Pengeluaran", v: expense,        c: "var(--terra)", n: filtered.filter(t => t.amount < 0).length },
-          { l: "Selisih",     v: income-expense, c: income >= expense ? "var(--ink)" : "var(--terra)", n: filtered.length },
+          { l: tr('beranda.pemasukan'),   v: income,         c: "var(--sage)",  n: filtered.filter(t => t.amount > 0).length },
+          { l: tr('beranda.pengeluaran'), v: expense,        c: "var(--terra)", n: filtered.filter(t => t.amount < 0).length },
+          { l: tr('beranda.selisih'),     v: income-expense, c: income >= expense ? "var(--ink)" : "var(--terra)", n: filtered.length },
         ].map((s, i) => (
           <div key={i} className={`card rise tx-stat-card${i === 2 ? " tx-stat-selisih" : ""}`} style={{ padding: 16, animationDelay: `${i * 0.03}s` }}>
             <div style={{ fontSize: 10.5, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", fontWeight: 500 }}>{s.l}</div>
-            <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 3 }}>{s.n} transaksi</div>
+            <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 3 }}>{tr('transaksi.transaksiCount', { count: s.n })}</div>
             <div className="serif tnum kpi-nominal" style={{ fontSize: nominalFontSize(s.v), letterSpacing: "-0.01em", marginTop: 8, color: s.c }}>{formatNominal(s.v)}</div>
           </div>
         ))}
@@ -88,36 +91,36 @@ export function TransactionsPage({ accounts, onAdd, onScan, transactions: txProp
       <div className="card" style={{ padding: 14, marginBottom: 16, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
           <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--muted)" }}><IconSearch size={15} /></span>
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Cari merchant, catatan, kategori…"
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder={tr('transaksi.cariPlaceholder')}
             style={{ width: "100%", padding: "10px 12px 10px 34px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10, color: "var(--ink)", fontSize: 13, outline: "none", fontFamily: "inherit" }} />
         </div>
         <div style={{ display: "flex", padding: 3, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10 }}>
-          {[{ id: "all", label: "Semua" }, { id: "income", label: "Masuk" }, { id: "expense", label: "Keluar" }].map(tb => (
+          {[{ id: "all", label: tr('transaksi.semua') }, { id: "income", label: tr('transaksi.masuk') }, { id: "expense", label: tr('transaksi.keluar') }].map(tb => (
             <button key={tb.id} onClick={() => setType(tb.id)} style={{ padding: "7px 13px", fontSize: 12.5, background: type === tb.id ? "var(--ivory)" : "transparent", border: type === tb.id ? "1px solid var(--line-soft)" : "1px solid transparent", borderRadius: 8, color: type === tb.id ? "var(--ink)" : "var(--muted)", fontWeight: type === tb.id ? 500 : 400 }}>{tb.label}</button>
           ))}
         </div>
         <select value={cat} onChange={e => setCat(e.target.value)} style={selectStyle}>
-          <option value="all">Semua kategori</option>
-          {catsUsed.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+          <option value="all">{tr('transaksi.semuaKategori')}</option>
+          {catsUsed.map(c => <option key={c.id} value={c.id}>{categoryLabel(c, tr)}</option>)}
         </select>
         <select value={method} onChange={e => setMethod(e.target.value)} style={selectStyle}>
-          <option value="all">Semua metode</option>
+          <option value="all">{tr('transaksi.semuaMetode')}</option>
           {methods.map(m => <option key={m} value={m}>{m}</option>)}
         </select>
         {active && (
-          <button onClick={reset} style={{ padding: "9px 12px", background: "transparent", border: "1px solid var(--line-soft)", borderRadius: 10, fontSize: 12.5, color: "var(--muted)" }}>Reset</button>
+          <button onClick={reset} style={{ padding: "9px 12px", background: "transparent", border: "1px solid var(--line-soft)", borderRadius: 10, fontSize: 12.5, color: "var(--muted)" }}>{tr('umum.reset')}</button>
         )}
       </div>
 
       <div className="card" style={{ padding: isMobile ? "6px 14px 12px" : "8px 22px 14px" }}>
         {/* Desktop table header */}
         <div className="tx-header-desktop" style={{ display: "grid", gridTemplateColumns: "minmax(220px,1.6fr) 1fr 1fr 0.7fr 150px", padding: "14px 4px 10px", borderBottom: "1px solid var(--line-soft)", fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>
-          <span>Merchant</span><span>Kategori</span><span>Metode</span><span>Waktu</span><span style={{ textAlign: "right" }}>Jumlah</span>
+          <span>{tr('transaksi.merchant')}</span><span>{tr('transaksi.kategori')}</span><span>{tr('transaksi.metode')}</span><span>{tr('transaksi.waktu')}</span><span style={{ textAlign: "right" }}>{tr('transaksi.jumlah')}</span>
         </div>
 
         {grouped.length === 0 && (
           <div style={{ padding: "48px 0", textAlign: "center", color: "var(--muted)", fontSize: 13.5 }}>
-            Tidak ada transaksi yang cocok dengan filter.
+            {tr('transaksi.tidakAdaCocok')}
           </div>
         )}
 
@@ -149,13 +152,13 @@ export function TransactionsPage({ accounts, onAdd, onScan, transactions: txProp
                       </span>
                       <div onClick={() => setEditingTx(t)} style={{ flex: 1, minWidth: 0, cursor: "pointer" }}>
                         <div style={{ fontSize: 14, fontWeight: 500, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.merchant}</div>
-                        <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 1 }}>{c?.label || t.category} · {t.method} · {t.time}</div>
+                        <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 1 }}>{categoryLabel(c, tr, t.category)} · {t.method} · {t.time}</div>
                       </div>
                       <div className="tnum" style={{ fontSize: 13.5, fontWeight: 600, color: isIncome ? "var(--sage)" : "var(--ink)", flexShrink: 0 }}>
                         {isIncome ? "+" : "−"}{fmt(Math.abs(t.amount))}
                       </div>
                       {onDelete && (
-                        <button onClick={() => setDeletingId(t.id)} title="Hapus"
+                        <button onClick={() => setDeletingId(t.id)} title={tr('umum.hapus')}
                           style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid var(--line-soft)", background: "var(--paper)", color: "var(--terra)", display: "grid", placeItems: "center", flexShrink: 0 }}>
                           <IconClose size={12} />
                         </button>
@@ -175,7 +178,7 @@ export function TransactionsPage({ accounts, onAdd, onScan, transactions: txProp
                           <div style={{ fontSize: 11.5, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.note}</div>
                         </div>
                       </div>
-                      <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>{c?.label || t.category}</div>
+                      <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>{categoryLabel(c, tr, t.category)}</div>
                       <div style={{ fontSize: 12.5, color: "var(--muted)" }}>{t.method}</div>
                       <div className="tnum" style={{ fontSize: 12.5, color: "var(--muted)" }}>{t.time}</div>
                       <div className="tnum" style={{ textAlign: "right", fontSize: 13.5, fontWeight: 500, color: isIncome ? "var(--sage)" : "var(--ink)", whiteSpace: "nowrap" }}>
@@ -184,13 +187,13 @@ export function TransactionsPage({ accounts, onAdd, onScan, transactions: txProp
                       {/* Edit + Hapus — tampil saat hover */}
                       <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", opacity: hover === t.id ? 1 : 0, transition: "opacity .15s" }}>
                         {onUpdate && (
-                          <button onClick={() => setEditingTx(t)} title="Edit"
+                          <button onClick={() => setEditingTx(t)} title={tr('umum.edit')}
                             style={{ padding: "5px 10px", borderRadius: 8, border: "1px solid var(--line-soft)", background: "var(--paper)", color: "var(--ink-2)", fontSize: 11, cursor: "pointer" }}>
-                            Edit
+                            {tr('umum.edit')}
                           </button>
                         )}
                         {onDelete && (
-                          <button onClick={() => setDeletingId(t.id)} title="Hapus"
+                          <button onClick={() => setDeletingId(t.id)} title={tr('umum.hapus')}
                             style={{ width: 28, height: 28, borderRadius: 8, border: "1px solid var(--line-soft)", background: "var(--paper)", color: "var(--terra)", display: "grid", placeItems: "center", cursor: "pointer" }}>
                             <IconClose size={12} />
                           </button>
@@ -206,7 +209,7 @@ export function TransactionsPage({ accounts, onAdd, onScan, transactions: txProp
 
         {grouped.length > 0 && (
           <div style={{ padding: "14px 4px 4px", fontSize: 12, color: "var(--muted)" }}>
-            {filtered.length} transaksi ditampilkan
+            {tr('transaksi.transaksiDitampilkan', { count: filtered.length })}
           </div>
         )}
       </div>
@@ -223,20 +226,20 @@ export function TransactionsPage({ accounts, onAdd, onScan, transactions: txProp
                 <IconClose size={18} />
               </span>
               <div>
-                <div className="serif" style={{ fontSize: 20, letterSpacing: "-0.01em" }}>Hapus transaksi?</div>
+                <div className="serif" style={{ fontSize: 20, letterSpacing: "-0.01em" }}>{tr('transaksi.hapusTransaksi')}</div>
                 <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 2, lineHeight: 1.4 }}>
-                  Tindakan ini tidak dapat dibatalkan. Data akan dihapus permanen dari Supabase.
+                  {tr('transaksi.hapusKonfirmasi')}
                 </div>
               </div>
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
               <button onClick={() => setDeletingId(null)}
                 style={{ flex: 1, padding: "13px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 12, fontSize: 14, color: "var(--ink-2)", fontFamily: "inherit" }}>
-                Batal
+                {tr('umum.batal')}
               </button>
               <button onClick={() => { onDelete?.(deletingId); setDeletingId(null); }}
                 style={{ flex: 1, padding: "13px", background: "var(--terra)", color: "#fff", border: 0, borderRadius: 12, fontSize: 14, fontWeight: 500, fontFamily: "inherit", cursor: "pointer" }}>
-                Hapus
+                {tr('umum.hapus')}
               </button>
             </div>
           </div>

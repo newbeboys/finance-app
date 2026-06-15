@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { screenStyle, brandStyle, subtitleStyle, errorStyle, linkBtnStyle } from './PinPad';
 import { isBiometricAvailable, authenticateBiometric } from '../lib/biometric';
 
@@ -6,7 +7,8 @@ import { isBiometricAvailable, authenticateBiometric } from '../lib/biometric';
 // Muncul setiap app dibuka saat biometrik adalah metode keamanan aktif.
 // Prompt sidik jari otomatis saat layar tampil; tidak ada batas waktu.
 export default function BiometricLock({ onSuccess, onEscape }) {
-  const [status, setStatus] = React.useState('');   // pesan error/info
+  const { t } = useTranslation();
+  const [status, setStatus] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const promptedRef = React.useRef(false);
 
@@ -15,14 +17,14 @@ export default function BiometricLock({ onSuccess, onEscape }) {
     setStatus('');
     const avail = await isBiometricAvailable();
     if (!avail) {
-      setStatus('Biometrik tidak tersedia di perangkat ini.');
+      setStatus(t('keamanan.biometrikTidakTersedia2'));
       setBusy(false);
       return;
     }
     const ok = await authenticateBiometric();
     setBusy(false);
     if (ok) onSuccess?.();
-    else setStatus('Verifikasi gagal. Ketuk “Coba Lagi”.');
+    else setStatus(t('keamanan.verifikasGagal'));
   }, [onSuccess]);
 
   // Prompt otomatis sekali saat layar pertama muncul
@@ -36,7 +38,7 @@ export default function BiometricLock({ onSuccess, onEscape }) {
     <div style={screenStyle}>
       <div style={{ fontSize: 30, marginBottom: 14 }} aria-hidden>🔒</div>
       <div style={brandStyle}>FinanceApp</div>
-      <div style={subtitleStyle}>Verifikasi Sidik Jari</div>
+      <div style={subtitleStyle}>{t('keamanan.verifikasiSidikJari')}</div>
 
       <div style={{ fontSize: 72, margin: '34px 0 6px' }} aria-hidden>👆</div>
       <div style={{ ...errorStyle, opacity: status ? 1 : 0 }}>{status || ' '}</div>
@@ -53,11 +55,11 @@ export default function BiometricLock({ onSuccess, onEscape }) {
         }}
       >
         <span style={{ fontSize: 18 }} aria-hidden>👆</span>
-        {busy ? 'Memverifikasi…' : 'Coba Lagi'}
+        {busy ? t('keamanan.memverifikasi') : t('keamanan.cobaLagi')}
       </button>
 
       <button type="button" onClick={onEscape} style={{ ...linkBtnStyle, marginTop: 26 }}>
-        Tidak bisa pakai biometrik? Keluar & login ulang
+        {t('keamanan.tidakBisaBiometrik')}
       </button>
     </div>
   );

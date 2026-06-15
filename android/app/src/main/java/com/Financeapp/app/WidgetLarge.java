@@ -5,6 +5,7 @@ import android.appwidget.AppWidgetProvider;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
 import android.view.View;
 import android.widget.RemoteViews;
 
@@ -42,8 +43,8 @@ public class WidgetLarge extends AppWidgetProvider {
             v.setProgressBar(R.id.pb_budget, 100, Math.max(0, Math.min(100, percent)), false);
             v.setTextViewText(R.id.tv_percent, p.getString(WidgetRenderer.K_PERSEN_LBL, ""));
 
-            int charId = WidgetRenderer.charDrawable(ctx, p.getString(WidgetRenderer.K_CHAR, "char_happy"));
-            if (charId != 0) v.setImageViewResource(R.id.iv_char, charId);
+            Bitmap charBmp = WidgetRenderer.charBitmap(ctx, p.getString(WidgetRenderer.K_CHAR, "char_happy"));
+            if (charBmp != null) v.setImageViewBitmap(R.id.iv_char, charBmp);
 
             bindTransactions(ctx, v, p.getString(WidgetRenderer.K_TX, "[]"));
 

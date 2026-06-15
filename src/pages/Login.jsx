@@ -1,7 +1,9 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '../supabase';
 
 export function LoginPage({ onSwitch, onAuthSuccess }) {
+  const { t } = useTranslation();
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [loading, setLoading] = React.useState(false);
@@ -22,13 +24,13 @@ export function LoginPage({ onSwitch, onAuthSuccess }) {
       <div style={cardStyle}>
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
           <div style={{ fontSize: 11, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 8 }}>FinanceApp</div>
-          <h1 className="serif" style={{ fontSize: 30, margin: 0, letterSpacing: '-0.015em' }}>Selamat datang</h1>
-          <p style={{ fontSize: 13.5, color: 'var(--muted)', marginTop: 8, lineHeight: 1.5 }}>Masuk untuk melanjutkan ke akunmu</p>
+          <h1 className="serif" style={{ fontSize: 30, margin: 0, letterSpacing: '-0.015em' }}>{t('auth.selamatDatang')}</h1>
+          <p style={{ fontSize: 13.5, color: 'var(--muted)', marginTop: 8, lineHeight: 1.5 }}>{t('auth.masukUntukLanjutkan')}</p>
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
-            <label style={labelStyle}>Email</label>
+            <label style={labelStyle}>{t('auth.email')}</label>
             <input
               type="email"
               value={email}
@@ -40,7 +42,7 @@ export function LoginPage({ onSwitch, onAuthSuccess }) {
           </div>
 
           <div>
-            <label style={labelStyle}>Password</label>
+            <label style={labelStyle}>{t('auth.password')}</label>
             <input
               type="password"
               value={password}
@@ -62,14 +64,14 @@ export function LoginPage({ onSwitch, onAuthSuccess }) {
             disabled={loading || !email || !password}
             style={btnStyle(loading || !email || !password)}
           >
-            {loading ? 'Memuat…' : 'Masuk'}
+            {loading ? t('auth.memuat') : t('auth.masuk')}
           </button>
         </form>
 
         <div style={{ textAlign: 'center', marginTop: 20, fontSize: 13.5, color: 'var(--muted)' }}>
-          Belum punya akun?{' '}
+          {t('auth.belumPunyaAkun')}{' '}
           <button onClick={onSwitch} style={{ background: 'none', border: 0, color: 'var(--ink)', fontWeight: 500, cursor: 'pointer', fontSize: 13.5, padding: 0, textDecoration: 'underline', textDecorationColor: 'var(--line)' }}>
-            Daftar sekarang
+            {t('auth.daftarSekarang')}
           </button>
         </div>
       </div>

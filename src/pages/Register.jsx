@@ -1,7 +1,9 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '../supabase';
 
 export function RegisterPage({ onSwitch, onAuthSuccess }) {
+  const { t } = useTranslation();
   const [name, setName] = React.useState('');
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
@@ -37,12 +39,12 @@ export function RegisterPage({ onSwitch, onAuthSuccess }) {
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             </div>
-            <h2 className="serif" style={{ fontSize: 26, margin: '0 0 10px', letterSpacing: '-0.01em' }}>Pendaftaran berhasil!</h2>
+            <h2 className="serif" style={{ fontSize: 26, margin: '0 0 10px', letterSpacing: '-0.01em' }}>{t('auth.pendaftaranBerhasil')}</h2>
             <p style={{ fontSize: 13.5, color: 'var(--muted)', lineHeight: 1.55, marginBottom: 24 }}>
-              Kami mengirimkan tautan verifikasi ke <strong style={{ color: 'var(--ink)' }}>{email}</strong>. Cek kotak masukmu, lalu masuk.
+              {t('auth.linkVerifikasi', { email })}
             </p>
             <button onClick={onSwitch} style={{ ...btnStyle(false), maxWidth: 200, margin: '0 auto' }}>
-              Ke halaman Login
+              {t('auth.keHalamanLogin')}
             </button>
           </div>
         </div>
@@ -55,25 +57,25 @@ export function RegisterPage({ onSwitch, onAuthSuccess }) {
       <div style={cardStyle}>
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
           <div style={{ fontSize: 11, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 8 }}>FinanceApp</div>
-          <h1 className="serif" style={{ fontSize: 30, margin: 0, letterSpacing: '-0.015em' }}>Buat akun baru</h1>
-          <p style={{ fontSize: 13.5, color: 'var(--muted)', marginTop: 8, lineHeight: 1.5 }}>Mulai kelola keuanganmu</p>
+          <h1 className="serif" style={{ fontSize: 30, margin: 0, letterSpacing: '-0.015em' }}>{t('auth.buatAkunBaru')}</h1>
+          <p style={{ fontSize: 13.5, color: 'var(--muted)', marginTop: 8, lineHeight: 1.5 }}>{t('auth.mulaiKelolaKeuangan')}</p>
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
-            <label style={labelStyle}>Nama lengkap</label>
+            <label style={labelStyle}>{t('auth.namaLengkap')}</label>
             <input
               type="text"
               value={name}
               onChange={e => setName(e.target.value)}
-              placeholder="Nama kamu"
+              placeholder={t('auth.namaKamu')}
               required
               style={inputStyle}
             />
           </div>
 
           <div>
-            <label style={labelStyle}>Email</label>
+            <label style={labelStyle}>{t('auth.email')}</label>
             <input
               type="email"
               value={email}
@@ -85,12 +87,12 @@ export function RegisterPage({ onSwitch, onAuthSuccess }) {
           </div>
 
           <div>
-            <label style={labelStyle}>Password</label>
+            <label style={labelStyle}>{t('auth.password')}</label>
             <input
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              placeholder="Minimal 6 karakter"
+              placeholder={t('auth.minPassword')}
               minLength={6}
               required
               style={inputStyle}
@@ -108,14 +110,14 @@ export function RegisterPage({ onSwitch, onAuthSuccess }) {
             disabled={loading || !name || !email || !password}
             style={btnStyle(loading || !name || !email || !password)}
           >
-            {loading ? 'Memuat…' : 'Daftar'}
+            {loading ? t('auth.memuat') : t('auth.daftar')}
           </button>
         </form>
 
         <div style={{ textAlign: 'center', marginTop: 20, fontSize: 13.5, color: 'var(--muted)' }}>
-          Sudah punya akun?{' '}
+          {t('auth.sudahPunyaAkun')}{' '}
           <button onClick={onSwitch} style={{ background: 'none', border: 0, color: 'var(--ink)', fontWeight: 500, cursor: 'pointer', fontSize: 13.5, padding: 0, textDecoration: 'underline', textDecorationColor: 'var(--line)' }}>
-            Masuk
+            {t('auth.masuk')}
           </button>
         </div>
       </div>

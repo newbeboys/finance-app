@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { ALL_CATEGORIES, fmtShort } from './data';
 import { IconReport, IconArrowDown, IconClose } from './icons';
 import { downloadExcel } from './report-excel';
@@ -650,7 +651,8 @@ function printReport(p) {
 
 // ── Preview modal ──────────────────────────────────────────────────
 function ReportPreview({ payload, onClose, onDownload }) {
-  useScrollLock(!!payload);   // kunci scroll latar saat pratinjau terbuka
+  const { t: tr } = useTranslation();
+  useScrollLock(!!payload);
   const ref = React.useRef(null);
   React.useEffect(() => {
     if (payload && ref.current) ref.current.srcdoc = buildReportDoc(payload);
@@ -667,10 +669,10 @@ function ReportPreview({ payload, onClose, onDownload }) {
           </div>
           <div className="report-preview-actions" style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
             <button className="report-preview-btn-print" onClick={() => printReport(p)} style={{ padding: "9px 14px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10, fontSize: 12.5, display: "inline-flex", gap: 7, alignItems: "center" }}>
-              <IconReport size={14} /> Cetak / PDF
+              <IconReport size={14} /> {tr('laporan.cetakPdf')}
             </button>
             <button onClick={() => onDownload(p)} style={{ padding: "9px 14px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 10, fontSize: 12.5, display: "inline-flex", gap: 7, alignItems: "center" }}>
-              <IconArrowDown size={14} /> <span className="report-preview-btn-label">Unduh</span>
+              <IconArrowDown size={14} /> <span className="report-preview-btn-label">{tr('laporan.unduh')}</span>
             </button>
             <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: 10, border: "1px solid var(--line-soft)", background: "var(--paper)", display: "grid", placeItems: "center", color: "var(--ink-2)", flexShrink: 0 }}>
               <IconClose size={15} />
@@ -698,7 +700,8 @@ const IconExcel = ({ size = 22 }) => (
 );
 
 function FormatPicker({ payload, onClose }) {
-  useScrollLock(!!payload);   // kunci scroll latar saat pemilih format terbuka
+  const { t: tr } = useTranslation();
+  useScrollLock(!!payload);
   const [busy, setBusy] = React.useState(null); // 'pdf' | 'excel' | null
   if (!payload) return null;
 
@@ -725,13 +728,12 @@ function FormatPicker({ payload, onClose }) {
   return (
     <div onClick={() => busy || onClose()} style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(42,44,32,.45)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 24, animation: "rise .2s ease-out" }}>
       <div onClick={e => e.stopPropagation()} style={{ position: "relative", width: "min(400px, 90vw)", background: "var(--ivory)", borderRadius: 18, padding: 20, boxSizing: "border-box", boxShadow: "0 30px 80px -20px rgba(42,44,32,.5)" }}>
-        {/* Tombol close — selalu terlihat di pojok kanan atas */}
-        <button onClick={onClose} disabled={!!busy} aria-label="Tutup" style={{ position: "absolute", top: 12, right: 12, zIndex: 1, width: 32, height: 32, borderRadius: 9, border: "1px solid var(--line-soft)", background: "var(--paper)", display: "grid", placeItems: "center", color: "var(--ink-2)", opacity: busy ? 0.5 : 1, cursor: busy ? "default" : "pointer" }}>
+        <button onClick={onClose} disabled={!!busy} aria-label={tr('umum.tutup')} style={{ position: "absolute", top: 12, right: 12, zIndex: 1, width: 32, height: 32, borderRadius: 9, border: "1px solid var(--line-soft)", background: "var(--paper)", display: "grid", placeItems: "center", color: "var(--ink-2)", opacity: busy ? 0.5 : 1, cursor: busy ? "default" : "pointer" }}>
           <IconClose size={14} />
         </button>
         <div style={{ marginBottom: 4, paddingRight: 40 }}>
-          <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Unduh laporan</div>
-          <div className="serif" style={{ fontSize: 22, letterSpacing: "-0.01em" }}>Pilih format</div>
+          <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{tr('laporan.unduhLaporan')}</div>
+          <div className="serif" style={{ fontSize: 22, letterSpacing: "-0.01em" }}>{tr('laporan.pilihFormat')}</div>
         </div>
         <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 16 }}>{payload.periodLabel}</div>
 
@@ -740,7 +742,7 @@ function FormatPicker({ payload, onClose }) {
             <span style={iconWrap("var(--terra)")}><IconPdf size={22} /></span>
             <span style={{ flex: 1 }}>
               <span style={{ display: "block", fontWeight: 500 }}>PDF</span>
-              <span style={{ display: "block", fontSize: 12, color: "var(--muted)" }}>Dokumen siap cetak — rapi & ringkas</span>
+              <span style={{ display: "block", fontSize: 12, color: "var(--muted)" }}>{tr('laporan.pdfDesc')}</span>
             </span>
             {busy === "pdf" && <Spinner />}
           </button>
@@ -749,7 +751,7 @@ function FormatPicker({ payload, onClose }) {
             <span style={iconWrap("var(--sage)")}><IconExcel size={22} /></span>
             <span style={{ flex: 1 }}>
               <span style={{ display: "block", fontWeight: 500 }}>Excel</span>
-              <span style={{ display: "block", fontSize: 12, color: "var(--muted)" }}>5 sheet, formula aktif, grafik & warna</span>
+              <span style={{ display: "block", fontSize: 12, color: "var(--muted)" }}>{tr('laporan.excelDesc')}</span>
             </span>
             {busy === "excel" && <Spinner />}
           </button>
@@ -765,9 +767,10 @@ function Spinner() {
 
 // ── Reports page ───────────────────────────────────────────────────
 export function ReportsPage({ transactions = [], customCategories = [] }) {
+  const { t: tr } = useTranslation();
   const [scope, setScope] = React.useState("month"); // month | year
-  const [preview, setPreview] = React.useState(null);         // payload
-  const [downloadTarget, setDownloadTarget] = React.useState(null); // payload
+  const [preview, setPreview] = React.useState(null);
+  const [downloadTarget, setDownloadTarget] = React.useState(null);
 
   const months = React.useMemo(() => monthsIndex(transactions), [transactions]);
   const years = React.useMemo(() => yearsIndex(months), [months]);
@@ -780,30 +783,30 @@ export function ReportsPage({ transactions = [], customCategories = [] }) {
     <div className="page-wrap" style={{ padding: "16px 32px 48px", maxWidth: 1180, margin: "0 auto" }}>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 22 }}>
         <div>
-          <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Laporan</div>
-          <h2 className="serif" style={{ fontSize: 34, margin: "4px 0 0", letterSpacing: "-0.015em" }}>Laporan keuangan</h2>
+          <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{tr('nav.laporan')}</div>
+          <h2 className="serif" style={{ fontSize: 34, margin: "4px 0 0", letterSpacing: "-0.015em" }}>{tr('laporan.judulHalaman')}</h2>
           <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 6, maxWidth: 540, lineHeight: 1.5 }}>
-            Setiap periode dirangkum otomatis dari transaksimu — pratinjau, unduh PDF atau Excel.
+            {tr('laporan.deskripsi')}
           </div>
         </div>
         <div style={{ display: "flex", padding: 3, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10 }}>
-          {[{ id: "month", label: "Bulanan" }, { id: "year", label: "Tahunan" }].map(s => (
+          {[{ id: "month", labelKey: "laporan.bulanan" }, { id: "year", labelKey: "laporan.tahunan" }].map(s => (
             <button key={s.id} onClick={() => setScope(s.id)} style={{
               padding: "8px 16px", fontSize: 12.5,
               background: scope === s.id ? "var(--ivory)" : "transparent",
               border: scope === s.id ? "1px solid var(--line-soft)" : "1px solid transparent",
               borderRadius: 8, color: scope === s.id ? "var(--ink)" : "var(--muted)",
               fontWeight: scope === s.id ? 500 : 400,
-            }}>{s.label}</button>
+            }}>{tr(s.labelKey)}</button>
           ))}
         </div>
       </div>
 
       {empty && (
         <div className="card" style={{ padding: 40, textAlign: "center" }}>
-          <div className="serif" style={{ fontSize: 24, letterSpacing: "-0.01em" }}>Belum ada data</div>
+          <div className="serif" style={{ fontSize: 24, letterSpacing: "-0.01em" }}>{tr('laporan.belumAdaData')}</div>
           <div style={{ color: "var(--muted)", fontSize: 13.5, marginTop: 8, lineHeight: 1.5 }}>
-            Tambahkan transaksi terlebih dahulu — laporan akan otomatis dirangkum di sini.
+            {tr('laporan.belumAdaDataDesc')}
           </div>
         </div>
       )}
@@ -812,7 +815,7 @@ export function ReportsPage({ transactions = [], customCategories = [] }) {
         <div className="report-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
           {months.map((m, i) => (
             <ReportCard key={m.key} eyebrow={`${m.full} ${m.year}`} income={m.income} expense={m.expense} net={m.net}
-              latest={i === 0} delay={i * 0.03}
+              latest={i === 0} delay={i * 0.03} big={false}
               onPreview={() => openPreview("month", m.key)}
               onDownload={() => openDownload("month", m.key)} />
           ))}
@@ -825,7 +828,7 @@ export function ReportsPage({ transactions = [], customCategories = [] }) {
             const ms = y.months;
             const sub = ms.length ? `${ms[0].abbr} – ${ms[ms.length - 1].abbr} ${y.year}` : null;
             return (
-              <ReportCard key={y.year} eyebrow={`Tahun ${y.year}`} income={y.income} expense={y.expense} net={y.net}
+              <ReportCard key={y.year} eyebrow={tr('laporan.tahun', { tahun: y.year })} income={y.income} expense={y.expense} net={y.net}
                 big latest={i === 0} delay={i * 0.04} sub={sub}
                 onPreview={() => openPreview("year", String(y.year))}
                 onDownload={() => openDownload("year", String(y.year))} />
@@ -841,6 +844,7 @@ export function ReportsPage({ transactions = [], customCategories = [] }) {
 }
 
 function ReportCard({ eyebrow, sub, income, expense, net, latest, big, delay, onPreview, onDownload }) {
+  const { t: tr } = useTranslation();
   const rate = income ? Math.round((net / income) * 100) : 0;
   return (
     <div className="card rise" style={{ padding: 0, overflow: "hidden", animationDelay: `${delay}s`, display: "flex", flexDirection: "column" }}>
@@ -848,7 +852,7 @@ function ReportCard({ eyebrow, sub, income, expense, net, latest, big, delay, on
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
             <div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>
-              {latest ? "Terbaru · " : ""}Laporan {big ? "tahunan" : "bulanan"}
+              {latest ? `${tr('laporan.terbaru')} · ` : ""}{big ? tr('laporan.laporanTahunan') : tr('laporan.laporanBulanan')}
             </div>
             <div className="serif" style={{ fontSize: big ? 30 : 24, letterSpacing: "-0.01em", marginTop: 3 }}>{eyebrow}</div>
             {sub && <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>{sub}</div>}
@@ -860,15 +864,15 @@ function ReportCard({ eyebrow, sub, income, expense, net, latest, big, delay, on
 
         <div style={{ display: "flex", gap: 14, marginTop: 16, flexWrap: "wrap" }}>
           <div style={{ minWidth: 60 }}>
-            <div style={{ fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--muted)" }}>Masuk</div>
+            <div style={{ fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--muted)" }}>{tr('laporan.masuk')}</div>
             <div className="tnum" style={{ fontSize: 13.5, fontWeight: 500, color: "var(--sage)" }}>{fmtShort(income)}</div>
           </div>
           <div style={{ minWidth: 60 }}>
-            <div style={{ fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--muted)" }}>Keluar</div>
+            <div style={{ fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--muted)" }}>{tr('laporan.keluar')}</div>
             <div className="tnum" style={{ fontSize: 13.5, fontWeight: 500, color: "var(--terra)" }}>{fmtShort(expense)}</div>
           </div>
           <div style={{ minWidth: 60 }}>
-            <div style={{ fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--muted)" }}>Bersih · {rate}%</div>
+            <div style={{ fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--muted)" }}>{tr('laporan.bersih')} · {rate}%</div>
             <div className="tnum serif" style={{ fontSize: 16, letterSpacing: "-0.01em" }}>{fmtShort(net)}</div>
           </div>
         </div>
@@ -876,11 +880,11 @@ function ReportCard({ eyebrow, sub, income, expense, net, latest, big, delay, on
 
       <div className="hairline" style={{ display: "flex" }}>
         <button onClick={onPreview} style={{ flex: 1, padding: "12px 0", background: "transparent", border: 0, fontSize: 12.5, color: "var(--ink-2)", display: "inline-flex", gap: 7, alignItems: "center", justifyContent: "center" }}>
-          Pratinjau
+          {tr('laporan.pratinjau')}
         </button>
         <div style={{ width: 1, background: "var(--line-soft)" }} />
         <button onClick={onDownload} style={{ flex: 1, padding: "12px 0", background: "transparent", border: 0, fontSize: 12.5, color: "var(--ink)", fontWeight: 500, display: "inline-flex", gap: 7, alignItems: "center", justifyContent: "center" }}>
-          <IconArrowDown size={14} /> Unduh
+          <IconArrowDown size={14} /> {tr('laporan.unduh')}
         </button>
       </div>
     </div>

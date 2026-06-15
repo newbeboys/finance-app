@@ -1,4 +1,5 @@
-import React from 'react';
+﻿import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { fmt } from '../data';
 import {
   loadRecurring, addRecurring, updateRecurring, deleteRecurring, toggleRecurring, fromISO,
@@ -7,18 +8,6 @@ import RecurringTransactionForm from '../components/RecurringTransactionForm';
 import { useScrollLock } from '../hooks/useScrollLock';
 
 const MONTH_NAMES = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-
-const freqLabel = (item) => {
-  if (item.frekuensi === 'mingguan') return `Mingguan · setiap ${item.hariMinggu}`;
-  if (item.frekuensi === 'tahunan')  return `Tahunan · ${item.tanggal} ${MONTH_NAMES[(item.bulan || 1) - 1]}`;
-  return `Bulanan · tanggal ${item.tanggal}`;
-};
-
-const dueLabel = (iso) => {
-  if (!iso) return '—';
-  const d = fromISO(iso);
-  return `${d.getDate()} ${MONTH_NAMES[d.getMonth()].slice(0, 3)} ${d.getFullYear()}`;
-};
 
 // ── Mini switch (lokal, agar tak bergantung pada settings-page) ──────
 function MiniSwitch({ on, onClick }) {
@@ -40,7 +29,7 @@ const TrashIcon = () => (
 );
 
 // ── Baris yang bisa di-swipe (pointer events → jalan di sentuh & mouse) ──
-function SwipeRow({ onDelete, onEdit, children }) {
+function SwipeRow({ onDelete, onEdit, children, deleteLabel = 'Hapus' }) {
   const REVEAL = 78;
   const [dx, setDx] = React.useState(0);
   const [animate, setAnimate] = React.useState(true);
@@ -84,7 +73,7 @@ function SwipeRow({ onDelete, onEdit, children }) {
     <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 14 }}>
       <button onClick={onDelete}
         style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: REVEAL, background: 'var(--terra)', color: '#fff', border: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, cursor: 'pointer', fontSize: 11 }}>
-        <TrashIcon /> Hapus
+        <TrashIcon /> {deleteLabel}
       </button>
       <div onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
         style={{ transform: `translateX(${dx}px)`, transition: animate ? 'transform .2s ease' : 'none', touchAction: 'pan-y', position: 'relative' }}>
@@ -96,17 +85,18 @@ function SwipeRow({ onDelete, onEdit, children }) {
 
 // ── Konfirmasi hapus ────────────────────────────────────────────────
 function ConfirmDelete({ item, onConfirm, onCancel }) {
+  const { t } = useTranslation();
   return (
     <div onClick={onCancel}
       style={{ position: 'fixed', inset: 0, zIndex: 1400, background: 'rgba(42,44,32,.4)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 16 }}>
       <div className="card" onClick={(e) => e.stopPropagation()} style={{ width: 'min(380px, 100%)', padding: 24, textAlign: 'center', boxShadow: '0 30px 80px -20px rgba(42,44,32,.4)' }}>
-        <div className="serif" style={{ fontSize: 22, letterSpacing: '-0.01em' }}>Hapus jadwal ini?</div>
+        <div className="serif" style={{ fontSize: 22, letterSpacing: '-0.01em' }}>{t('berulang.hapusJadwal')}</div>
         <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 8, lineHeight: 1.5 }}>
-          “{item.nama}” akan dihapus. Transaksi yang sudah tercatat tidak akan terpengaruh.
+          {t('berulang.hapusKonfirmasi', { nama: item.nama })}
         </div>
         <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
-          <button onClick={onCancel} style={{ flex: 1, padding: '12px', background: 'var(--paper)', border: '1px solid var(--line-soft)', borderRadius: 12, fontSize: 14, color: 'var(--ink-2)', cursor: 'pointer', fontFamily: 'inherit' }}>Batal</button>
-          <button onClick={onConfirm} style={{ flex: 1, padding: '12px', background: 'var(--terra)', color: '#fff', border: 0, borderRadius: 12, fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>Hapus</button>
+          <button onClick={onCancel} style={{ flex: 1, padding: '12px', background: 'var(--paper)', border: '1px solid var(--line-soft)', borderRadius: 12, fontSize: 14, color: 'var(--ink-2)', cursor: 'pointer', fontFamily: 'inherit' }}>{t('umum.batal')}</button>
+          <button onClick={onConfirm} style={{ flex: 1, padding: '12px', background: 'var(--terra)', color: '#fff', border: 0, borderRadius: 12, fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>{t('umum.hapus')}</button>
         </div>
       </div>
     </div>
@@ -115,7 +105,21 @@ function ConfirmDelete({ item, onConfirm, onCancel }) {
 
 // ── Halaman utama ───────────────────────────────────────────────────
 export default function RecurringTransactionPage({ open, onClose }) {
-  useScrollLock(open);   // kunci scroll latar saat halaman/modal terbuka
+  const { t } = useTranslation();
+  useScrollLock(open);
+
+  const freqLabel = (item) => {
+    if (item.frekuensi === 'mingguan') return t('berulang.mingguanSetiap', { hari: item.hariMinggu });
+    if (item.frekuensi === 'tahunan')  return t('berulang.tahunanTgl', { tanggal: item.tanggal, bulan: MONTH_NAMES[(item.bulan || 1) - 1] });
+    return t('berulang.bulananTgl', { tanggal: item.tanggal });
+  };
+
+  const dueLabel = (iso) => {
+    if (!iso) return '—';
+    const d = fromISO(iso);
+    return `${d.getDate()} ${MONTH_NAMES[d.getMonth()].slice(0, 3)} ${d.getFullYear()}`;
+  };
+
   const [items, setItems] = React.useState([]);
   const [formOpen, setFormOpen] = React.useState(false);
   const [editing, setEditing] = React.useState(null);
@@ -145,12 +149,12 @@ export default function RecurringTransactionPage({ open, onClose }) {
     <div style={{ position: 'fixed', inset: 0, zIndex: 1200, background: 'var(--cream)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Header */}
       <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12, padding: '16px 18px', paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)', borderBottom: '1px solid var(--line-soft)', background: 'var(--ivory)' }}>
-        <button onClick={onClose} aria-label="Kembali"
+        <button onClick={onClose} aria-label={t('umum.kembali')}
           style={{ width: 38, height: 38, borderRadius: 10, border: '1px solid var(--line-soft)', background: 'var(--paper)', display: 'grid', placeItems: 'center', color: 'var(--ink-2)', cursor: 'pointer', flexShrink: 0 }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
         </button>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="serif" style={{ fontSize: 22, letterSpacing: '-0.01em', color: 'var(--ink)' }}>Transaksi Berulang</div>
+          <div className="serif" style={{ fontSize: 22, letterSpacing: '-0.01em', color: 'var(--ink)' }}>{t('berulang.judul')}</div>
         </div>
         <button onClick={openAdd} aria-label="Tambah"
           style={{ width: 40, height: 40, borderRadius: 12, border: 0, background: 'var(--ink)', color: 'var(--cream)', display: 'grid', placeItems: 'center', cursor: 'pointer', flexShrink: 0 }}>
@@ -164,7 +168,7 @@ export default function RecurringTransactionPage({ open, onClose }) {
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '64px 24px', textAlign: 'center' }}>
             <div style={{ fontSize: 40 }} aria-hidden>🔄</div>
             <div style={{ fontSize: 13.5, color: 'var(--muted)', lineHeight: 1.6, maxWidth: 280 }}>
-              Belum ada transaksi berulang. Tap + untuk menambahkan.
+              {t('berulang.belumAdaJadwal')}
             </div>
           </div>
         ) : (
@@ -173,7 +177,7 @@ export default function RecurringTransactionPage({ open, onClose }) {
               const isIncome = item.tipe === 'pemasukan';
               const color = isIncome ? 'var(--sage)' : 'var(--terra)';
               return (
-                <SwipeRow key={item.id} onEdit={() => openEdit(item)} onDelete={() => setConfirm(item)}>
+                <SwipeRow key={item.id} onEdit={() => openEdit(item)} onDelete={() => setConfirm(item)} deleteLabel={t('umum.hapus')}>
                   <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', opacity: item.aktif ? 1 : 0.55, transition: 'opacity .2s ease' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
@@ -184,7 +188,7 @@ export default function RecurringTransactionPage({ open, onClose }) {
                       </div>
                       <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>{freqLabel(item)}</div>
                       <div style={{ fontSize: 11.5, color: 'var(--muted-2)', marginTop: 2 }}>
-                        Jatuh tempo berikutnya: <span style={{ color: 'var(--ink-2)' }}>{dueLabel(item.nextDueDate)}</span>
+                        {t('berulang.jatuhTempoBer')} <span style={{ color: 'var(--ink-2)' }}>{dueLabel(item.nextDueDate)}</span>
                       </div>
                     </div>
                     <MiniSwitch on={item.aktif} onClick={() => handleToggle(item)} />
@@ -193,7 +197,7 @@ export default function RecurringTransactionPage({ open, onClose }) {
               );
             })}
             <div style={{ fontSize: 11.5, color: 'var(--muted)', textAlign: 'center', padding: '6px 0 0', lineHeight: 1.5 }}>
-              Geser kartu ke kiri untuk menghapus · ketuk untuk mengubah
+              {t('berulang.gestureHint')}
             </div>
           </div>
         )}

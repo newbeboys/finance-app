@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { fmtShort, formatNominal, nominalFontSize } from './data';
 import { IconPlus, IconClose } from './icons';
 import { Ring } from './charts';
@@ -19,11 +20,11 @@ const GOAL_ICONS = {
 };
 
 const GOAL_ICON_LIST = [
-  { id: "emergency", label: "Dana darurat" }, { id: "travel", label: "Liburan" },
-  { id: "home", label: "Rumah" }, { id: "vehicle", label: "Kendaraan" },
-  { id: "education", label: "Pendidikan" }, { id: "gadget", label: "Gadget" },
-  { id: "gift", label: "Hadiah" }, { id: "health", label: "Kesehatan" },
-  { id: "ring", label: "Pernikahan" }, { id: "star", label: "Lainnya" },
+  { id: "emergency" }, { id: "travel" },
+  { id: "home" }, { id: "vehicle" },
+  { id: "education" }, { id: "gadget" },
+  { id: "gift" }, { id: "health" },
+  { id: "ring" }, { id: "star" },
 ];
 
 function GoalGlyph({ icon, size = 18 }) {
@@ -38,6 +39,7 @@ function GoalGlyph({ icon, size = 18 }) {
 const GOAL_COLORS = ["#5C6B4C", "#B68A3E", "#C9886D", "#2A6FDB", "#1FA8A0", "#9A6BD9", "#B26A4A", "#7A8A6E"];
 
 export function SavingsPage({ goals, onAdd, onDeposit, onDelete }) {
+  const { t: tr } = useTranslation();
   const isMobile = useIsMobile();
   const totalSaved = goals.reduce((s, g) => s + g.current, 0);
   const totalTarget = goals.reduce((s, g) => s + g.target, 0);
@@ -47,33 +49,33 @@ export function SavingsPage({ goals, onAdd, onDeposit, onDelete }) {
     <div className="page-wrap" style={{ padding: "16px 32px 48px", maxWidth: 1180, margin: "0 auto" }}>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 22 }}>
         <div>
-          <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Tabungan · {goals.length} goal</div>
-          <h2 className="serif" style={{ fontSize: isMobile ? 26 : 34, margin: "4px 0 0", letterSpacing: "-0.015em" }}>Yang sedang kamu kejar</h2>
+          <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{tr('tabungan.goalCount', { count: goals.length })}</div>
+          <h2 className="serif" style={{ fontSize: isMobile ? 26 : 34, margin: "4px 0 0", letterSpacing: "-0.015em" }}>{tr('tabungan.judulHalaman')}</h2>
           {!isMobile && (
             <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 6, maxWidth: 540, lineHeight: 1.5 }}>
-              Buat target tabungan apa pun — beri nama sendiri, pilih ikon kategori, tetapkan jumlah & tenggat.
+              {tr('tabungan.deskripsiHalaman')}
             </div>
           )}
         </div>
         <button onClick={onAdd} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500 }}>
-          <IconPlus size={15} /> Buat goal baru
+          <IconPlus size={15} /> {tr('tabungan.buatGoalBaru')}
         </button>
       </div>
 
       <div className="card rise" style={{ padding: isMobile ? 18 : 24, marginBottom: 20 }}>
         <div style={{ display: "flex", gap: isMobile ? 16 : 28, alignItems: "center", flexWrap: "wrap", marginBottom: 14 }}>
           <div style={{ flex: "0 0 auto" }}>
-            <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Total terkumpul</div>
+            <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{tr('tabungan.totalTerkumpul')}</div>
             <div className="serif tnum kpi-nominal" style={{ fontSize: nominalFontSize(totalSaved, { hero: true, mobile: isMobile }), letterSpacing: "-0.02em", marginTop: 4 }}>{formatNominal(totalSaved)}</div>
-            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>dari target {formatNominal(totalTarget)}</div>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>{tr('tabungan.dariTarget', { jumlah: formatNominal(totalTarget) })}</div>
           </div>
-          <div style={{ fontSize: 12, color: "var(--muted)" }}>{completed} goal tercapai</div>
+          <div style={{ fontSize: 12, color: "var(--muted)" }}>{tr('tabungan.goalTercapaiCount', { count: completed })}</div>
         </div>
         <div style={{ height: 8, background: "var(--line-soft)", borderRadius: 99, overflow: "hidden" }}>
           <div style={{ height: "100%", width: `${totalTarget ? Math.min(totalSaved / totalTarget, 1) * 100 : 0}%`, background: "var(--sage)", borderRadius: 99, transition: "width .5s ease" }} />
         </div>
         <div style={{ marginTop: 6, fontSize: 12, color: "var(--muted)" }}>
-          {totalTarget ? Math.round((totalSaved / totalTarget) * 100) : 0}% dari semua target
+          {tr('tabungan.dariSemuaTarget', { persen: totalTarget ? Math.round((totalSaved / totalTarget) * 100) : 0 })}
         </div>
       </div>
 
@@ -95,7 +97,9 @@ export function SavingsPage({ goals, onAdd, onDeposit, onDelete }) {
                   </div>
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ fontSize: 14.5, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</div>
-                    <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>{done ? "Tercapai 🎉" : `Tenggat ${g.deadline}`}</div>
+                    <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
+                      {done ? tr('tabungan.tercapaiEmoji') : tr('tabungan.tenggat', { tanggal: g.deadline })}
+                    </div>
                   </div>
                 </div>
                 <div style={{ marginTop: 16 }}>
@@ -107,16 +111,16 @@ export function SavingsPage({ goals, onAdd, onDeposit, onDelete }) {
                     <div style={{ height: "100%", width: `${pct * 100}%`, background: g.color, borderRadius: 99, transition: "width .4s ease" }} />
                   </div>
                   <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 7 }}>
-                    {done ? "Target tercapai penuh" : `Kurang ${fmtShort(remaining)}`}
+                    {done ? tr('tabungan.tercapaiPenuh') : tr('tabungan.kurang', { jumlah: fmtShort(remaining) })}
                   </div>
                 </div>
               </div>
               <div className="hairline" style={{ display: "flex" }}>
                 <button onClick={() => onDeposit(g)} style={{ flex: 1, padding: "12px 0", background: "transparent", border: 0, fontSize: 12.5, fontWeight: 500, color: "var(--ink)", display: "inline-flex", gap: 7, alignItems: "center", justifyContent: "center" }}>
-                  <IconPlus size={14} /> Tambah dana
+                  <IconPlus size={14} /> {tr('tabungan.tambahDana')}
                 </button>
                 <div style={{ width: 1, background: "var(--line-soft)" }} />
-                <button onClick={() => onDelete(g.id)} title="Hapus goal" style={{ flex: "0 0 50px", padding: "12px 0", background: "transparent", border: 0, color: "var(--terra)", display: "grid", placeItems: "center" }}>
+                <button onClick={() => onDelete(g.id)} title={tr('tabungan.hapusGoal')} style={{ flex: "0 0 50px", padding: "12px 0", background: "transparent", border: 0, color: "var(--terra)", display: "grid", placeItems: "center" }}>
                   <IconClose size={14} />
                 </button>
               </div>
@@ -128,8 +132,8 @@ export function SavingsPage({ goals, onAdd, onDeposit, onDelete }) {
           <span style={{ width: 48, height: 48, borderRadius: 14, background: "var(--paper)", border: "1px solid var(--line-soft)", display: "grid", placeItems: "center", color: "var(--sage)" }}>
             <IconPlus size={22} />
           </span>
-          <span style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink-2)" }}>Buat goal baru</span>
-          <span style={{ fontSize: 12, maxWidth: 180, textAlign: "center", lineHeight: 1.4 }}>Tabungan untuk apa pun yang kamu mau</span>
+          <span style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink-2)" }}>{tr('tabungan.buatGoalBaru')}</span>
+          <span style={{ fontSize: 12, maxWidth: 180, textAlign: "center", lineHeight: 1.4 }}>{tr('tabungan.untukApaPun')}</span>
         </button>
       </div>
     </div>
@@ -137,7 +141,8 @@ export function SavingsPage({ goals, onAdd, onDeposit, onDelete }) {
 }
 
 export function AddGoalModal({ open, onClose, onCreate }) {
-  useScrollLock(open);   // kunci scroll latar saat modal terbuka
+  const { t: tr } = useTranslation();
+  useScrollLock(open);
   const [label, setLabel] = React.useState("");
   const [icon, setIcon] = React.useState("star");
   const [target, setTarget] = React.useState("");
@@ -155,7 +160,7 @@ export function AddGoalModal({ open, onClose, onCreate }) {
   const valid = label.trim() && num(target) > 0;
   const submit = () => {
     if (!valid) return;
-    onCreate({ id: "g" + Date.now(), label: label.trim(), icon, color, target: num(target), current: num(current), deadline: deadline.trim() || "Tanpa tenggat" });
+    onCreate({ id: "g" + Date.now(), label: label.trim(), icon, color, target: num(target), current: num(current), deadline: deadline.trim() || tr('tabungan.tanpaTenggat') });
     onClose();
   };
 
@@ -165,8 +170,8 @@ export function AddGoalModal({ open, onClose, onCreate }) {
         <div className="goal-modal-body">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
-              <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Target baru</div>
-              <div className="serif" style={{ fontSize: 28, marginTop: 4, letterSpacing: "-0.01em" }}>Buat goal tabungan</div>
+              <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{tr('tabungan.targetBaru')}</div>
+              <div className="serif" style={{ fontSize: 28, marginTop: 4, letterSpacing: "-0.01em" }}>{tr('tabungan.buatGoalTabungan')}</div>
             </div>
             <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 10, border: "1px solid var(--line-soft)", background: "var(--paper)", display: "grid", placeItems: "center", color: "var(--ink-2)" }}>
               <IconClose size={14} />
@@ -174,45 +179,48 @@ export function AddGoalModal({ open, onClose, onCreate }) {
           </div>
 
           <label style={{ display: "block", marginTop: 20 }}>
-            <span style={goalFieldLabel}>Nama goal (custom)</span>
-            <input value={label} onChange={e => setLabel(e.target.value)} placeholder="contoh: Liburan ke Bali, DP rumah, Laptop baru…" style={goalInput} />
+            <span style={goalFieldLabel}>{tr('tabungan.namaGoal')}</span>
+            <input value={label} onChange={e => setLabel(e.target.value)} placeholder={tr('tabungan.namaGoalPlaceholder')} style={goalInput} />
           </label>
 
           <div style={{ marginTop: 16 }}>
-            <span style={goalFieldLabel}>Kategori / ikon</span>
+            <span style={goalFieldLabel}>{tr('tabungan.kategoriIkon')}</span>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8 }}>
-              {GOAL_ICON_LIST.map(it => (
-                <button key={it.id} onClick={() => setIcon(it.id)} title={it.label} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "10px 4px", borderRadius: 12, background: icon === it.id ? "var(--ivory)" : "var(--paper)", border: "1px solid " + (icon === it.id ? "var(--ink)" : "var(--line-soft)"), color: icon === it.id ? color : "var(--ink-2)" }}>
-                  <GoalGlyph icon={it.id} size={18} />
-                  <span style={{ fontSize: 9.5, color: "var(--muted)", textAlign: "center", lineHeight: 1.1 }}>{it.label}</span>
-                </button>
-              ))}
+              {GOAL_ICON_LIST.map(it => {
+                const iconLabel = tr('tabungan.ikon.' + it.id, { defaultValue: it.id });
+                return (
+                  <button key={it.id} onClick={() => setIcon(it.id)} title={iconLabel} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "10px 4px", borderRadius: 12, background: icon === it.id ? "var(--ivory)" : "var(--paper)", border: "1px solid " + (icon === it.id ? "var(--ink)" : "var(--line-soft)"), color: icon === it.id ? color : "var(--ink-2)" }}>
+                    <GoalGlyph icon={it.id} size={18} />
+                    <span style={{ fontSize: 9.5, color: "var(--muted)", textAlign: "center", lineHeight: 1.1 }}>{iconLabel}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 16 }}>
             <label>
-              <span style={goalFieldLabel}>Target jumlah</span>
+              <span style={goalFieldLabel}>{tr('tabungan.targetJumlah')}</span>
               <div style={goalMoneyWrap}>
                 <span style={{ color: "var(--muted)", fontSize: 13 }}>Rp</span>
                 <input value={target ? num(target).toLocaleString("id-ID") : ""} onChange={e => setTarget(e.target.value)} placeholder="0" style={goalMoneyInput} />
               </div>
             </label>
             <label>
-              <span style={goalFieldLabel}>Sudah terkumpul (opsional)</span>
+              <span style={goalFieldLabel}>{tr('tabungan.sudahTerkumpul')}</span>
               <div style={goalMoneyWrap}>
                 <span style={{ color: "var(--muted)", fontSize: 13 }}>Rp</span>
                 <input value={current ? num(current).toLocaleString("id-ID") : ""} onChange={e => setCurrent(e.target.value)} placeholder="0" style={goalMoneyInput} />
               </div>
             </label>
             <label style={{ gridColumn: "span 2" }}>
-              <span style={goalFieldLabel}>Tenggat (opsional)</span>
-              <input value={deadline} onChange={e => setDeadline(e.target.value)} placeholder="contoh: Des 2026" style={goalInput} />
+              <span style={goalFieldLabel}>{tr('tabungan.tenggatOpsional')}</span>
+              <input value={deadline} onChange={e => setDeadline(e.target.value)} placeholder={tr('tabungan.tenggatPlaceholder')} style={goalInput} />
             </label>
           </div>
 
           <div style={{ marginTop: 16 }}>
-            <span style={goalFieldLabel}>Warna</span>
+            <span style={goalFieldLabel}>{tr('tabungan.warna')}</span>
             <div style={{ display: "flex", gap: 8 }}>
               {GOAL_COLORS.map(c => (
                 <button key={c} onClick={() => setColor(c)} style={{ width: 28, height: 28, borderRadius: 8, background: c, border: 0, outline: color === c ? "2px solid var(--ink)" : "2px solid transparent", outlineOffset: 2, cursor: "pointer" }} />
@@ -222,8 +230,8 @@ export function AddGoalModal({ open, onClose, onCreate }) {
         </div>
 
         <div className="goal-modal-actions">
-          <button onClick={onClose} style={{ flex: 1, padding: "11px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 12, fontSize: 13.5, color: "var(--ink-2)" }}>Batal</button>
-          <button onClick={submit} disabled={!valid} style={{ flex: 2, padding: "11px", background: valid ? "var(--ink)" : "var(--line)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, cursor: valid ? "pointer" : "default" }}>Buat goal</button>
+          <button onClick={onClose} style={{ flex: 1, padding: "11px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 12, fontSize: 13.5, color: "var(--ink-2)" }}>{tr('umum.batal')}</button>
+          <button onClick={submit} disabled={!valid} style={{ flex: 2, padding: "11px", background: valid ? "var(--ink)" : "var(--line)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, cursor: valid ? "pointer" : "default" }}>{tr('tabungan.buatGoal')}</button>
         </div>
       </div>
     </div>
@@ -231,7 +239,8 @@ export function AddGoalModal({ open, onClose, onCreate }) {
 }
 
 export function DepositModal({ goal, onClose, onConfirm }) {
-  useScrollLock(!!goal);   // kunci scroll latar saat modal setor terbuka
+  const { t: tr } = useTranslation();
+  useScrollLock(!!goal);
   const [amount, setAmount] = React.useState("");
   React.useEffect(() => { setAmount(""); }, [goal]);
   if (!goal) return null;
@@ -247,7 +256,7 @@ export function DepositModal({ goal, onClose, onConfirm }) {
             <GoalGlyph icon={goal.icon} size={18} />
           </span>
           <div>
-            <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Tambah dana</div>
+            <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{tr('tabungan.tambahDana')}</div>
             <div className="serif" style={{ fontSize: 22, letterSpacing: "-0.01em" }}>{goal.label}</div>
           </div>
         </div>
@@ -269,8 +278,8 @@ export function DepositModal({ goal, onClose, onConfirm }) {
         </div>
 
         <div style={{ display: "flex", gap: 10, marginTop: 22 }}>
-          <button onClick={onClose} style={{ flex: 1, padding: "11px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 12, fontSize: 13.5, color: "var(--ink-2)" }}>Batal</button>
-          <button onClick={confirm} style={{ flex: 2, padding: "11px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500 }}>Tambah ke tabungan</button>
+          <button onClick={onClose} style={{ flex: 1, padding: "11px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 12, fontSize: 13.5, color: "var(--ink-2)" }}>{tr('umum.batal')}</button>
+          <button onClick={confirm} style={{ flex: 2, padding: "11px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500 }}>{tr('tabungan.tambahKeTabungan')}</button>
         </div>
       </div>
     </div>

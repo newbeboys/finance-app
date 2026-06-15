@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 // Suntik keyframes shake sekali saja (tanpa menyentuh CSS global)
 if (typeof document !== 'undefined' && !document.getElementById('pin-pad-style')) {
@@ -26,6 +27,7 @@ export function PinDots({ length = 6, filled = 0, shake = false }) {
 }
 
 export function Numpad({ onDigit, onDelete }) {
+  const { t } = useTranslation();
   const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, width: 264, margin: '0 auto' }}>
@@ -34,7 +36,7 @@ export function Numpad({ onDigit, onDelete }) {
       ))}
       <span />
       <button type="button" onClick={() => onDigit('0')} style={padBtn}>0</button>
-      <button type="button" onClick={onDelete} style={padBtn} aria-label="Hapus">⌫</button>
+      <button type="button" onClick={onDelete} style={padBtn} aria-label={t('umum.hapus')}>⌫</button>
     </div>
   );
 }

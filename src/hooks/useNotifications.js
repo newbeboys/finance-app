@@ -67,15 +67,15 @@ function budgetNotifs(transactions, budgets) {
 
     if (pct >= 1) {
       notifs.push({ id, type: 'budget', icon: '🚨',
-        title: 'Anggaran terlampaui!',
-        message: `Anggaran ${b.label} melebihi batas`,
-        detail: `Terpakai ${formatNominal(s)} dari ${formatNominal(b.limit)}`,
+        titleKey: 'notifikasi.anggaranTerlampaui',
+        msgKey: 'notifikasi.anggaranMelebihi', msgParams: { label: b.label },
+        detailKey: 'notifikasi.terpakaiDari', detailParams: { terpakai: formatNominal(s), batas: formatNominal(b.limit) },
         read: false, ts: Date.now() });
     } else if (pct >= 0.8) {
       notifs.push({ id, type: 'budget', icon: '⚠️',
-        title: 'Peringatan Anggaran',
-        message: `Anggaran ${b.label} sudah ${Math.round(pct * 100)}%`,
-        detail: `Terpakai ${formatNominal(s)} dari ${formatNominal(b.limit)}`,
+        titleKey: 'notifikasi.peringatanAnggaran',
+        msgKey: 'notifikasi.anggaranPersen', msgParams: { label: b.label, persen: Math.round(pct * 100) },
+        detailKey: 'notifikasi.terpakaiDari', detailParams: { terpakai: formatNominal(s), batas: formatNominal(b.limit) },
         read: false, ts: Date.now() });
     }
   });
@@ -96,7 +96,8 @@ function incomeNotifs(transactions) {
         id:      `income-${tx.id}`,
         type:    'income',
         icon:    '💰',
-        title:   'Transaksi masuk',
+        titleKey: 'notifikasi.transaksiMasuk',
+        // Nominal & data merchant/tanggal bukan teks yang perlu diterjemahkan
         message: `+${formatNominal(tx.amount)}`,
         detail:  `${tx.merchant} · ${tx.date}`,
         read:    false,
@@ -131,9 +132,9 @@ function weeklyNotif(transactions) {
     id:      `weekly-${wKey}`,
     type:    'weekly',
     icon:    '📊',
-    title:   'Ringkasan Mingguan',
-    message: `Masuk ${formatNominal(income)} · Keluar ${formatNominal(exp)}`,
-    detail:  `Selisih: ${formatNominal(income - exp)}`,
+    titleKey: 'notifikasi.ringkasanMingguan',
+    msgKey:  'notifikasi.ringkasanMasukKeluar', msgParams: { masuk: formatNominal(income), keluar: formatNominal(exp) },
+    detailKey: 'notifikasi.selisih', detailParams: { jumlah: formatNominal(income - exp) },
     read:    false,
     ts:      Date.now(),
   }];
@@ -155,9 +156,9 @@ function billsNotif(transactions) {
       id:      `bills-${curPfx}`,
       type:    'bills',
       icon:    '🔔',
-      title:   'Pengingat Tagihan',
-      message: 'Jangan lupa catat tagihan bulan ini!',
-      detail:  `Bulan lalu kamu punya tagihan ${formatNominal(total)}`,
+      titleKey: 'notifikasi.pengingatTagihan',
+      msgKey:  'notifikasi.janganLupaTagihan',
+      detailKey: 'notifikasi.bulanLaluTagihan', detailParams: { jumlah: formatNominal(total) },
       read:    false,
       ts:      Date.now(),
     }];

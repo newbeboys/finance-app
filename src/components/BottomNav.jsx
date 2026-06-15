@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   IconDashboard, IconTx, IconSave, IconBudget,
   IconChart, IconReport, IconWallet, IconSettings,
@@ -14,23 +15,24 @@ const IconMore = ({ size = 22 }) => (
 );
 
 const MAIN_NAV = [
-  { id: "dashboard",    label: "Beranda",   Icon: IconDashboard },
-  { id: "transactions", label: "Transaksi", Icon: IconTx },
-  { id: "savings",      label: "Tabungan",  Icon: IconSave },
-  { id: "budgets",      label: "Anggaran",  Icon: IconBudget },
+  { id: "dashboard",    tKey: "nav.beranda",   Icon: IconDashboard },
+  { id: "transactions", tKey: "nav.transaksi", Icon: IconTx },
+  { id: "savings",      tKey: "nav.tabungan",  Icon: IconSave },
+  { id: "budgets",      tKey: "nav.anggaran",  Icon: IconBudget },
 ];
 
 const MORE_NAV = [
-  { id: "analytics", label: "Analitik",   Icon: IconChart },
-  { id: "reports",   label: "Laporan",    Icon: IconReport },
-  { id: "wallets",   label: "Dompet",     Icon: IconWallet },
-  { id: "settings",  label: "Pengaturan", Icon: IconSettings },
+  { id: "analytics", tKey: "nav.analitik",   Icon: IconChart },
+  { id: "reports",   tKey: "nav.laporan",    Icon: IconReport },
+  { id: "wallets",   tKey: "nav.dompet",     Icon: IconWallet },
+  { id: "settings",  tKey: "nav.pengaturan", Icon: IconSettings },
 ];
 
 const MORE_IDS = MORE_NAV.map(n => n.id);
 const BLUE = "#3B7BF8";
 
 export function BottomNav({ active, onNav }) {
+  const { t } = useTranslation();
   const [showMore, setShowMore] = React.useState(false);
   useScrollLock(showMore);   // kunci scroll latar saat drawer "Lainnya" terbuka
   const moreActive = MORE_IDS.includes(active);
@@ -77,7 +79,7 @@ export function BottomNav({ active, onNav }) {
               gap: 8,
             }}
           >
-            {MORE_NAV.map(({ id, label, Icon }) => {
+            {MORE_NAV.map(({ id, tKey, Icon }) => {
               const isActive = active === id;
               return (
                 <button
@@ -100,7 +102,7 @@ export function BottomNav({ active, onNav }) {
                   }}
                 >
                   <Icon size={22} />
-                  <span>{label}</span>
+                  <span>{t(tKey)}</span>
                 </button>
               );
             })}
@@ -110,7 +112,7 @@ export function BottomNav({ active, onNav }) {
 
       {/* Bottom navigation bar */}
       <nav className="bottom-nav">
-        {MAIN_NAV.map(({ id, label, Icon }) => {
+        {MAIN_NAV.map(({ id, tKey, Icon }) => {
           const isActive = active === id;
           return (
             <button
@@ -149,7 +151,7 @@ export function BottomNav({ active, onNav }) {
               <span style={{ position: "relative", zIndex: 1 }}>
                 <Icon size={22} />
               </span>
-              <span style={{ position: "relative", zIndex: 1 }}>{label}</span>
+              <span style={{ position: "relative", zIndex: 1 }}>{t(tKey)}</span>
             </button>
           );
         })}
@@ -190,7 +192,7 @@ export function BottomNav({ active, onNav }) {
           <span style={{ position: "relative", zIndex: 1 }}>
             <IconMore size={22} />
           </span>
-          <span style={{ position: "relative", zIndex: 1 }}>Lainnya</span>
+          <span style={{ position: "relative", zIndex: 1 }}>{t('nav.lainnya')}</span>
         </button>
       </nav>
     </>

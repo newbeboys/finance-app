@@ -1,4 +1,6 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from './i18n';
 import { IconCheck } from './icons';
 import { supabase } from './supabase';
 import PinSetup from './components/PinSetup';
@@ -78,7 +80,7 @@ function SettingCard({ eyebrow, title, children }) {
   );
 }
 
-function ThemePreview({ mode, active, onClick }) {
+function ThemePreview({ mode, label, active, onClick }) {
   const isDark = mode === "dark";
   const bg = isDark ? "#1B1D15" : "#EAE5D5";
   const card = isDark ? "#24261E" : "#F5F1E4";
@@ -101,7 +103,7 @@ function ThemePreview({ mode, active, onClick }) {
         </div>
       </div>
       <div style={{ padding: "8px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: `1px solid ${line}`, background: card }}>
-        <span style={{ fontSize: 12.5, fontWeight: 500, color: ink }}>{isDark ? "Gelap" : "Terang"}</span>
+        <span style={{ fontSize: 12.5, fontWeight: 500, color: ink }}>{label}</span>
         {active && <span style={{ color: "var(--sage)" }}><IconCheck size={15} /></span>}
       </div>
     </button>
@@ -123,11 +125,62 @@ const PALETTE_SWATCHES = [
   { id: "bone",  label: "Bone",  hint: "Netral", c: "#EFEBDF" },
 ];
 
+// ── Modal Pilih Bahasa ──────────────────────────────────────────────
+function LanguageModal({ onClose, onToast }) {
+  const { t: tr } = useTranslation();
+  const cur = i18n.language;
+
+  const choose = (lng) => {
+    if (lng === cur) { onClose(); return; }
+    localStorage.setItem('bahasa', lng);
+    i18n.changeLanguage(lng);
+    onClose();
+    onToast();
+  };
+
+  const LANGS = [
+    { id: 'id', flag: '🇮🇩', label: tr('bahasa.indonesia') },
+    { id: 'en', flag: '🇬🇧', label: tr('bahasa.inggris') },
+  ];
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(0,0,0,.5)", display: "grid", placeItems: "center", padding: 24 }}
+      onClick={onClose}>
+      <div className="card" style={{ padding: 0, maxWidth: 360, width: "100%", overflow: "hidden" }}
+        onClick={e => e.stopPropagation()}>
+        <div style={{ padding: "20px 20px 12px", borderBottom: "1px solid var(--line-soft)" }}>
+          <div className="serif" style={{ fontSize: 20 }}>{tr('bahasa.pilih')}</div>
+        </div>
+        {LANGS.map((lng, i) => (
+          <button key={lng.id} type="button" onClick={() => choose(lng.id)} style={{
+            width: "100%", display: "flex", alignItems: "center", gap: 14,
+            padding: "16px 20px", background: "transparent", border: 0,
+            borderBottom: i < LANGS.length - 1 ? "1px solid var(--line-soft)" : 0,
+            cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+          }}>
+            <span style={{ fontSize: 26 }}>{lng.flag}</span>
+            <span style={{ flex: 1, fontSize: 14, fontWeight: 500, color: "var(--ink)" }}>{lng.label}</span>
+            {cur === lng.id && <span style={{ color: "var(--sage)" }}><IconCheck size={18} /></span>}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub }) {
+  const { t: tr } = useTranslation();
   const notifOn = t.notifications !== false;
   const subs = notifSubs ?? { budget: true, income: true, weekly: true, bills: false };
   const toggleSub = onToggleNotifSub ?? (() => {});
   const [loggingOut, setLoggingOut] = React.useState(false);
+  const [showLangModal, setShowLangModal] = React.useState(false);
+  const [langToast, setLangToast] = React.useState(false);
+
+  const showLangToast = () => {
+    setLangToast(true);
+    setTimeout(() => setLangToast(false), 2500);
+  };
 
   // Toggle "Animasi & Suara" — preferensi terpisah di localStorage (default ON)
   const [animasiSuara, setAnimasiSuara] = React.useState(() => {
@@ -149,7 +202,7 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub })
   const [pinSetup, setPinSetup] = React.useState(null); // null | 'create' | 'change'
   const [bioNote, setBioNote] = React.useState('');
   const [confirmNone, setConfirmNone] = React.useState(false);
-  useScrollLock(confirmNone || !!pinSetup);   // kunci scroll latar saat dialog konfirmasi / setup PIN terbuka
+  useScrollLock(confirmNone || !!pinSetup || showLangModal);
 
   // Halaman "Transaksi Berulang" (overlay penuh)
   const [showRecurring, setShowRecurring] = React.useState(false);
@@ -159,31 +212,31 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub })
     if (m === securityMethod) return;
     setBioNote('');
     if (m === 'none') {
-      setConfirmNone(true);             // konfirmasi dulu sebelum mematikan
+      setConfirmNone(true);
       return;
     }
     if (m === 'pin') {
-      setPinSetup('create');            // buka flow buat PIN; tercentang setelah selesai
+      setPinSetup('create');
       return;
     }
     if (m === 'biometric') {
       const ok = await isBiometricAvailable();
       if (!ok) {
-        setBioNote('Biometrik tidak tersedia di perangkat ini (hanya berfungsi di APK Android).');
+        setBioNote(tr('pengaturan.biometrikTidakTersedia'));
         return;
       }
-      enableBiometricOnly();            // aktifkan biometrik + hapus PIN
+      enableBiometricOnly();
       setSecurityMethod('biometric');
     }
   };
 
   const handlePinSetupDone = () => {
-    setSecurityMethod('pin'); // setPin() sudah menyimpan pinAktif & mematikan biometrik
+    setSecurityMethod('pin');
     setPinSetup(null);
   };
 
   const confirmDisableSecurity = () => {
-    clearPin();               // hapus PIN + matikan biometrik
+    clearPin();
     setSecurityMethod('none');
     setConfirmNone(false);
   };
@@ -195,45 +248,47 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub })
     await supabase.auth.signOut();
   }
 
+  const curLangLabel = i18n.language === 'en' ? tr('bahasa.inggris') : tr('bahasa.indonesia');
+
   return (
     <div className="page-wrap" style={{ padding: "16px 32px 48px", maxWidth: 760, margin: "0 auto" }}>
       <div style={{ marginBottom: 22 }}>
-        <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Pengaturan</div>
-        <h2 className="serif settings-h2" style={{ fontSize: 34, margin: "4px 0 0", letterSpacing: "-0.015em" }}>Sesuaikan FinanceApp</h2>
+        <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{tr('pengaturan.judul')}</div>
+        <h2 className="serif settings-h2" style={{ fontSize: 34, margin: "4px 0 0", letterSpacing: "-0.015em" }}>{tr('pengaturan.subjudul')}</h2>
         <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 6, lineHeight: 1.5 }}>
-          Atur tampilan, warna latar, layout, notifikasi, dan wawasan AI. Perubahan langsung diterapkan.
+          {tr('pengaturan.deskripsi')}
         </div>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {/* Account */}
-        <SettingCard eyebrow="Akun" title="Profil & sesi">
-          <SettingRow title="Nama" desc={displayName}>
+        <SettingCard eyebrow={tr('pengaturan.akun')} title={tr('pengaturan.profilSesi')}>
+          <SettingRow title={tr('pengaturan.nama')} desc={displayName}>
             <span style={{ fontSize: 13, color: "var(--muted)" }} />
           </SettingRow>
-          <SettingRow title="Email" desc={user?.email || '—'}>
+          <SettingRow title={tr('pengaturan.email')} desc={user?.email || '—'}>
             <span style={{ fontSize: 13, color: "var(--muted)" }} />
           </SettingRow>
-          <SettingRow title="Keluar dari akun" desc="Kamu akan diarahkan ke halaman login." last>
+          <SettingRow title={tr('pengaturan.keluarAkun')} desc={tr('pengaturan.keluarDeskripsi')} last>
             <button
               onClick={handleLogout}
               disabled={loggingOut}
               style={{ padding: "9px 18px", fontSize: 13, fontWeight: 500, background: "color-mix(in oklch, var(--terra) 12%, transparent)", color: "var(--terra)", border: "1px solid color-mix(in oklch, var(--terra) 28%, transparent)", borderRadius: 10, cursor: loggingOut ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: loggingOut ? 0.6 : 1 }}
             >
-              {loggingOut ? "Keluar…" : "Logout"}
+              {loggingOut ? tr('pengaturan.keluar') : tr('pengaturan.logout')}
             </button>
           </SettingRow>
         </SettingCard>
 
         {/* Appearance */}
-        <SettingCard eyebrow="Tampilan" title="Tema & warna">
-          <SettingRow title="Mode tampilan" desc="Pilih tema terang atau gelap untuk seluruh aplikasi.">
+        <SettingCard eyebrow={tr('pengaturan.tampilan')} title={tr('pengaturan.temaWarna')}>
+          <SettingRow title={tr('pengaturan.modeTampilan')} desc={tr('pengaturan.modeTampilanDesc')}>
             <div className="theme-preview-wrap" style={{ display: "flex", gap: 10, width: 240 }}>
-              <ThemePreview mode="light" active={t.theme !== "dark"} onClick={() => setTweak("theme", "light")} />
-              <ThemePreview mode="dark"  active={t.theme === "dark"} onClick={() => setTweak("theme", "dark")} />
+              <ThemePreview mode="light" label={tr('pengaturan.terang')} active={t.theme !== "dark"} onClick={() => setTweak("theme", "light")} />
+              <ThemePreview mode="dark"  label={tr('pengaturan.gelap')}  active={t.theme === "dark"} onClick={() => setTweak("theme", "dark")} />
             </div>
           </SettingRow>
-          <SettingRow title="Warna latar" desc="Nuansa kanvas aplikasi. Hanya berlaku pada mode terang." last>
+          <SettingRow title={tr('pengaturan.warnaLatar')} desc={tr('pengaturan.warnaLatarDesc')} last>
             <div style={{ display: "flex", gap: 14, flexWrap: "nowrap" }}>
               {PALETTE_SWATCHES.map(p => {
                 const active = (t.palette || "cream") === p.id;
@@ -251,10 +306,10 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub })
         </SettingCard>
 
         {/* Font Theme */}
-        <SettingCard eyebrow="Tipografi" title="Tema font">
+        <SettingCard eyebrow={tr('pengaturan.tipografi')} title={tr('pengaturan.temaFont')}>
           <div style={{ marginTop: 12 }}>
             <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 14, lineHeight: 1.5 }}>
-              Pilih gaya tipografi. Hanya font-family yang berubah — ukuran dan layout tetap sama.
+              {tr('pengaturan.temaFontDesc')}
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(128px, 1fr))", gap: 10 }}>
               {FONT_THEME_OPTIONS.map(ft => {
@@ -288,42 +343,59 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub })
         </SettingCard>
 
         {/* Layout */}
-        <SettingCard eyebrow="Layout" title="Tata letak">
-          <SettingRow title="Gaya sidebar" desc="Tampilkan label penuh atau versi ringkas yang hanya ikon." last>
+        <SettingCard eyebrow={tr('pengaturan.layout')} title={tr('pengaturan.tataLetak')}>
+          <SettingRow title={tr('pengaturan.gayaSidebar')} desc={tr('pengaturan.gayaSidebarDesc')} last>
             <div style={{ display: "flex", padding: 3, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10 }}>
-              {[{ id: "labeled", label: "Berlabel" }, { id: "compact", label: "Ringkas" }].map(o => (
+              {[{ id: "labeled", labelKey: "pengaturan.berlabel" }, { id: "compact", labelKey: "pengaturan.ringkas" }].map(o => (
                 <button key={o.id} onClick={() => setTweak("sidebarVariant", o.id)} style={{
                   padding: "10px 20px", fontSize: 13,
                   background: (t.sidebarVariant || "labeled") === o.id ? "var(--ivory)" : "transparent",
                   border: (t.sidebarVariant || "labeled") === o.id ? "1px solid var(--line-soft)" : "1px solid transparent",
                   borderRadius: 8, color: (t.sidebarVariant || "labeled") === o.id ? "var(--ink)" : "var(--muted)",
                   fontWeight: (t.sidebarVariant || "labeled") === o.id ? 500 : 400,
-                }}>{o.label}</button>
+                }}>{tr(o.labelKey)}</button>
               ))}
             </div>
           </SettingRow>
         </SettingCard>
 
+        {/* Language */}
+        <SettingCard eyebrow={tr('pengaturan.bahasa')} title={tr('bahasa.pilih')}>
+          <button
+            onClick={() => setShowLangModal(true)}
+            style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "14px 0 4px", background: "transparent", border: 0, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}
+          >
+            <span style={{ fontSize: 20, width: 40, height: 40, borderRadius: 11, background: "var(--paper)", border: "1px solid var(--line-soft)", display: "grid", placeItems: "center", flexShrink: 0 }} aria-hidden>
+              {i18n.language === 'en' ? '🇬🇧' : '🇮🇩'}
+            </span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: "block", fontSize: 13.5, fontWeight: 500, color: "var(--ink)" }}>{curLangLabel}</span>
+              <span style={{ display: "block", fontSize: 12, color: "var(--muted)", marginTop: 3, lineHeight: 1.45 }}>{tr('pengaturan.bahasaDesc')}</span>
+            </span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M9 18l6-6-6-6" /></svg>
+          </button>
+        </SettingCard>
+
         {/* Security — metode tunggal via radio (Tidak ada / PIN / Biometrik) */}
-        <SettingCard eyebrow="Keamanan" title="Kunci aplikasi">
+        <SettingCard eyebrow={tr('pengaturan.keamanan')} title={tr('pengaturan.kunciAplikasi')}>
           <div style={{ fontSize: 12.5, color: "var(--muted)", margin: "8px 0 2px", lineHeight: 1.5 }}>
-            Pilih metode keamanan aplikasi. Hanya satu yang dapat aktif.
+            {tr('pengaturan.pilihMetode')}
           </div>
           <RadioOption
-            label="Tidak ada"
-            desc="Aplikasi terbuka tanpa kunci."
+            label={tr('pengaturan.tidakAda')}
+            desc={tr('pengaturan.tidakAdaDesc')}
             checked={securityMethod === 'none'}
             onSelect={() => selectMethod('none')}
           />
           <RadioOption
-            label="PIN (6 digit)"
-            desc="Buka aplikasi dengan PIN 6 digit."
+            label={tr('pengaturan.pin')}
+            desc={tr('pengaturan.pinDesc')}
             checked={securityMethod === 'pin'}
             onSelect={() => selectMethod('pin')}
           />
           <RadioOption
-            label="Biometrik (Sidik Jari)"
-            desc={bioNote || "Buka aplikasi dengan sidik jari."}
+            label={tr('pengaturan.biometrik')}
+            desc={bioNote || tr('pengaturan.biometrikDesc')}
             checked={securityMethod === 'biometric'}
             onSelect={() => selectMethod('biometric')}
             last
@@ -334,58 +406,58 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub })
                 onClick={() => setPinSetup('change')}
                 style={{ padding: "10px 18px", fontSize: 13, fontWeight: 500, background: "var(--paper)", color: "var(--ink-2)", border: "1px solid var(--line-soft)", borderRadius: 10, cursor: "pointer", fontFamily: "inherit" }}
               >
-                Ubah PIN
+                {tr('pengaturan.ubahPin')}
               </button>
             </div>
           )}
         </SettingCard>
 
         {/* Transaksi Berulang — navigasi ke halaman */}
-        <SettingCard eyebrow="Otomatis" title="Jadwal">
+        <SettingCard eyebrow={tr('pengaturan.otomatis')} title={tr('pengaturan.jadwal')}>
           <button
             onClick={() => setShowRecurring(true)}
             style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "14px 0 4px", background: "transparent", border: 0, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}
           >
             <span style={{ fontSize: 20, width: 40, height: 40, borderRadius: 11, background: "var(--paper)", border: "1px solid var(--line-soft)", display: "grid", placeItems: "center", flexShrink: 0 }} aria-hidden>🔄</span>
             <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ display: "block", fontSize: 13.5, fontWeight: 500, color: "var(--ink)" }}>Transaksi Berulang</span>
-              <span style={{ display: "block", fontSize: 12, color: "var(--muted)", marginTop: 3, lineHeight: 1.45 }}>Jadwalkan pemasukan & pengeluaran agar tercatat otomatis.</span>
+              <span style={{ display: "block", fontSize: 13.5, fontWeight: 500, color: "var(--ink)" }}>{tr('pengaturan.transaksiBerulang')}</span>
+              <span style={{ display: "block", fontSize: 12, color: "var(--muted)", marginTop: 3, lineHeight: 1.45 }}>{tr('pengaturan.transaksiBerulangDesc')}</span>
             </span>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M9 18l6-6-6-6" /></svg>
           </button>
         </SettingCard>
 
         {/* Notifications */}
-        <SettingCard eyebrow="Notifikasi" title="Pemberitahuan">
-          <SettingRow title="Aktifkan notifikasi" desc="Master switch untuk semua pemberitahuan FinanceApp.">
+        <SettingCard eyebrow={tr('pengaturan.notifikasi')} title={tr('pengaturan.pemberitahuan')}>
+          <SettingRow title={tr('pengaturan.aktifkanNotif')} desc={tr('pengaturan.aktifkanNotifDesc')}>
             <Switch on={notifOn} onClick={() => setTweak("notifications", !notifOn)} />
           </SettingRow>
           {[
-            { k: "budget", title: "Peringatan anggaran", desc: "Saat sebuah kategori mencapai 80% atau melebihi batas." },
-            { k: "income", title: "Transaksi masuk", desc: "Beri tahu setiap kali ada dana masuk." },
-            { k: "weekly", title: "Ringkasan mingguan", desc: "Rangkuman pengeluaran tiap Senin pagi." },
-            { k: "bills",  title: "Pengingat tagihan", desc: "Ingatkan tagihan berulang sebelum jatuh tempo." },
+            { k: "budget", titleKey: "pengaturan.peringatanAnggaran", descKey: "pengaturan.peringatanAnggaranDesc" },
+            { k: "income", titleKey: "pengaturan.transaksiMasuk",     descKey: "pengaturan.transaksiMasukDesc" },
+            { k: "weekly", titleKey: "pengaturan.ringkasanMingguan",  descKey: "pengaturan.ringkasanMingguanDesc" },
+            { k: "bills",  titleKey: "pengaturan.pengingatTagihan",   descKey: "pengaturan.pengingatTagihanDesc" },
           ].map(row => (
-            <SettingRow key={row.k} title={row.title} desc={row.desc} last={row.last}>
+            <SettingRow key={row.k} title={tr(row.titleKey)} desc={tr(row.descKey)}>
               <div style={{ opacity: notifOn ? 1 : 0.4, pointerEvents: notifOn ? "auto" : "none" }}>
                 <Switch on={subs[row.k]} onClick={() => toggleSub(row.k)} />
               </div>
             </SettingRow>
           ))}
-          <SettingRow title="Animasi & Suara" desc="Aktifkan efek suara dan animasi pada aplikasi" last>
+          <SettingRow title={tr('pengaturan.animasiSuara')} desc={tr('pengaturan.animasiSuaraDesc')} last>
             <Switch on={animasiSuara} onClick={toggleAnimasiSuara} />
           </SettingRow>
         </SettingCard>
 
         {/* AI */}
-        <SettingCard eyebrow="Kecerdasan" title="Wawasan AI">
-          <SettingRow title="Tampilkan wawasan AI" desc="Kartu saran cerdas di Beranda — analisis pengeluaran, tips menabung, dan prediksi." last>
+        <SettingCard eyebrow={tr('pengaturan.kecerdasan')} title={tr('pengaturan.wawasanAi')}>
+          <SettingRow title={tr('pengaturan.tampilkanWawasanAi')} desc={tr('pengaturan.tampilkanWawasanAiDesc')} last>
             <Switch on={t.showAI !== false} onClick={() => setTweak("showAI", !(t.showAI !== false))} color="var(--gold)" />
           </SettingRow>
         </SettingCard>
 
         <div style={{ fontSize: 11.5, color: "var(--muted)", textAlign: "center", padding: "6px 0", lineHeight: 1.5 }}>
-          FinanceApp · Preferensi tersimpan di perangkat ini.
+          {tr('pengaturan.footer')}
         </div>
       </div>
 
@@ -400,19 +472,35 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub })
       {confirmNone && (
         <div style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(0,0,0,.5)", display: "grid", placeItems: "center", padding: 24 }}>
           <div className="card" style={{ padding: 24, maxWidth: 360, width: "100%", textAlign: "center" }}>
-            <div className="serif" style={{ fontSize: 20, marginBottom: 8 }}>Nonaktifkan keamanan?</div>
+            <div className="serif" style={{ fontSize: 20, marginBottom: 8 }}>{tr('pengaturan.nonaktifkanKeamanan')}</div>
             <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.5, marginBottom: 20 }}>
-              Yakin ingin menonaktifkan keamanan? PIN akan dihapus dan biometrik dimatikan.
+              {tr('pengaturan.nonaktifkanKonfirmasi')}
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               <button onClick={() => setConfirmNone(false)} style={{ flex: 1, padding: "11px", fontSize: 13.5, fontWeight: 500, background: "var(--paper)", color: "var(--ink)", border: "1px solid var(--line-soft)", borderRadius: 10, cursor: "pointer", fontFamily: "inherit" }}>
-                Batal
+                {tr('umum.batal')}
               </button>
               <button onClick={confirmDisableSecurity} style={{ flex: 1, padding: "11px", fontSize: 13.5, fontWeight: 500, background: "var(--terra)", color: "#fff", border: 0, borderRadius: 10, cursor: "pointer", fontFamily: "inherit" }}>
-                Ya, nonaktifkan
+                {tr('pengaturan.yaNonaktifkan')}
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {showLangModal && (
+        <LanguageModal onClose={() => setShowLangModal(false)} onToast={showLangToast} />
+      )}
+
+      {langToast && (
+        <div style={{
+          position: "fixed", bottom: 80, left: "50%", transform: "translateX(-50%)",
+          background: "var(--ink)", color: "var(--paper)", borderRadius: 10,
+          padding: "10px 20px", fontSize: 13.5, fontWeight: 500,
+          zIndex: 4000, whiteSpace: "nowrap", pointerEvents: "none",
+          boxShadow: "0 4px 20px rgba(0,0,0,.3)",
+        }}>
+          {tr('bahasa.berhasilDiubah')}
         </div>
       )}
 

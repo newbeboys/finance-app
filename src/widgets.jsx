@@ -1,11 +1,18 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { CATEGORIES, ALL_CATEGORIES, fmtShort, fmt, formatNominal, nominalFontSize } from './data';
 import { IconArrowUp, IconArrowDown, IconArrowRight, IconSpark, CatIcon } from './icons';
 import { CashflowChart, SpendingDonut, Spark, Ring } from './charts';
 import { useIsMobile } from './use-mobile';
 import { useScrollLock } from './hooks/useScrollLock';
+import { categoryLabel } from './category-field';
+
+// Nama bulan singkat terlokalisasi (mengikuti bahasa aktif)
+const monthShort = (locale, mo) => new Date(2024, mo, 1).toLocaleDateString(locale, { month: 'short' });
+const localeOf = (i18n) => (i18n.language === 'en' ? 'en-US' : 'id-ID');
 
 export function KpiCards({ balanceVisible, onToggleVisible, totalBalance, accountCount, transactions = [] }) {
+  const { t: tr, i18n } = useTranslation();
   const isMobile = useIsMobile();
 
   // Hitung income & expense bulan ini dari transaksi Supabase
@@ -37,13 +44,13 @@ export function KpiCards({ balanceVisible, onToggleVisible, totalBalance, accoun
   }, [transactions]);
 
   const savings  = Math.max(income - expenses, 0);
-  const monthName = new Date().toLocaleDateString('id-ID', { month: 'long' });
+  const monthName = new Date().toLocaleDateString(localeOf(i18n), { month: 'long' });
 
   const cards = [
-    { label: "Total saldo", value: totalBalance ?? 0, delta: 0, hero: true, spark: sparks.balance, color: "var(--ink)", sub: `dari ${accountCount ?? 0} akun` },
-    { label: isMobile ? "Pemasukan"   : `Pemasukan (${monthName})`,   value: income,   delta: 0, spark: sparks.income,  color: "var(--sage)",  sub: "bulan ini" },
-    { label: isMobile ? "Pengeluaran" : `Pengeluaran (${monthName})`, value: expenses, delta: 0, deltaInverted: true, spark: sparks.expense, color: "var(--terra)", sub: catCount > 0 ? `${catCount} kategori` : "bulan ini" },
-    { label: isMobile ? "Selisih" : "Selisih bulan ini", value: income - expenses, delta: 0, spark: [], color: income >= expenses ? "var(--sage)" : "var(--terra)", sub: "pemasukan − pengeluaran" },
+    { label: tr('beranda.totalSaldo'), value: totalBalance ?? 0, delta: 0, hero: true, spark: sparks.balance, color: "var(--ink)", sub: tr('beranda.dariAkun', { count: accountCount ?? 0 }) },
+    { label: isMobile ? tr('beranda.pemasukan')   : tr('beranda.pemasukanBulan', { bulan: monthName }),   value: income,   delta: 0, spark: sparks.income,  color: "var(--sage)",  sub: tr('beranda.bulanIni') },
+    { label: isMobile ? tr('beranda.pengeluaran') : tr('beranda.pengeluaranBulan', { bulan: monthName }), value: expenses, delta: 0, deltaInverted: true, spark: sparks.expense, color: "var(--terra)", sub: catCount > 0 ? tr('beranda.jumlahKategori', { count: catCount }) : tr('beranda.bulanIni') },
+    { label: isMobile ? tr('beranda.selisih') : tr('beranda.selisihBulanIni'), value: income - expenses, delta: 0, spark: [], color: income >= expenses ? "var(--sage)" : "var(--terra)", sub: tr('beranda.pemasukanMinusPengeluaran') },
   ];
 
   return (
@@ -55,7 +62,7 @@ export function KpiCards({ balanceVisible, onToggleVisible, totalBalance, accoun
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 4, minWidth: 0 }}>
               <div className="kpi-label" style={{ fontSize: isMobile ? 10 : 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1 }}>{c.label}</div>
               {c.hero ? (
-                <button className="kpi-hide-btn" onClick={onToggleVisible} style={{ fontSize: 10.5, letterSpacing: ".05em", color: "var(--muted)", background: "transparent", border: 0, padding: 0, textTransform: "uppercase", minHeight: "auto", flexShrink: 0 }}>{balanceVisible ? "Hide" : "Show"}</button>
+                <button className="kpi-hide-btn" onClick={onToggleVisible} style={{ fontSize: 10.5, letterSpacing: ".05em", color: "var(--muted)", background: "transparent", border: 0, padding: 0, textTransform: "uppercase", minHeight: "auto", flexShrink: 0 }}>{balanceVisible ? tr('beranda.hide') : tr('beranda.show')}</button>
               ) : (
                 !isMobile && <Spark values={c.spark} color={c.color} />
               )}
@@ -92,9 +99,7 @@ export function KpiCards({ balanceVisible, onToggleVisible, totalBalance, accoun
   );
 }
 
-const CF_MONTHS = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
-
-function computeCashflow(transactions, range, pickedMonth) {
+function computeCashflow(transactions, range, pickedMonth, locale = 'id-ID') {
   if (!transactions || transactions.length === 0) return [];
   const now = new Date();
 
@@ -122,19 +127,21 @@ function computeCashflow(transactions, range, pickedMonth) {
     const txs = transactions.filter(t => t.dateRaw && t.dateRaw.startsWith(pfx));
     const income  = txs.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
     const expense = txs.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
-    return { m: CF_MONTHS[mo], income, expense, year: yr, month: mo };
+    return { m: monthShort(locale, mo), income, expense, year: yr, month: mo };
   });
 }
 
 export function CashflowCard({ transactions = [] }) {
+  const { t: tr, i18n } = useTranslation();
+  const locale = localeOf(i18n);
   const [range, setRange] = React.useState("6M");
   const [pickedMonth, setPickedMonth] = React.useState(null); // { year, month }
   const [sheetOpen, setSheetOpen] = React.useState(false);
   useScrollLock(sheetOpen);   // kunci scroll latar saat bottom-sheet "Pilih Bulan" terbuka
 
   const cashflowData = React.useMemo(
-    () => computeCashflow(transactions, range, pickedMonth),
-    [transactions, range, pickedMonth]
+    () => computeCashflow(transactions, range, pickedMonth, locale),
+    [transactions, range, pickedMonth, locale]
   );
 
   const hasData = cashflowData.some(d => d.income > 0 || d.expense > 0);
@@ -154,7 +161,7 @@ export function CashflowCard({ transactions = [] }) {
   }, []);
 
   const pickedLabel = pickedMonth
-    ? `${CF_MONTHS[pickedMonth.month]} ${pickedMonth.year}`
+    ? `${monthShort(locale, pickedMonth.month)} ${pickedMonth.year}`
     : null;
 
   const isPicked = pickedMonth !== null;
@@ -164,11 +171,11 @@ export function CashflowCard({ transactions = [] }) {
       <div className="card rise span-2" style={{ padding: 22 }}>
         <div className="cashflow-header" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8, gap: 12, flexWrap: "wrap" }}>
           <div>
-            <div className="cashflow-label" style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Arus kas</div>
-            <div className="serif cashflow-title" style={{ fontSize: 26, marginTop: 2, letterSpacing: "-0.01em" }}>Pemasukan vs. pengeluaran</div>
+            <div className="cashflow-label" style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{tr('beranda.arusKas')}</div>
+            <div className="serif cashflow-title" style={{ fontSize: 26, marginTop: 2, letterSpacing: "-0.01em" }}>{tr('beranda.pemasukanVsPengeluaran')}</div>
             <div style={{ display: "flex", gap: 16, marginTop: 8, fontSize: 12, color: "var(--muted)" }}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 2, background: "var(--sage)", display: "inline-block" }} /> Pemasukan</span>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 2, background: "var(--terra)", display: "inline-block", borderTop: "2px dashed var(--terra)" }} /> Pengeluaran</span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 2, background: "var(--sage)", display: "inline-block" }} /> {tr('beranda.pemasukan')}</span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 2, background: "var(--terra)", display: "inline-block", borderTop: "2px dashed var(--terra)" }} /> {tr('beranda.pengeluaran')}</span>
             </div>
           </div>
 
@@ -189,7 +196,7 @@ export function CashflowCard({ transactions = [] }) {
             {/* Pilih Bulan */}
             <button onClick={() => setSheetOpen(true)}
               style={{ padding: "5px 12px", fontSize: 12, background: isPicked ? "var(--ink)" : "var(--paper)", color: isPicked ? "var(--cream)" : "var(--ink-2)", border: "1px solid var(--line-soft)", borderRadius: 8, display: "inline-flex", alignItems: "center", gap: 6 }}>
-              {isPicked ? `${pickedLabel} ▾` : "Pilih Bulan ▾"}
+              {isPicked ? `${pickedLabel} ▾` : `${tr('beranda.pilihBulan')} ▾`}
             </button>
           </div>
         </div>
@@ -197,8 +204,8 @@ export function CashflowCard({ transactions = [] }) {
         {!hasData ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, height: 160, color: "var(--muted)" }}>
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--line)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>
-            <div style={{ fontSize: 13 }}>Belum ada data arus kas</div>
-            <div style={{ fontSize: 12, opacity: 0.7 }}>Data akan muncul setelah kamu menambahkan transaksi</div>
+            <div style={{ fontSize: 13 }}>{tr('beranda.belumAdaArusKas')}</div>
+            <div style={{ fontSize: 12, opacity: 0.7 }}>{tr('beranda.arusKasMuncul')}</div>
           </div>
         ) : (
           <CashflowChart data={cashflowData} />
@@ -212,7 +219,7 @@ export function CashflowCard({ transactions = [] }) {
             style={{ position: "fixed", inset: 0, background: "rgba(42,44,32,.45)", zIndex: 150, animation: "rise .2s ease-out" }} />
           <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "var(--ivory)", borderRadius: "16px 16px 0 0", padding: "20px 16px 80px", zIndex: 200, maxHeight: "55vh", overflowY: "auto", boxShadow: "0 -8px 32px -8px rgba(42,44,32,.2)", animation: "rise .25s ease-out" }}>
             <div style={{ width: 36, height: 4, borderRadius: 99, background: "var(--line)", margin: "-8px auto 16px" }} />
-            <div style={{ fontSize: 11, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 14 }}>Pilih bulan</div>
+            <div style={{ fontSize: 11, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 14 }}>{tr('beranda.pilihBulanJudul')}</div>
 
             {pickerMonths.map(([year, months]) => (
               <div key={year} style={{ marginBottom: 20 }}>
@@ -224,7 +231,7 @@ export function CashflowCard({ transactions = [] }) {
                       <button key={`${m.year}-${m.month}`}
                         onClick={() => { setPickedMonth(m); setSheetOpen(false); }}
                         style={{ padding: "10px 0", borderRadius: 10, border: active ? 0 : "1px solid var(--line-soft)", background: active ? "var(--ink)" : "var(--paper)", color: active ? "var(--cream)" : "var(--ink)", fontSize: 13.5, fontWeight: active ? 600 : 400, fontFamily: "inherit", cursor: "pointer" }}>
-                        {CF_MONTHS[m.month]}
+                        {monthShort(locale, m.month)}
                       </button>
                     );
                   })}
@@ -241,6 +248,8 @@ export function CashflowCard({ transactions = [] }) {
 const SP_MONTHS_ID = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
 
 export function SpendingCard({ transactions = [] }) {
+  const { t: tr, i18n } = useTranslation();
+  const locale = localeOf(i18n);
   const [hover, setHover] = React.useState(null);
   const [sheetOpen, setSheetOpen] = React.useState(false);
   useScrollLock(sheetOpen);   // kunci scroll latar saat bottom-sheet "Pilih Bulan" terbuka
@@ -273,18 +282,18 @@ export function SpendingCard({ transactions = [] }) {
   if (monthCats.length === 0) {
     return (
       <div className="card rise" style={{ padding: 22, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, minHeight: 200 }}>
-        <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)", alignSelf: "flex-start" }}>Rincian pengeluaran</div>
+        <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)", alignSelf: "flex-start" }}>{tr('beranda.rincianPengeluaran')}</div>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: "24px 0" }}>
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--line)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 8v4M12 16h.01" /></svg>
-          <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink-2)" }}>Belum ada data pengeluaran</div>
-          <div style={{ fontSize: 12, color: "var(--muted)", textAlign: "center", lineHeight: 1.5 }}>Mulai tambahkan transaksi untuk melihat rincian per kategori</div>
+          <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink-2)" }}>{tr('beranda.belumAdaPengeluaran')}</div>
+          <div style={{ fontSize: 12, color: "var(--muted)", textAlign: "center", lineHeight: 1.5 }}>{tr('beranda.pengeluaranMuncul')}</div>
         </div>
       </div>
     );
   }
 
   const total = monthCats.reduce((s, c) => s + c.amount, 0);
-  const selLabel = `${SP_MONTHS_ID[sel.month]} ${sel.year !== now.getFullYear() ? sel.year : ""}`.trim();
+  const selLabel = `${monthShort(locale, sel.month)} ${sel.year !== now.getFullYear() ? sel.year : ""}`.trim();
 
   const byYear = {};
   monthsWithData.forEach(m => { (byYear[m.year] ||= []).push(m); });
@@ -294,8 +303,8 @@ export function SpendingCard({ transactions = [] }) {
       <div className="card rise" style={{ padding: 22 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
-            <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Rincian pengeluaran</div>
-            <div className="serif" style={{ fontSize: 26, marginTop: 2, letterSpacing: "-0.01em" }}>Per kategori</div>
+            <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{tr('beranda.rincianPengeluaran')}</div>
+            <div className="serif" style={{ fontSize: 26, marginTop: 2, letterSpacing: "-0.01em" }}>{tr('beranda.perKategori')}</div>
           </div>
           <button onClick={() => setSheetOpen(true)} style={ghostBtn}>{selLabel} ▾</button>
         </div>
@@ -307,14 +316,14 @@ export function SpendingCard({ transactions = [] }) {
             <div key={c.id} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}
               style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 4px", borderRadius: 8, background: hover === i ? "var(--paper)" : "transparent" }}>
               <span style={{ width: 9, height: 9, borderRadius: 3, background: c.color, flexShrink: 0 }} />
-              <span style={{ fontSize: 12.5, color: "var(--ink-2)", flex: 1 }}>{c.label}</span>
+              <span style={{ fontSize: 12.5, color: "var(--ink-2)", flex: 1 }}>{categoryLabel(c, tr)}</span>
               <span className="tnum" style={{ fontSize: 12.5, color: "var(--muted)" }}>{Math.round((c.amount / total) * 100)}%</span>
               <span className="tnum" style={{ fontSize: 12, color: "var(--ink)", minWidth: 92, textAlign: "right" }}>{fmtShort(c.amount)}</span>
             </div>
           ))}
           {monthCats.length > 5 && (
             <button style={{ ...ghostBtn, marginTop: 4, width: "fit-content", padding: "4px 0", border: 0, background: "transparent", color: "var(--muted)" }}>
-              + {monthCats.length - 5} kategori lagi
+              {tr('beranda.kategoriLagi', { count: monthCats.length - 5 })}
             </button>
           )}
         </div>
@@ -325,7 +334,7 @@ export function SpendingCard({ transactions = [] }) {
           <div onClick={() => setSheetOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(42,44,32,.45)", zIndex: 150, animation: "rise .2s ease-out" }} />
           <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "var(--ivory)", borderRadius: "16px 16px 0 0", padding: "20px 16px 80px", zIndex: 200, maxHeight: "50vh", overflowY: "auto", boxShadow: "0 -8px 32px -8px rgba(42,44,32,.2)", animation: "rise .25s ease-out" }}>
             <div style={{ width: 36, height: 4, borderRadius: 99, background: "var(--line)", margin: "-8px auto 16px" }} />
-            <div style={{ fontSize: 11, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 14 }}>Pilih bulan</div>
+            <div style={{ fontSize: 11, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 14 }}>{tr('beranda.pilihBulanJudul')}</div>
             {Object.entries(byYear).sort((a, b) => b[0] - a[0]).map(([yr, months]) => (
               <div key={yr} style={{ marginBottom: 20 }}>
                 <div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 10 }}>{yr}</div>
@@ -336,7 +345,7 @@ export function SpendingCard({ transactions = [] }) {
                       <button key={`${m.year}-${m.month}`}
                         onClick={() => { setSel(m); setSheetOpen(false); }}
                         style={{ padding: "10px 0", borderRadius: 10, border: active ? 0 : "1px solid var(--line-soft)", background: active ? "var(--ink)" : "var(--paper)", color: active ? "var(--cream)" : "var(--ink)", fontSize: 13.5, fontWeight: active ? 600 : 400, fontFamily: "inherit", cursor: "pointer" }}>
-                        {SP_MONTHS_ID[m.month]}
+                        {monthShort(locale, m.month)}
                       </button>
                     );
                   })}
@@ -350,10 +359,10 @@ export function SpendingCard({ transactions = [] }) {
   );
 }
 
-function buildInsights(transactions, customCategories = []) {
+function buildInsights(transactions, customCategories, tr, locale) {
   const now = new Date();
   const pfx = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const monthName = now.toLocaleDateString('id-ID', { month: 'long' });
+  const monthName = now.toLocaleDateString(locale, { month: 'long' });
 
   const expTx = transactions.filter(t => t.amount < 0 && t.dateRaw && t.dateRaw.startsWith(pfx));
   if (expTx.length === 0) return [];
@@ -366,14 +375,18 @@ function buildInsights(transactions, customCategories = []) {
   const sorted = Object.entries(catMap).sort((a, b) => b[1] - a[1]);
   const topId  = sorted[0][0];
   const allCats = [...ALL_CATEGORIES, ...customCategories];
-  const topCat = allCats.find(c => c.id === topId) || { label: topId };
+  const topCat = allCats.find(c => c.id === topId) || { id: topId, label: topId };
+  const topCatName = categoryLabel(topCat, tr);
   const topPct = Math.round((sorted[0][1] / totalExp) * 100);
 
   const insights = [
     {
-      title: `Pengeluaran terbesar: ${topCat.label}`,
-      body: `${topCat.label} menyumbang ${topPct}% dari total pengeluaran ${monthName} (${fmt(sorted[0][1])}). ${topPct > 40 ? "Pertimbangkan untuk mengurangi anggaran di kategori ini." : "Proporsinya masih dalam batas yang wajar."}`,
-      cta: "Lihat anggaran",
+      title: tr('insight.pengeluaranTerbesar', { kategori: topCatName }),
+      body: tr('insight.pengeluaranTerbesarBody', {
+        kategori: topCatName, persen: topPct, bulan: monthName, jumlah: fmt(sorted[0][1]),
+        saran: topPct > 40 ? tr('insight.saranKurangi') : tr('insight.saranWajar'),
+      }),
+      cta: tr('insight.lihatAnggaran'),
       tone: topPct > 40 ? "warn" : "info",
     },
   ];
@@ -381,17 +394,23 @@ function buildInsights(transactions, customCategories = []) {
   if (totalInc > 0) {
     const ratio = totalExp / totalInc;
     insights.push({
-      title: `${Math.round(ratio * 100)}% pendapatan terpakai`,
-      body: `Dari ${fmt(totalInc)} yang masuk ${monthName}, kamu menghabiskan ${fmt(totalExp)}. ${ratio > 0.8 ? "Coba tingkatkan porsi tabungan bulan depan." : "Pengeluaranmu masih terkontrol dengan baik!"}`,
-      cta: "Lihat detail",
+      title: tr('insight.persenTerpakai', { persen: Math.round(ratio * 100) }),
+      body: tr('insight.persenTerpakaiBody', {
+        masuk: fmt(totalInc), bulan: monthName, keluar: fmt(totalExp),
+        saran: ratio > 0.8 ? tr('insight.saranTingkatkanTabungan') : tr('insight.saranTerkontrol'),
+      }),
+      cta: tr('insight.lihatDetail'),
       tone: ratio > 0.8 ? "warn" : "good",
     });
   }
 
   insights.push({
-    title: `${expTx.length} transaksi tercatat`,
-    body: `Kamu sudah mencatat ${expTx.length} transaksi pengeluaran di ${sorted.length} kategori bulan ini. ${expTx.length >= 10 ? "Kebiasaan mencatat yang bagus — terus pertahankan!" : "Catat setiap pengeluaran untuk analisis yang lebih akurat."}`,
-    cta: "Tambah transaksi",
+    title: tr('insight.transaksiTercatat', { count: expTx.length }),
+    body: tr('insight.transaksiTercatatBody', {
+      count: expTx.length, kategori: sorted.length,
+      saran: expTx.length >= 10 ? tr('insight.saranKebiasaanBagus') : tr('insight.saranCatatSetiap'),
+    }),
+    cta: tr('insight.tambahTransaksi'),
     tone: expTx.length >= 10 ? "good" : "info",
   });
 
@@ -399,16 +418,18 @@ function buildInsights(transactions, customCategories = []) {
 }
 
 export function InsightsCard({ transactions = [], customCategories = [] }) {
+  const { t: tr, i18n } = useTranslation();
+  const locale = localeOf(i18n);
   const [idx, setIdx] = React.useState(0);
-  const insights = React.useMemo(() => buildInsights(transactions, customCategories), [transactions, customCategories]);
+  const insights = React.useMemo(() => buildInsights(transactions, customCategories, tr, locale), [transactions, customCategories, tr, locale]);
   React.useEffect(() => { setIdx(0); }, [insights.length]);
 
   if (insights.length === 0) {
     return (
       <div className="card rise" style={{ padding: 22, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 180 }}>
         <span style={{ color: "var(--muted)" }}><IconSpark size={22} /></span>
-        <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink-2)" }}>Belum ada wawasan AI</div>
-        <div style={{ fontSize: 12, color: "var(--muted)", textAlign: "center", lineHeight: 1.5, maxWidth: 220 }}>Tambahkan transaksi dan anggaran agar AI bisa menganalisis pola keuanganmu</div>
+        <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink-2)" }}>{tr('beranda.belumAdaWawasan')}</div>
+        <div style={{ fontSize: 12, color: "var(--muted)", textAlign: "center", lineHeight: 1.5, maxWidth: 220 }}>{tr('beranda.wawasanMuncul')}</div>
       </div>
     );
   }
@@ -426,7 +447,7 @@ export function InsightsCard({ transactions = [], customCategories = [] }) {
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
         <span style={{ color: toneColor }}><IconSpark size={14} /></span>
-        <span style={{ fontSize: 11, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)" }}>Wawasan AI · {idx + 1} dari {insights.length}</span>
+        <span style={{ fontSize: 11, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)" }}>{tr('beranda.wawasanAiCounter', { idx: idx + 1, total: insights.length })}</span>
       </div>
 
       <div className="serif" style={{ fontSize: 24, lineHeight: 1.15, letterSpacing: "-0.01em", marginBottom: 10 }}>{ins.title}</div>
@@ -447,22 +468,23 @@ export function InsightsCard({ transactions = [], customCategories = [] }) {
 }
 
 export function SavingsCard({ goals = GOALS, onManage }) {
+  const { t: tr } = useTranslation();
   const ringColors = ["var(--sage)", "var(--gold)", "var(--blush)"];
   return (
     <div className="card rise" style={{ padding: 22 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
         <div>
-          <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Target tabungan</div>
-          <div className="serif" style={{ fontSize: 22, marginTop: 2, letterSpacing: "-0.01em" }}>Yang sedang kamu kumpulkan</div>
+          <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{tr('beranda.targetTabungan')}</div>
+          <div className="serif" style={{ fontSize: 22, marginTop: 2, letterSpacing: "-0.01em" }}>{tr('beranda.yangKamuKumpulkan')}</div>
         </div>
-        <button style={ghostBtn} onClick={onManage}>Kelola</button>
+        <button style={ghostBtn} onClick={onManage}>{tr('umum.kelola')}</button>
       </div>
 
       {goals.length === 0 ? (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "20px 0 8px", textAlign: "center" }}>
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--line)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z" /><path d="m9 12 2 2 4-4" /></svg>
-          <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>Belum ada goal tabungan</div>
-          <button onClick={onManage} style={{ fontSize: 12, color: "var(--sage)", background: "transparent", border: 0, padding: 0, cursor: "pointer", textDecoration: "underline" }}>Buat goal pertama</button>
+          <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>{tr('beranda.belumAdaGoal')}</div>
+          <button onClick={onManage} style={{ fontSize: 12, color: "var(--sage)", background: "transparent", border: 0, padding: 0, cursor: "pointer", textDecoration: "underline" }}>{tr('beranda.buatGoalPertama')}</button>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -494,6 +516,8 @@ export function SavingsCard({ goals = GOALS, onManage }) {
 }
 
 export function BudgetsCard({ onManage, transactions = [], budgets: allBudgets = [] }) {
+  const { t: tr, i18n } = useTranslation();
+  const locale = localeOf(i18n);
   const budgets = allBudgets.filter(b => b.enabled);
 
   // Hitung pengeluaran aktual per category dari transaksi bulan ini
@@ -514,18 +538,18 @@ export function BudgetsCard({ onManage, transactions = [], budgets: allBudgets =
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 16 }}>
         <div>
           <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>
-            Anggaran · {new Date().toLocaleDateString('id-ID', { month: 'long' })}
+            {tr('beranda.anggaranBulan', { bulan: new Date().toLocaleDateString(locale, { month: 'long' }) })}
           </div>
-          <div className="serif" style={{ fontSize: 22, marginTop: 2, letterSpacing: "-0.01em" }}>Posisi kamu sekarang</div>
+          <div className="serif" style={{ fontSize: 22, marginTop: 2, letterSpacing: "-0.01em" }}>{tr('beranda.posisiSekarang')}</div>
         </div>
-        <button style={ghostBtn} onClick={onManage}>Atur</button>
+        <button style={ghostBtn} onClick={onManage}>{tr('umum.atur')}</button>
       </div>
 
       {budgets.length === 0 ? (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "16px 0 4px", textAlign: "center" }}>
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--line)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M9 21V9" /></svg>
-          <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>Belum ada anggaran aktif</div>
-          <button onClick={onManage} style={{ fontSize: 12, color: "var(--sage)", background: "transparent", border: 0, padding: 0, cursor: "pointer", textDecoration: "underline" }}>Atur anggaran</button>
+          <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>{tr('beranda.belumAdaAnggaranAktif')}</div>
+          <button onClick={onManage} style={{ fontSize: 12, color: "var(--sage)", background: "transparent", border: 0, padding: 0, cursor: "pointer", textDecoration: "underline" }}>{tr('beranda.aturAnggaran')}</button>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -556,7 +580,7 @@ export function BudgetsCard({ onManage, transactions = [], budgets: allBudgets =
                   <div style={{ height: "100%", width: `${Math.min(pct, 1) * 100}%`, background: over ? "var(--terra)" : b.color, borderRadius: 99, transition: "width .6s ease" }} />
                   {over && <div style={{ position: "absolute", top: 0, left: "100%", height: "100%", width: `${(pct - 1) * 100}%`, background: "var(--terra)", transform: "translateX(-100%)", opacity: 0.4 }} />}
                 </div>
-                {over && <div style={{ fontSize: 11, color: "var(--terra)", marginTop: 4 }}>{fmtShort(computedSpent - b.limit)} di atas anggaran</div>}
+                {over && <div style={{ fontSize: 11, color: "var(--terra)", marginTop: 4 }}>{tr('beranda.diAtasAnggaran', { jumlah: fmtShort(computedSpent - b.limit) })}</div>}
               </div>
             );
           })}

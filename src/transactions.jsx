@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { TRANSACTIONS, CATEGORIES, INCOME_CATEGORIES, fmt } from './data';
 
 import { IconFilter, IconPlus, IconArrowRight, IconClose, IconCalendar, IconChev, CatIcon } from './icons';
@@ -6,11 +7,12 @@ import { ghostBtn } from './widgets';
 import { ScanStrukButton } from './components/ScanStruk';
 import { useIsMobile } from './use-mobile';
 import { useScrollLock } from './hooks/useScrollLock';
-import { CategoryField, CUSTOM_ID, CUSTOM_COLORS, resolveCategory } from './category-field';
+import { CategoryField, CUSTOM_ID, CUSTOM_COLORS, resolveCategory, categoryLabel } from './category-field';
 import { playSound } from './lib/sound';
 import incomeSound from './assets/sound/incom-sound.wav';
 
 export function TransactionsCard({ onAdd, onScan, limit, onSeeAll, transactions: txProp, loading = false, customCategories = [] }) {
+  const { t: tr } = useTranslation();
   const transactions = txProp ?? TRANSACTIONS;
   const isMobile = useIsMobile();
   const [filter, setFilter] = React.useState("all");
@@ -24,9 +26,9 @@ export function TransactionsCard({ onAdd, onScan, limit, onSeeAll, transactions:
   const filtered = limit ? filteredAll.slice(0, limit) : filteredAll;
 
   const tabs = [
-    { id: "all",     label: "Semua",   count: transactions.length },
-    { id: "expense", label: "Keluar",  count: transactions.filter(t => t.amount < 0).length },
-    { id: "income",  label: "Masuk",   count: transactions.filter(t => t.amount > 0).length },
+    { id: "all",     label: tr('transaksi.semua'),  count: transactions.length },
+    { id: "expense", label: tr('transaksi.keluar'), count: transactions.filter(t => t.amount < 0).length },
+    { id: "income",  label: tr('transaksi.masuk'),  count: transactions.filter(t => t.amount > 0).length },
   ];
 
   const grouped = filtered.reduce((acc, t) => {
@@ -39,8 +41,8 @@ export function TransactionsCard({ onAdd, onScan, limit, onSeeAll, transactions:
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14, gap: 10, flexWrap: "wrap" }}>
         <div>
-          <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Aktivitas terbaru</div>
-          <div className="serif" style={{ fontSize: isMobile ? 20 : 26, marginTop: 2, letterSpacing: "-0.01em" }}>Beberapa hari terakhir</div>
+          <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{tr('transaksi.aktivitasTerbaru')}</div>
+          <div className="serif" style={{ fontSize: isMobile ? 20 : 26, marginTop: 2, letterSpacing: "-0.01em" }}>{tr('transaksi.beberapaHariTerakhir')}</div>
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
           <div style={{ display: "flex", padding: 3, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10 }}>
@@ -54,15 +56,15 @@ export function TransactionsCard({ onAdd, onScan, limit, onSeeAll, transactions:
           {!isMobile && <button style={ghostBtn}><IconFilter size={13} /></button>}
           {onScan && <ScanStrukButton onClick={onScan} isMobile={isMobile} />}
           <button onClick={onAdd} style={{ padding: isMobile ? "8px 12px" : "7px 12px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 10, fontSize: 12.5, display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <IconPlus size={13} /> Tambah
+            <IconPlus size={13} /> {tr('transaksi.tambah')}
           </button>
         </div>
       </div>
 
       {/* Desktop table header */}
       <div className="tx-header-desktop" style={{ display: "grid", gridTemplateColumns: "minmax(220px,1.5fr) 1fr 1fr 1fr 140px", padding: "0 4px 8px", borderBottom: "1px solid var(--line-soft)", fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>
-        <span>Merchant</span><span>Kategori</span><span>Metode</span><span>Waktu</span>
-        <span style={{ textAlign: "right" }}>Jumlah</span>
+        <span>{tr('transaksi.merchant')}</span><span>{tr('transaksi.kategori')}</span><span>{tr('transaksi.metode')}</span><span>{tr('transaksi.waktu')}</span>
+        <span style={{ textAlign: "right" }}>{tr('transaksi.jumlah')}</span>
       </div>
 
       {/* Mobile: simple divider */}
@@ -73,15 +75,15 @@ export function TransactionsCard({ onAdd, onScan, limit, onSeeAll, transactions:
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ animation: "spin 1s linear infinite" }}>
             <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
           </svg>
-          Memuat transaksi…
+          {tr('umum.memuat')}
         </div>
       )}
 
       {!loading && filtered.length === 0 && (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "32px 16px", textAlign: "center" }}>
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--line)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" /><rect x="9" y="3" width="6" height="4" rx="1" /><path d="M9 12h6M9 16h4" /></svg>
-          <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink-2)" }}>Belum ada transaksi</div>
-          <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.5 }}>Mulai tambahkan transaksi pertamamu</div>
+          <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink-2)" }}>{tr('transaksi.belumAdaTransaksi')}</div>
+          <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.5 }}>{tr('transaksi.mulaiTambahkan')}</div>
         </div>
       )}
 
@@ -112,7 +114,7 @@ export function TransactionsCard({ onAdd, onScan, limit, onSeeAll, transactions:
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.merchant}</div>
-                    <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 1 }}>{cat?.label || t.category} · {t.time}</div>
+                    <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 1 }}>{categoryLabel(cat, tr, t.category)} · {t.time}</div>
                   </div>
                   <div className="tnum" style={{ fontSize: 14, fontWeight: 600, color: isIncome ? "var(--sage)" : "var(--ink)", flexShrink: 0 }}>
                     {isIncome ? "+" : "−"}{fmt(Math.abs(t.amount))}
@@ -132,7 +134,7 @@ export function TransactionsCard({ onAdd, onScan, limit, onSeeAll, transactions:
                       <div style={{ fontSize: 11.5, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.note}</div>
                     </div>
                   </div>
-                  <div style={{ fontSize: 12.5, color: "var(--ink-2)", textTransform: "capitalize" }}>{cat?.label || t.category}</div>
+                  <div style={{ fontSize: 12.5, color: "var(--ink-2)", textTransform: "capitalize" }}>{categoryLabel(cat, tr, t.category)}</div>
                   <div style={{ fontSize: 12.5, color: "var(--muted)" }}>{t.method}</div>
                   <div style={{ fontSize: 12.5, color: "var(--muted)" }} className="tnum">{t.time}</div>
                   <div className="tnum" style={{ textAlign: "right", fontSize: 13.5, fontWeight: 500, color: isIncome ? "var(--sage)" : "var(--ink)", whiteSpace: "nowrap" }}>
@@ -147,10 +149,10 @@ export function TransactionsCard({ onAdd, onScan, limit, onSeeAll, transactions:
 
       <div style={{ padding: "14px 4px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ fontSize: 12, color: "var(--muted)" }}>
-          {isMobile ? `${filtered.length} transaksi` : `Menampilkan ${filtered.length} dari ${transactions.length} transaksi`}
+          {isMobile ? tr('transaksi.transaksiCount', { count: filtered.length }) : tr('transaksi.menampilkanDari', { n: filtered.length, total: transactions.length })}
         </div>
         <button onClick={onSeeAll} style={{ ...ghostBtn, padding: "8px 14px", display: "inline-flex", alignItems: "center", gap: 6 }}>
-          Lihat semua <IconArrowRight size={12} />
+          {tr('umum.lihatSemua')} <IconArrowRight size={12} />
         </button>
       </div>
     </div>
@@ -173,6 +175,8 @@ const formatLong = iso => {
 
 // Date picker popup — tema mengikuti CSS variable aplikasi (light/dark)
 export function DatePickerPopup({ valueISO, onConfirm, onClose }) {
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language === 'en' ? 'en-US' : 'id-ID';
   const [sel, setSel] = React.useState(valueISO || todayISO());
   const todayIso = todayISO();
   const selDate = isoToDate(sel);
@@ -182,6 +186,9 @@ export function DatePickerPopup({ valueISO, onConfirm, onClose }) {
   const month = view.getMonth();
   const startOffset = (new Date(year, month, 1).getDay() + 6) % 7; // Senin = 0
   const daysInMonth = new Date(year, month + 1, 0).getDate();
+  // Nama hari (Sen-first) & bulan terlokalisasi mengikuti bahasa aktif
+  const weekdays = Array.from({ length: 7 }, (_, i) => new Date(2024, 0, 1 + i).toLocaleDateString(locale, { weekday: 'short' }));
+  const monthLabel = new Date(year, month, 1).toLocaleDateString(locale, { month: 'long' });
 
   const cells = [];
   for (let i = 0; i < startOffset; i++) cells.push(null);
@@ -209,7 +216,7 @@ export function DatePickerPopup({ valueISO, onConfirm, onClose }) {
             <IconChev size={15} className="" style={{ transform: "rotate(90deg)" }} />
           </button>
           <div className="serif" style={{ fontSize: 16, color: "var(--ink)", letterSpacing: "-0.01em" }}>
-            {MONTH_NAMES[month]} {year}
+            {monthLabel} {year}
           </div>
           <button onClick={() => setView(new Date(year, month + 1, 1))} style={navBtn}>
             <IconChev size={15} className="" style={{ transform: "rotate(-90deg)" }} />
@@ -218,7 +225,7 @@ export function DatePickerPopup({ valueISO, onConfirm, onClose }) {
 
         {/* Hari */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, marginBottom: 4 }}>
-          {WEEKDAYS.map(w => (
+          {weekdays.map(w => (
             <div key={w} style={{ textAlign: "center", fontSize: 10.5, color: "var(--muted)", padding: "4px 0", letterSpacing: ".03em" }}>{w}</div>
           ))}
         </div>
@@ -248,13 +255,13 @@ export function DatePickerPopup({ valueISO, onConfirm, onClose }) {
 
         {/* Aksi */}
         <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-          <button onClick={() => { const t = todayIso; setSel(t); setView(isoToDate(t)); }}
+          <button onClick={() => { const today = todayIso; setSel(today); setView(isoToDate(today)); }}
             style={{ flex: 1, padding: "10px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10, fontSize: 12.5, color: "var(--ink-2)", cursor: "pointer" }}>
-            Hari ini
+            {t('transaksi.hariIni')}
           </button>
           <button onClick={() => onConfirm(sel)}
             style={{ flex: 1.4, padding: "10px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 10, fontSize: 12.5, fontWeight: 500, cursor: "pointer" }}>
-            Pilih tanggal
+            {t('transaksi.pilihTanggal')}
           </button>
         </div>
       </div>
@@ -263,6 +270,8 @@ export function DatePickerPopup({ valueISO, onConfirm, onClose }) {
 }
 
 export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial = null, customCategories = [], onCreateCustom, prefill = null, notice = null, previewImage = null }) {
+  const { t: tr, i18n } = useTranslation();
+  const locale = i18n.language === 'en' ? 'en-US' : 'id-ID';
   useScrollLock(open);   // kunci scroll latar saat modal terbuka
   const isEdit = !!initial;
   const [type, setType] = React.useState("expense");
@@ -347,7 +356,7 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
         if (!onCreateCustom) { setSaving(false); return; }
         const { category, error } = await onCreateCustom({ name: pendingCustom.name, color: pendingCustom.color });
         if (error || !category) {
-          setSaveError('Gagal menyimpan kategori kustom. Coba lagi.');
+          setSaveError(tr('transaksi.gagalKategoriKustom'));
           setSaving(false);
           return;
         }
@@ -373,7 +382,7 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
     const res = isEdit ? await onUpdate?.(initial.id, tx) : await onSave?.(tx);
     if (res?.error) {
       // Simpan gagal → tetap buka modal, beri tahu user (data tidak hilang)
-      setSaveError('Gagal menyimpan transaksi. Periksa koneksi lalu coba lagi.');
+      setSaveError(tr('transaksi.gagalSimpan'));
       setSaving(false);
       return;
     }
@@ -388,14 +397,14 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
       <div className="card modal-sheet" onClick={e => e.stopPropagation()} style={{ width: "min(480px, 100%)", padding: 24, animation: "rise .3s ease-out", boxShadow: "0 30px 80px -20px rgba(42,44,32,.4)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
-            <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{isEdit ? "Edit transaksi" : "Entri baru"}</div>
-            <div className="serif" style={{ fontSize: 26, marginTop: 4, letterSpacing: "-0.01em" }}>{isEdit ? "Perbarui data" : "Catat transaksi"}</div>
-            <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 4, fontStyle: "italic" }} className="serif">{formatLong(dateRaw)}</div>
+            <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{isEdit ? tr('transaksi.editTransaksi') : tr('transaksi.entriBaru')}</div>
+            <div className="serif" style={{ fontSize: 26, marginTop: 4, letterSpacing: "-0.01em" }}>{isEdit ? tr('transaksi.perbaruiData') : tr('transaksi.catatTransaksi')}</div>
+            <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 4, fontStyle: "italic" }} className="serif">{isoToDate(dateRaw).toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             {/* Pilih tanggal */}
             <div style={{ position: "relative" }}>
-              <button onClick={() => setShowPicker(v => !v)} title="Pilih tanggal" aria-label="Pilih tanggal"
+              <button onClick={() => setShowPicker(v => !v)} title={tr('transaksi.pilihTanggal')} aria-label={tr('transaksi.pilihTanggal')}
                 style={{ width: 36, height: 36, borderRadius: 10, border: "1px solid var(--line-soft)", background: showPicker ? "var(--ink)" : "var(--paper)", display: "grid", placeItems: "center", color: showPicker ? "var(--cream)" : "var(--ink-2)", cursor: "pointer" }}>
                 <IconCalendar size={15} />
               </button>
@@ -417,7 +426,7 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
         {(previewImage || notice) && (
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 16 }}>
             {previewImage && (
-              <img src={previewImage} alt="Pratinjau struk"
+              <img src={previewImage} alt={tr('transaksi.pratinjauStruk')}
                 style={{ width: 52, height: 52, objectFit: "cover", borderRadius: 10, border: "1px solid var(--line-soft)", flexShrink: 0 }} />
             )}
             {notice && (
@@ -434,13 +443,13 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
         )}
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, padding: 3, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 12, marginTop: 18 }}>
-          {[{ id: "expense", label: "Pengeluaran" }, { id: "income", label: "Pemasukan" }].map(opt => (
+          {[{ id: "expense", label: tr('transaksi.pengeluaran') }, { id: "income", label: tr('transaksi.pemasukan') }].map(opt => (
             <button key={opt.id} onClick={() => switchType(opt.id)} style={{ padding: "10px 10px", fontSize: 13, background: type === opt.id ? "var(--ivory)" : "transparent", border: type === opt.id ? "1px solid var(--line-soft)" : "1px solid transparent", borderRadius: 9, color: type === opt.id ? "var(--ink)" : "var(--muted)", fontWeight: type === opt.id ? 500 : 400 }}>{opt.label}</button>
           ))}
         </div>
 
         <div style={{ marginTop: 20, textAlign: "center" }}>
-          <div style={{ fontSize: 10.5, color: "var(--muted)", letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 6 }}>Jumlah</div>
+          <div style={{ fontSize: 10.5, color: "var(--muted)", letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 6 }}>{tr('transaksi.jumlah')}</div>
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", gap: 6 }}>
             <span className="serif" style={{ fontSize: 28, color: "var(--muted)" }}>{type === "expense" ? "−" : "+"}Rp</span>
             <input autoFocus value={amount} onChange={e => setAmount(e.target.value.replace(/[^\d.]/g, ""))} placeholder="0"
@@ -449,10 +458,10 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
         </div>
 
         <div style={{ display: "grid", gap: 12, marginTop: 20 }}>
-          <Field label="Merchant">
-            <input value={merchant} onChange={e => setMerchant(e.target.value)} placeholder="nama merchant" style={inputStyle} />
+          <Field label={tr('transaksi.merchant')}>
+            <input value={merchant} onChange={e => setMerchant(e.target.value)} placeholder={tr('transaksi.namaMerchant')} style={inputStyle} />
           </Field>
-          <Field label="Kategori">
+          <Field label={tr('transaksi.kategori')}>
             <CategoryField
               value={cat}
               onChange={setCat}
@@ -463,12 +472,12 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
               onPendingChange={setPendingCustom}
             />
           </Field>
-          <Field label="Catatan (opsional)">
-            <input value={note} onChange={e => setNote(e.target.value)} placeholder="Untuk apa?" style={inputStyle} />
+          <Field label={tr('transaksi.catatanOpsional')}>
+            <input value={note} onChange={e => setNote(e.target.value)} placeholder={tr('transaksi.catatanPlaceholder')} style={inputStyle} />
           </Field>
           <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--ink-2)" }}>
             <input type="checkbox" checked={recurring} onChange={e => setRecurring(e.target.checked)} />
-            Tandai sebagai berulang
+            {tr('transaksi.tandaiBerulang')}
           </label>
         </div>
 
@@ -479,10 +488,10 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
         )}
 
         <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-          <button onClick={onClose} style={{ flex: 1, padding: "13px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 12, fontSize: 14, color: "var(--ink-2)" }}>Batal</button>
+          <button onClick={onClose} style={{ flex: 1, padding: "13px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 12, fontSize: 14, color: "var(--ink-2)" }}>{tr('umum.batal')}</button>
           <button onClick={submit} disabled={!valid || saving}
             style={{ flex: 2, padding: "13px", background: (valid && !saving) ? "var(--ink)" : "var(--line-soft)", color: (valid && !saving) ? "var(--cream)" : "var(--muted-2)", border: 0, borderRadius: 12, fontSize: 14, fontWeight: 500, cursor: (valid && !saving) ? "pointer" : "default" }}>
-            {saving ? "Menyimpan…" : (isEdit ? "Simpan perubahan" : "Simpan transaksi")}
+            {saving ? tr('umum.menyimpan') : (isEdit ? tr('transaksi.simpanPerubahan') : tr('transaksi.simpanTransaksi'))}
           </button>
         </div>
       </div>

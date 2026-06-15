@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { PinDots, Numpad, screenStyle, brandStyle, subtitleStyle, errorStyle, linkBtnStyle } from './PinPad';
 import { verifyPin } from '../lib/pin';
 import { isBiometricAvailable, authenticateBiometric } from '../lib/biometric';
@@ -7,6 +8,7 @@ const MAX_ATTEMPTS = 5;
 
 // Layar kunci yang muncul setiap aplikasi dibuka saat PIN aktif.
 export default function PinLock({ onUnlock, onForgot, biometricEnabled = false }) {
+  const { t } = useTranslation();
   const [entry, setEntry] = React.useState('');
   const [error, setError] = React.useState('');
   const [shake, setShake] = React.useState(false);
@@ -50,10 +52,10 @@ export default function PinLock({ onUnlock, onForgot, biometricEnabled = false }
       setAttempts(n);
       if (n >= MAX_ATTEMPTS) {
         setLocked5x(true);
-        fail('Terlalu banyak percobaan, silakan login ulang');
+        fail(t('keamanan.terlaluBanyak'));
         setTimeout(() => onForgot?.(), 1200);
       } else {
-        fail('PIN salah, coba lagi');
+        fail(t('keamanan.pinSalahCobaLagi'));
       }
     }, 120);
     return () => clearTimeout(t);
@@ -66,7 +68,7 @@ export default function PinLock({ onUnlock, onForgot, biometricEnabled = false }
     <div style={screenStyle}>
       <div style={{ fontSize: 30, marginBottom: 14 }} aria-hidden>🔒</div>
       <div style={brandStyle}>FinanceApp</div>
-      <div style={subtitleStyle}>Masukkan PIN</div>
+      <div style={subtitleStyle}>{t('keamanan.masukkanPin')}</div>
 
       <div style={{ margin: '30px 0 0' }}>
         <PinDots filled={entry.length} shake={shake} />
@@ -80,12 +82,12 @@ export default function PinLock({ onUnlock, onForgot, biometricEnabled = false }
       {bioAvailable && (
         <button type="button" onClick={tryBiometric}
           style={{ marginTop: 22, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 18px', background: 'rgba(255,255,255,.08)', color: '#fff', border: '1px solid rgba(255,255,255,.16)', borderRadius: 24, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>
-          <span style={{ fontSize: 18 }} aria-hidden>👆</span> Gunakan Sidik Jari
+          <span style={{ fontSize: 18 }} aria-hidden>👆</span> {t('keamanan.gunakanSidikJari')}
         </button>
       )}
 
       <button type="button" onClick={onForgot} style={{ ...linkBtnStyle, marginTop: bioAvailable ? 18 : 28 }}>
-        Lupa PIN?
+        {t('keamanan.lupa')}
       </button>
     </div>
   );

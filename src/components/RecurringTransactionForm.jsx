@@ -1,19 +1,15 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { CATEGORIES, INCOME_CATEGORIES } from '../data';
 import { CategoryField, CUSTOM_ID, CUSTOM_COLORS } from '../category-field';
 import { DatePickerPopup } from '../transactions';
 import { useScrollLock } from '../hooks/useScrollLock';
 import { todayISO, fromISO } from '../lib/recurringHelper';
 
+// Day/month names kept in Indonesian — stored as values in recurring transaction data
 const DAY_OPTIONS   = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
 const MONTH_NAMES   = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 const DAY_NAMES     = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-
-const FREKUENSI = [
-  { id: 'mingguan', label: 'Mingguan' },
-  { id: 'bulanan',  label: 'Bulanan'  },
-  { id: 'tahunan',  label: 'Tahunan'  },
-];
 
 const inputStyle = { width: '100%', padding: '11px 12px', background: 'var(--paper)', border: '1px solid var(--line-soft)', borderRadius: 10, color: 'var(--ink)', fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' };
 
@@ -34,6 +30,7 @@ const formatLong = (iso) => {
 // Pemilih tanggal 1–28 berbentuk grid kalender (7 kolom × 4 baris).
 // Mengganti dropdown panjang — nilai tetap angka 1–28.
 function DateGridField({ value, onChange }) {
+  const { t } = useTranslation();
   const [open, setOpen] = React.useState(false);
   const [pos, setPos] = React.useState(null);
   const wrapRef = React.useRef(null);
@@ -65,7 +62,7 @@ function DateGridField({ value, onChange }) {
     <div ref={wrapRef}>
       <button type="button" onClick={toggle}
         style={{ ...inputStyle, display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', textAlign: 'left' }}>
-        <span style={{ color: 'var(--ink)' }}>Tanggal {value}</span>
+        <span style={{ color: 'var(--ink)' }}>{t('berulang.tanggalN', { n: value })}</span>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
           style={{ color: 'var(--muted)', flexShrink: 0, marginLeft: 6, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s ease' }}>
           <path d="M6 9l6 6 6-6" />
@@ -78,7 +75,7 @@ function DateGridField({ value, onChange }) {
           background: 'var(--paper)', border: '1px solid var(--line-soft)', borderRadius: 12,
           boxShadow: '0 12px 36px -10px rgba(42,44,32,.35)', zIndex: 9999, padding: 12, boxSizing: 'border-box',
         }}>
-          <div style={{ fontSize: 11, color: 'var(--muted)', letterSpacing: '.05em', textTransform: 'uppercase', marginBottom: 10 }}>Pilih Tanggal</div>
+          <div style={{ fontSize: 11, color: 'var(--muted)', letterSpacing: '.05em', textTransform: 'uppercase', marginBottom: 10 }}>{t('berulang.pilihTanggal')}</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
             {Array.from({ length: 28 }, (_, i) => i + 1).map((n) => {
               const sel = n === value;
@@ -106,8 +103,15 @@ const BUILTIN_IDS = new Set([...CATEGORIES, ...INCOME_CATEGORIES].map((c) => c.i
 
 // Modal form untuk menambah / mengubah satu jadwal transaksi berulang.
 export default function RecurringTransactionForm({ initial = null, onSave, onCancel }) {
-  useScrollLock(true);   // form ini di-mount hanya saat terbuka → kunci scroll latar
+  const { t } = useTranslation();
+  useScrollLock(true);
   const isEdit = !!initial;
+
+  const FREKUENSI = [
+    { id: 'mingguan', label: t('berulang.mingguan') },
+    { id: 'bulanan',  label: t('berulang.bulanan')  },
+    { id: 'tahunan',  label: t('berulang.tahunan')  },
+  ];
 
   const [nama, setNama]         = React.useState('');
   const [tipe, setTipe]         = React.useState('pengeluaran');
@@ -182,13 +186,13 @@ export default function RecurringTransactionForm({ initial = null, onSave, onCan
         style={{ width: 'min(480px, 100%)', maxHeight: '92vh', overflowY: 'auto', padding: 24, animation: 'rise .3s ease-out', boxShadow: '0 30px 80px -20px rgba(42,44,32,.4)' }}>
 
         <div style={{ marginBottom: 4 }}>
-          <div style={{ fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--muted)' }}>{isEdit ? 'Edit jadwal' : 'Jadwal baru'}</div>
-          <div className="serif" style={{ fontSize: 26, marginTop: 4, letterSpacing: '-0.01em' }}>{isEdit ? 'Ubah transaksi berulang' : 'Transaksi berulang'}</div>
+          <div style={{ fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--muted)' }}>{isEdit ? t('berulang.editJadwal') : t('berulang.jadwalBaru')}</div>
+          <div className="serif" style={{ fontSize: 26, marginTop: 4, letterSpacing: '-0.01em' }}>{isEdit ? t('berulang.ubahBerulang') : t('berulang.transaksiBerulangForm')}</div>
         </div>
 
         {/* Tipe */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, padding: 3, background: 'var(--paper)', border: '1px solid var(--line-soft)', borderRadius: 12, marginTop: 18 }}>
-          {[{ id: 'pengeluaran', label: 'Pengeluaran' }, { id: 'pemasukan', label: 'Pemasukan' }].map((opt) => (
+          {[{ id: 'pengeluaran', label: t('transaksi.pengeluaran') }, { id: 'pemasukan', label: t('transaksi.pemasukan') }].map((opt) => (
             <button key={opt.id} onClick={() => switchTipe(opt.id)}
               style={{ padding: '10px', fontSize: 13, background: tipe === opt.id ? 'var(--ivory)' : 'transparent', border: tipe === opt.id ? '1px solid var(--line-soft)' : '1px solid transparent', borderRadius: 9, color: tipe === opt.id ? 'var(--ink)' : 'var(--muted)', fontWeight: tipe === opt.id ? 500 : 400, cursor: 'pointer', fontFamily: 'inherit' }}>
               {opt.label}
@@ -197,11 +201,11 @@ export default function RecurringTransactionForm({ initial = null, onSave, onCan
         </div>
 
         <div style={{ display: 'grid', gap: 14, marginTop: 18 }}>
-          <Field label="Nama transaksi">
-            <input value={nama} onChange={(e) => setNama(e.target.value)} placeholder="mis. Bayar Kos, Gaji Bulanan" style={inputStyle} />
+          <Field label={t('berulang.namaTransaksi')}>
+            <input value={nama} onChange={(e) => setNama(e.target.value)} placeholder={t('berulang.namaTxPlaceholder')} style={inputStyle} />
           </Field>
 
-          <Field label="Jumlah">
+          <Field label={t('transaksi.jumlah')}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, ...inputStyle, padding: 0, paddingLeft: 12 }}>
               <span style={{ color: 'var(--muted)', fontSize: 14 }}>{tipe === 'pengeluaran' ? '−' : '+'}Rp</span>
               <input value={jumlah} onChange={(e) => setJumlah(e.target.value.replace(/[^\d]/g, ''))} placeholder="0" inputMode="numeric"
@@ -209,7 +213,7 @@ export default function RecurringTransactionForm({ initial = null, onSave, onCan
             </div>
           </Field>
 
-          <Field label="Kategori">
+          <Field label={t('transaksi.kategori')}>
             <CategoryField
               value={cat}
               onChange={setCat}
@@ -222,7 +226,7 @@ export default function RecurringTransactionForm({ initial = null, onSave, onCan
           </Field>
 
           {/* Frekuensi */}
-          <Field label="Frekuensi">
+          <Field label={t('berulang.frekuensi')}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, padding: 3, background: 'var(--paper)', border: '1px solid var(--line-soft)', borderRadius: 12 }}>
               {FREKUENSI.map((f) => (
                 <button key={f.id} onClick={() => setFrekuensi(f.id)}
@@ -235,7 +239,7 @@ export default function RecurringTransactionForm({ initial = null, onSave, onCan
 
           {/* Detail jadwal sesuai frekuensi */}
           {frekuensi === 'mingguan' && (
-            <Field label="Setiap hari">
+            <Field label={t('berulang.setiapHari')}>
               <select value={hariMinggu} onChange={(e) => setHariMinggu(e.target.value)} style={inputStyle}>
                 {DAY_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
               </select>
@@ -243,17 +247,17 @@ export default function RecurringTransactionForm({ initial = null, onSave, onCan
           )}
 
           {frekuensi === 'bulanan' && (
-            <Field label="Setiap tanggal">
+            <Field label={t('berulang.setiapTgl')}>
               <DateGridField value={tanggal} onChange={setTanggal} />
             </Field>
           )}
 
           {frekuensi === 'tahunan' && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 12 }}>
-              <Field label="Tanggal">
+              <Field label={t('berulang.tanggal')}>
                 <DateGridField value={tanggal} onChange={setTanggal} />
               </Field>
-              <Field label="Bulan">
+              <Field label={t('berulang.bulan')}>
                 <select value={bulan} onChange={(e) => setBulan(+e.target.value)} style={inputStyle}>
                   {MONTH_NAMES.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
                 </select>
@@ -262,7 +266,7 @@ export default function RecurringTransactionForm({ initial = null, onSave, onCan
           )}
 
           {/* Mulai dari tanggal */}
-          <Field label="Mulai dari">
+          <Field label={t('berulang.mulaiDariLabel')}>
             <div style={{ position: 'relative' }}>
               <button type="button" onClick={() => setShowPicker((v) => !v)}
                 style={{ ...inputStyle, display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', textAlign: 'left' }}>
@@ -279,16 +283,16 @@ export default function RecurringTransactionForm({ initial = null, onSave, onCan
             </div>
           </Field>
 
-          <Field label="Catatan (opsional)">
-            <input value={catatan} onChange={(e) => setCatatan(e.target.value)} placeholder="Catatan tambahan…" style={inputStyle} />
+          <Field label={t('berulang.catatanOpsional')}>
+            <input value={catatan} onChange={(e) => setCatatan(e.target.value)} placeholder={t('berulang.catatanPlaceholder')} style={inputStyle} />
           </Field>
         </div>
 
         <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
-          <button onClick={onCancel} style={{ flex: 1, padding: '13px', background: 'var(--paper)', border: '1px solid var(--line-soft)', borderRadius: 12, fontSize: 14, color: 'var(--ink-2)', cursor: 'pointer', fontFamily: 'inherit' }}>Batal</button>
+          <button onClick={onCancel} style={{ flex: 1, padding: '13px', background: 'var(--paper)', border: '1px solid var(--line-soft)', borderRadius: 12, fontSize: 14, color: 'var(--ink-2)', cursor: 'pointer', fontFamily: 'inherit' }}>{t('umum.batal')}</button>
           <button onClick={submit} disabled={!valid}
             style={{ flex: 2, padding: '13px', background: valid ? 'var(--ink)' : 'var(--line-soft)', color: valid ? 'var(--cream)' : 'var(--muted-2)', border: 0, borderRadius: 12, fontSize: 14, fontWeight: 500, cursor: valid ? 'pointer' : 'default', fontFamily: 'inherit' }}>
-            Simpan
+            {t('umum.simpan')}
           </button>
         </div>
       </div>

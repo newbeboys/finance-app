@@ -1,8 +1,24 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { ALL_CATEGORIES } from './data';
 
 // Nilai khusus untuk opsi "Kustom (nama bebas)" di dropdown
 export const CUSTOM_ID = '__custom__';
+
+/**
+ * Label kategori terlokalisasi.
+ * Kategori bawaan (id seperti "food") punya key `kategori.<id>` di terjemahan.
+ * Kategori kustom dari Supabase tak punya key → fallback ke nama tersimpan
+ * (tidak diterjemahkan, sesuai aturan: data user tetap apa adanya).
+ *
+ * @param cat       objek kategori { id, label } (atau null)
+ * @param translate fungsi t dari useTranslation
+ * @param fallback  teks bila cat null (mis. id mentah dari transaksi)
+ */
+export function categoryLabel(cat, translate, fallback = '') {
+  if (!cat) return fallback;
+  return translate('kategori.' + cat.id, { defaultValue: cat.label });
+}
 
 // Palet warna untuk kategori kustom (dipakai di kedua menu)
 export const CUSTOM_COLORS = [
@@ -51,6 +67,7 @@ export function CategoryField({
   value, onChange, categories = [], customCategories = [],
   allowCustom = true, pending, onPendingChange,
 }) {
+  const { t } = useTranslation();
   const merged = [...categories, ...customCategories];
   const isCustom = value === CUSTOM_ID;
   const selected = merged.find(c => c.id === value);
@@ -86,7 +103,7 @@ export function CategoryField({
     setOpen(false);
   };
 
-  const triggerLabel = isCustom ? 'Kustom (nama bebas)' : (selected?.label || 'Pilih kategori');
+  const triggerLabel = isCustom ? t('kategori.kustom') : (selected ? categoryLabel(selected, t) : t('kategori.pilihKategori'));
   const triggerColor = isCustom ? (pending?.color || CUSTOM_COLORS[0]) : selected?.color;
 
   return (
@@ -122,8 +139,8 @@ export function CategoryField({
                   color: 'var(--ink)', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
                 }}>
                 <Dot color={c.color} />
-                {c.label}
-                {c.custom && <span style={{ fontSize: 10, color: 'var(--muted)', marginLeft: 4 }}>kustom</span>}
+                {categoryLabel(c, t)}
+                {c.custom && <span style={{ fontSize: 10, color: 'var(--muted)', marginLeft: 4 }}>{t('kategori.kustomBadge')}</span>}
                 {c.id === value && (
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto', color: 'var(--sage)' }}>
                     <path d="M20 6L9 17l-5-5" />
@@ -143,7 +160,7 @@ export function CategoryField({
                   textAlign: 'left', fontFamily: 'inherit',
                 }}>
                 <PlusDot />
-                Kustom (nama bebas)
+                {t('kategori.kustom')}
               </button>
             )}
           </div>
@@ -155,7 +172,7 @@ export function CategoryField({
         <div style={{ display: 'grid', gap: 10, marginTop: 10 }}>
           <input autoFocus value={pending?.name || ''}
             onChange={e => onPendingChange?.({ ...pending, name: e.target.value })}
-            placeholder="Nama kategori, mis. Donasi, Hadiah…"
+            placeholder={t('kategori.namaKategoriPlaceholder')}
             style={fieldInput} />
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {CUSTOM_COLORS.map(col => (

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import Lottie from 'lottie-react';
 import goalsAnim from '../assets/animation/goals-animation.json';
 import goalsSound from '../assets/sound/goals-sound.wav';
@@ -9,7 +10,8 @@ import { useScrollLock } from '../hooks/useScrollLock';
 // Animasi diputar sekali (loop:false) + sound berbarengan, lalu hilang
 // otomatis saat animasi selesai (onComplete). Tombol "Tutup" untuk skip.
 export function GoalCompleteOverlay({ onClose }) {
-  useScrollLock(true);   // overlay ini di-mount hanya saat tampil → kunci scroll latar
+  const { t } = useTranslation();
+  useScrollLock(true);
   React.useEffect(() => {
     playSound(goalsSound);
   }, []);
@@ -27,8 +29,8 @@ export function GoalCompleteOverlay({ onClose }) {
             rendererSettings={{ preserveAspectRatio: 'xMidYMid meet' }}
           />
         </div>
-        <div className="serif" style={titleStyle}>Selamat! Target tercapai! 🎉</div>
-        <button type="button" onClick={onClose} style={btnStyle}>Tutup</button>
+        <div className="serif" style={titleStyle}>{t('tabungan.selamatTercapai')}</div>
+        <button type="button" onClick={onClose} style={btnStyle}>{t('umum.tutup')}</button>
       </div>
     </div>
   );

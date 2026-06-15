@@ -4,6 +4,8 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 
 /**
  * Helper bersama untuk widget Medium & Large.
@@ -48,6 +50,26 @@ public final class WidgetRenderer {
             id = ctx.getResources().getIdentifier("char_happy", "drawable", ctx.getPackageName());
         }
         return id;
+    }
+
+    /**
+     * Decode karakter sebagai bitmap 96×96px menggunakan inSampleSize=4.
+     * Bitmap 96×96 ARGB = ~36 KB — aman untuk parsel RemoteViews (< 1 MB limit).
+     */
+    public static Bitmap charBitmap(Context ctx, String name) {
+        int id = charDrawable(ctx, name);
+        if (id == 0) return null;
+        try {
+            BitmapFactory.Options opts = new BitmapFactory.Options();
+            opts.inSampleSize = 4;
+            Bitmap raw = BitmapFactory.decodeResource(ctx.getResources(), id, opts);
+            if (raw == null) return null;
+            Bitmap scaled = Bitmap.createScaledBitmap(raw, 96, 96, true);
+            if (scaled != raw) raw.recycle();
+            return scaled;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private static int piFlags() {

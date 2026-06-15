@@ -5,6 +5,7 @@ import android.appwidget.AppWidgetProvider;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
 import android.widget.RemoteViews;
 
 /**
@@ -31,8 +32,8 @@ public class WidgetMedium extends AppWidgetProvider {
             // Nilai murni; label "Bersih" kini statis di layout (dua kolom rapi).
             v.setTextViewText(R.id.tv_net,     p.getString(WidgetRenderer.K_BERSIH, "Rp 0"));
 
-            int charId = WidgetRenderer.charDrawable(ctx, p.getString(WidgetRenderer.K_CHAR, "char_happy"));
-            if (charId != 0) v.setImageViewResource(R.id.iv_char, charId);
+            Bitmap charBmp = WidgetRenderer.charBitmap(ctx, p.getString(WidgetRenderer.K_CHAR, "char_happy"));
+            if (charBmp != null) v.setImageViewBitmap(R.id.iv_char, charBmp);
 
             v.setOnClickPendingIntent(R.id.widget_root, WidgetRenderer.openApp(ctx));
 

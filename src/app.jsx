@@ -1,4 +1,5 @@
-import React from 'react';
+﻿import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { useTweaks, TweaksPanel, TweakSection, TweakRadio, TweakSelect, TweakToggle } from './tweaks-panel';
 import { BottomNav } from './components/BottomNav';
 import { TopBar } from './topbar';
@@ -49,6 +50,7 @@ const FONT_THEMES = {
 };
 
 export default function App() {
+  const { t } = useTranslation();
   const [session, setSession] = React.useState(undefined); // undefined = loading
   const [authView, setAuthView] = React.useState('login');
   // Onboarding tampil setiap kali user baru register atau login (fresh session).
@@ -121,7 +123,7 @@ export default function App() {
   // 2) Konten utama (auth/onboarding) — di-mount di belakang splash agar transisi mulus.
   let content;
   if (session === undefined) {
-    content = <div style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', background: 'var(--cream)', color: 'var(--muted)', fontSize: 14 }}>Memuat…</div>;
+    content = <div style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', background: 'var(--cream)', color: 'var(--muted)', fontSize: 14 }}>{t('umum.memuat')}</div>;
   } else if (!session) {
     content = authView === 'login'
       ? <LoginPage onSwitch={() => setAuthView('register')} onAuthSuccess={() => setShowOnboarding(true)} />
@@ -437,9 +439,10 @@ function AuthenticatedApp({ session }) {
 }
 
 function RecurringToast({ data, onDone }) {
+  const { t } = useTranslation();
   React.useEffect(() => {
-    const t = setTimeout(onDone, 4800);
-    return () => clearTimeout(t);
+    const timer = setTimeout(onDone, 4800);
+    return () => clearTimeout(timer);
   }, [onDone]);
   return (
     <div role="status" style={{
@@ -447,15 +450,16 @@ function RecurringToast({ data, onDone }) {
       borderRadius: 12, padding: "12px 16px", fontSize: 12.5, lineHeight: 1.45,
       boxShadow: "0 12px 32px -8px rgba(42,44,32,.45)", animation: "rise .25s ease-out",
     }}>
-      ✅ Transaksi berulang “{data.nama}” sebesar {fmt(data.jumlah)} telah dicatat otomatis
+      ✅ {t('berulang.dicatatOtomatis', { nama: data.nama, jumlah: fmt(data.jumlah) })}
     </div>
   );
 }
 
 function Placeholder({ section }) {
+  const { t } = useTranslation();
   const titles = {
-    transactions: "Transaksi", analytics: "Analitik", budgets: "Anggaran",
-    savings: "Tabungan", reports: "Laporan", settings: "Pengaturan",
+    transactions: t('nav.transaksi'), analytics: t('nav.analitik'), budgets: t('nav.anggaran'),
+    savings: t('nav.tabungan'), reports: t('nav.laporan'), settings: t('nav.pengaturan'),
   };
   return (
     <div style={{ padding: "60px 32px", display: "grid", placeItems: "center" }}>
