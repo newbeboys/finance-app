@@ -1,154 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Widget Medium 4x2 — ringkasan keuangan bulan ini + karakter (minimalis & padat) -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/widget_root"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="@drawable/widget_bg"
-    android:padding="12dp">
+<LinearLayout
+  xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="match_parent"
+  android:layout_height="match_parent"
+  android:orientation="vertical"
+  android:gravity="center"
+  android:background="#1a1a2e"
+  android:padding="16dp">
 
-    <!-- Header: nama app + bulan tahun -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
+  <TextView
+    android:id="@+id/widget_title"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:text="FinanceApp"
+    android:textColor="#FFFFFF"
+    android:textSize="18sp"
+    android:textStyle="bold"/>
 
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="💰 FinanceApp"
-            android:textColor="@color/widget_text"
-            android:textSize="12sp"
-            android:textStyle="bold"
-            android:maxLines="1"
-            android:ellipsize="end" />
+  <TextView
+    android:id="@+id/widget_subtitle"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:text="Widget aktif!"
+    android:textColor="#10B981"
+    android:textSize="14sp"/>
 
-        <TextView
-            android:id="@+id/tv_month"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Jun 2026"
-            android:textColor="@color/widget_muted"
-            android:textSize="10sp"
-            android:maxLines="1" />
-    </LinearLayout>
-
-    <!-- Body: karakter (kiri) + tiga baris label/nominal (kanan) -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:layout_marginTop="8dp"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
-
-        <ImageView
-            android:id="@+id/iv_char"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:src="@drawable/char_happy"
-            android:scaleType="fitCenter"
-            android:contentDescription="@string/widget_medium_desc" />
-
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="12dp"
-            android:orientation="vertical">
-
-            <!-- Masuk -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Masuk"
-                    android:textColor="@color/widget_muted"
-                    android:textSize="10sp" />
-
-                <TextView
-                    android:id="@+id/tv_income"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Rp 0"
-                    android:textColor="@color/widget_income"
-                    android:textSize="12sp"
-                    android:textStyle="bold"
-                    android:maxLines="1"
-                    android:ellipsize="end" />
-            </LinearLayout>
-
-            <!-- Keluar -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="3dp"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Keluar"
-                    android:textColor="@color/widget_muted"
-                    android:textSize="10sp" />
-
-                <TextView
-                    android:id="@+id/tv_expense"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Rp 0"
-                    android:textColor="@color/widget_expense"
-                    android:textSize="12sp"
-                    android:textStyle="bold"
-                    android:maxLines="1"
-                    android:ellipsize="end" />
-            </LinearLayout>
-
-            <!-- Garis pemisah tipis sebelum Bersih -->
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:layout_marginTop="5dp"
-                android:layout_marginBottom="5dp"
-                android:background="@color/widget_divider" />
-
-            <!-- Bersih -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Bersih"
-                    android:textColor="@color/widget_muted"
-                    android:textSize="10sp" />
-
-                <TextView
-                    android:id="@+id/tv_net"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Rp 0"
-                    android:textColor="@color/widget_text"
-                    android:textSize="12sp"
-                    android:textStyle="bold"
-                    android:maxLines="1"
-                    android:ellipsize="end" />
-            </LinearLayout>
-        </LinearLayout>
-    </LinearLayout>
 </LinearLayout>
