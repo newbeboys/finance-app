@@ -21,7 +21,7 @@ export default function OnboardingScreen({ onDone }) {
   const isLast = index === SLIDE_KEYS.length - 1;
 
   const goTo = React.useCallback((i) => {
-    setIndex((cur) => Math.max(0, Math.min(SLIDES.length - 1, i ?? cur)));
+    setIndex((cur) => Math.max(0, Math.min(SLIDE_KEYS.length - 1, i ?? cur)));
   }, []);
 
   const handleNext = () => {

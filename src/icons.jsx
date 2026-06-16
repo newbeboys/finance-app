@@ -1,5 +1,3 @@
-import React from 'react';
-
 const Ic = (paths, vb = "0 0 24 24") => ({ size = 18, stroke = 1.4, className = "", ...rest }) => (
   <svg viewBox={vb} width={size} height={size} fill="none" stroke="currentColor" strokeWidth={stroke}
        strokeLinecap="round" strokeLinejoin="round" className={className} {...rest}>

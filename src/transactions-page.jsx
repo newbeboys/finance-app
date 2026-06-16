@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { TRANSACTIONS, ALL_CATEGORIES, fmt, fmtShort, formatNominal, nominalFontSize } from './data';
+import { TRANSACTIONS, ALL_CATEGORIES, fmt, formatNominal, nominalFontSize } from './data';
 import { IconSearch, IconPlus, IconClose, CatIcon } from './icons';
 import { useIsMobile } from './use-mobile';
 import { AddTransactionModal } from './transactions';

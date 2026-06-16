@@ -1,4 +1,3 @@
-import React from 'react';
 import { useTranslation } from 'react-i18next';
 
 // Suntik keyframes shake sekali saja (tanpa menyentuh CSS global)
