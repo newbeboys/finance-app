@@ -26,6 +26,7 @@ import { fmt } from './data';
 import PinLock from './components/PinLock';
 import BiometricLock from './components/BiometricLock';
 import { isPinActive, isBiometricEnabled, clearPin } from './lib/pin';
+import { useAutoLock } from './hooks/useAutoLock';
 import { useTransactions } from './hooks/useTransactions';
 import { useSavings } from './hooks/useSavings';
 import { useWallets } from './hooks/useWallets';
@@ -110,6 +111,14 @@ export default function App() {
     setShowSplash(true);
     try { await supabase.auth.signOut(); } catch {}
   }, []);
+
+  // Auto-lock: setelah app lama di background, munculkan kembali gerbang keamanan.
+  // No-op bila tak ada metode keamanan aktif (PIN/biometrik mati).
+  const lockNow = React.useCallback(() => {
+    if (isPinActive()) { setShowSplash(false); setShowPin(true); }
+    else if (isBiometricEnabled()) { setShowSplash(false); setShowBiometric(true); }
+  }, []);
+  useAutoLock(lockNow);
 
   // 1) Gerbang keamanan: tampil paling depan, SEBELUM splash & konten.
   //    Tidak ada batas waktu — user bebas selama apa pun memasukkan PIN/sidik jari.

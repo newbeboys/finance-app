@@ -23,19 +23,22 @@ export default function PinSetup({ requireCurrent = false, onComplete, onCancel 
   React.useEffect(() => {
     if (entry.length !== 6) return;
     const pin = entry;
-    const t = setTimeout(() => {
+    let cancelled = false;
+    const timer = setTimeout(async () => {
       if (stage === 'current') {
-        if (verifyPin(pin)) { setError(''); setEntry(''); setStage('new'); }
+        const ok = await verifyPin(pin);
+        if (cancelled) return;
+        if (ok) { setError(''); setEntry(''); setStage('new'); }
         else fail(t('keamanan.pinLamaSalah'));
       } else if (stage === 'new') {
         setFirstPin(pin); setError(''); setEntry(''); setStage('confirm');
       } else { // confirm
-        if (pin === firstPin) { setPin(pin); onComplete?.(); }
+        if (pin === firstPin) { await setPin(pin); if (!cancelled) onComplete?.(); }
         else { setFirstPin(''); setStage('new'); fail(t('keamanan.pinTidakCocokUlangi')); }
       }
     }, 120);
-    return () => clearTimeout(t);
-  }, [entry, stage, firstPin, onComplete]);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [entry, stage, firstPin, onComplete, t]);
 
   const onDigit = (d) => setEntry(e => (e.length < 6 ? e + d : e));
   const onDelete = () => { setError(''); setEntry(e => e.slice(0, -1)); };

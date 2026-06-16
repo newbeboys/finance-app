@@ -46,8 +46,11 @@ export default function PinLock({ onUnlock, onForgot, biometricEnabled = false }
   React.useEffect(() => {
     if (entry.length !== 6 || locked5x) return;
     const pin = entry;
-    const t = setTimeout(() => {
-      if (verifyPin(pin)) { onUnlock?.(); return; }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      const ok = await verifyPin(pin);
+      if (cancelled) return;
+      if (ok) { onUnlock?.(); return; }
       const n = attempts + 1;
       setAttempts(n);
       if (n >= MAX_ATTEMPTS) {
@@ -58,8 +61,8 @@ export default function PinLock({ onUnlock, onForgot, biometricEnabled = false }
         fail(t('keamanan.pinSalahCobaLagi'));
       }
     }, 120);
-    return () => clearTimeout(t);
-  }, [entry, attempts, locked5x, onUnlock, onForgot]);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [entry, attempts, locked5x, onUnlock, onForgot, t]);
 
   const onDigit = (d) => { if (!locked5x) setEntry(e => (e.length < 6 ? e + d : e)); };
   const onDelete = () => { setError(''); setEntry(e => e.slice(0, -1)); };
