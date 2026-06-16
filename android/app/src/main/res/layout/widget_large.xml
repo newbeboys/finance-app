@@ -12,17 +12,45 @@
     android:id="@+id/widget_title"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
-    android:text="FinanceApp Large"
+    android:text="FinanceApp"
     android:textColor="#FFFFFF"
-    android:textSize="20sp"
+    android:textSize="18sp"
     android:textStyle="bold"/>
 
   <TextView
-    android:id="@+id/widget_subtitle"
+    android:id="@+id/widget_bulan"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
-    android:text="Widget aktif!"
+    android:text="Bulan ini"
+    android:textColor="#AAAAAA"
+    android:textSize="12sp"/>
+
+  <TextView
+    android:id="@+id/widget_masuk"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:text="&#8593; Rp 0"
     android:textColor="#10B981"
-    android:textSize="16sp"/>
+    android:textSize="14sp"
+    android:layout_marginTop="12dp"/>
+
+  <TextView
+    android:id="@+id/widget_keluar"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:text="&#8595; Rp 0"
+    android:textColor="#EF4444"
+    android:textSize="14sp"
+    android:layout_marginTop="4dp"/>
+
+  <TextView
+    android:id="@+id/widget_bersih"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:text="= Rp 0"
+    android:textColor="#FFFFFF"
+    android:textSize="14sp"
+    android:textStyle="bold"
+    android:layout_marginTop="8dp"/>
 
 </LinearLayout>
