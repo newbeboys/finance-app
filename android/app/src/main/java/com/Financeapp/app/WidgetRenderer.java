@@ -53,18 +53,22 @@ public final class WidgetRenderer {
     }
 
     /**
-     * Decode karakter sebagai bitmap 96×96px menggunakan inSampleSize=4.
-     * Bitmap 96×96 ARGB = ~36 KB — aman untuk parsel RemoteViews (< 1 MB limit).
+     * Decode karakter sebagai bitmap 128×128px. Sumber drawable kini 128×128
+     * (drawable-nodpi), jadi tak perlu downsample agresif — dekode penuh lalu
+     * skala ke 128×128. Bitmap 128×128 ARGB = ~64 KB — aman untuk parsel
+     * RemoteViews (< 1 MB limit) dan tetap tajam pada widget Medium & Large.
      */
     public static Bitmap charBitmap(Context ctx, String name) {
         int id = charDrawable(ctx, name);
         if (id == 0) return null;
         try {
             BitmapFactory.Options opts = new BitmapFactory.Options();
-            opts.inSampleSize = 4;
+            // Sumber sudah kecil (128×128); inSampleSize=1 agar tidak blur.
+            opts.inSampleSize = 1;
+            opts.inScaled = false; // jangan density-scale; jaga ukuran tetap kecil
             Bitmap raw = BitmapFactory.decodeResource(ctx.getResources(), id, opts);
             if (raw == null) return null;
-            Bitmap scaled = Bitmap.createScaledBitmap(raw, 96, 96, true);
+            Bitmap scaled = Bitmap.createScaledBitmap(raw, 128, 128, true);
             if (scaled != raw) raw.recycle();
             return scaled;
         } catch (Exception e) {
