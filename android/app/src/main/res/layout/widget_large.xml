@@ -8,6 +8,14 @@
   android:background="#1a1a2e"
   android:padding="16dp">
 
+  <ImageView
+    android:id="@+id/widget_character"
+    android:layout_width="64dp"
+    android:layout_height="64dp"
+    android:src="@drawable/char_happy"
+    android:scaleType="fitCenter"
+    android:contentDescription="Karakter"/>
+
   <TextView
     android:id="@+id/widget_title"
     android:layout_width="wrap_content"
@@ -15,7 +23,8 @@
     android:text="FinanceApp"
     android:textColor="#FFFFFF"
     android:textSize="18sp"
-    android:textStyle="bold"/>
+    android:textStyle="bold"
+    android:layout_marginTop="8dp"/>
 
   <TextView
     android:id="@+id/widget_bulan"
@@ -32,7 +41,7 @@
     android:text="&#8593; Rp 0"
     android:textColor="#10B981"
     android:textSize="14sp"
-    android:layout_marginTop="12dp"/>
+    android:layout_marginTop="10dp"/>
 
   <TextView
     android:id="@+id/widget_keluar"

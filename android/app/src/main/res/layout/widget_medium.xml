@@ -3,43 +3,60 @@
   xmlns:android="http://schemas.android.com/apk/res/android"
   android:layout_width="match_parent"
   android:layout_height="match_parent"
-  android:orientation="vertical"
-  android:gravity="center"
+  android:orientation="horizontal"
+  android:gravity="center_vertical"
   android:background="#1a1a2e"
   android:padding="16dp">
 
-  <TextView
-    android:id="@+id/widget_title"
-    android:layout_width="wrap_content"
-    android:layout_height="wrap_content"
-    android:text="FinanceApp"
-    android:textColor="#FFFFFF"
-    android:textSize="16sp"
-    android:textStyle="bold"/>
+  <ImageView
+    android:id="@+id/widget_character"
+    android:layout_width="48dp"
+    android:layout_height="48dp"
+    android:src="@drawable/char_happy"
+    android:scaleType="fitCenter"
+    android:contentDescription="Karakter"/>
 
-  <TextView
-    android:id="@+id/widget_bulan"
-    android:layout_width="wrap_content"
+  <LinearLayout
+    android:layout_width="0dp"
     android:layout_height="wrap_content"
-    android:text="Bulan ini"
-    android:textColor="#AAAAAA"
-    android:textSize="11sp"/>
+    android:layout_weight="1"
+    android:layout_marginStart="12dp"
+    android:orientation="vertical">
 
-  <TextView
-    android:id="@+id/widget_masuk"
-    android:layout_width="wrap_content"
-    android:layout_height="wrap_content"
-    android:text="&#8593; Rp 0"
-    android:textColor="#10B981"
-    android:textSize="13sp"
-    android:layout_marginTop="8dp"/>
+    <TextView
+      android:id="@+id/widget_title"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:text="FinanceApp"
+      android:textColor="#FFFFFF"
+      android:textSize="16sp"
+      android:textStyle="bold"/>
 
-  <TextView
-    android:id="@+id/widget_keluar"
-    android:layout_width="wrap_content"
-    android:layout_height="wrap_content"
-    android:text="&#8595; Rp 0"
-    android:textColor="#EF4444"
-    android:textSize="13sp"/>
+    <TextView
+      android:id="@+id/widget_bulan"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:text="Bulan ini"
+      android:textColor="#AAAAAA"
+      android:textSize="11sp"/>
+
+    <TextView
+      android:id="@+id/widget_masuk"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:text="&#8593; Rp 0"
+      android:textColor="#10B981"
+      android:textSize="13sp"
+      android:layout_marginTop="6dp"/>
+
+    <TextView
+      android:id="@+id/widget_keluar"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:text="&#8595; Rp 0"
+      android:textColor="#EF4444"
+      android:textSize="13sp"/>
+
+  </LinearLayout>
 
 </LinearLayout>
