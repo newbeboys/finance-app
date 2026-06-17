@@ -1,5 +1,6 @@
 import React from 'react';
 import { supabase } from '../supabase';
+import { usePaywall } from '../components/PaywallModal';
 
 const FALLBACK_COLORS = ["#2A6FDB","#1FA8A0","#1B8A3F","#9A6BD9","#B26A4A","#B68A3E","#5C6B4C","#C9886D"];
 const pickColor = (name) => FALLBACK_COLORS[(name || '').charCodeAt(0) % FALLBACK_COLORS.length];
@@ -18,9 +19,10 @@ function toAppWallet(row) {
   };
 }
 
-export function useWallets(userId) {
+export function useWallets(userId, limits) {
   const [accounts, setAccounts] = React.useState([]);
   const [loading, setLoading]   = React.useState(true);
+  const { openPaywall } = usePaywall();
 
   React.useEffect(() => {
     if (!userId) { setLoading(false); return; }
@@ -45,6 +47,13 @@ export function useWallets(userId) {
   }, [userId]);
 
   async function createAccount(a) {
+    // ── Batas plan: tolak insert bila sudah mencapai limit ────────
+    const maxWallets = limits?.maxWallets ?? Infinity;
+    if (accounts.length >= maxWallets) {
+      openPaywall('Wallet / Dompet tambahan');
+      return { error: null, limitReached: true };
+    }
+
     // ── Kolom base schema (selalu ada) ────────────────────────────
     // AddAccountModal kirim 'institution', schema pakai 'bank'
     const basePayload = {

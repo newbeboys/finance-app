@@ -4,6 +4,7 @@ import { ALL_CATEGORIES, fmtShort } from './data';
 import { IconReport, IconArrowDown, IconClose } from './icons';
 import { downloadExcel } from './report-excel';
 import { useScrollLock } from './hooks/useScrollLock';
+import { usePaywall } from './components/PaywallModal';
 
 // ── Halaman Laporan (Reports) ──────────────────────────────────────
 // Generates monthly & yearly financial reports as downloadable, print-ready
@@ -766,8 +767,9 @@ function Spinner() {
 }
 
 // ── Reports page ───────────────────────────────────────────────────
-export function ReportsPage({ transactions = [], customCategories = [] }) {
+export function ReportsPage({ transactions = [], customCategories = [], canExport = true }) {
   const { t: tr } = useTranslation();
+  const { openPaywall } = usePaywall();
   const [scope, setScope] = React.useState("month"); // month | year
   const [preview, setPreview] = React.useState(null);
   const [downloadTarget, setDownloadTarget] = React.useState(null);
@@ -776,8 +778,15 @@ export function ReportsPage({ transactions = [], customCategories = [] }) {
   const years = React.useMemo(() => yearsIndex(months), [months]);
   const empty = transactions.length === 0;
 
+  // Gate unduh laporan (PDF/Excel) — fitur khusus Pro. Basic → PaywallModal,
+  // generator tidak pernah jalan.
+  const requestDownload = (payload) => {
+    if (!canExport) { openPaywall('Unduh laporan PDF/Excel'); return; }
+    setDownloadTarget(payload);
+  };
+
   const openPreview = (kind, key) => setPreview(buildPayload(transactions, kind, key, customCategories));
-  const openDownload = (kind, key) => setDownloadTarget(buildPayload(transactions, kind, key, customCategories));
+  const openDownload = (kind, key) => requestDownload(buildPayload(transactions, kind, key, customCategories));
 
   return (
     <div className="page-wrap" style={{ padding: "16px 32px 48px", maxWidth: 1180, margin: "0 auto" }}>
@@ -837,7 +846,7 @@ export function ReportsPage({ transactions = [], customCategories = [] }) {
         </div>
       )}
 
-      <ReportPreview payload={preview} onClose={() => setPreview(null)} onDownload={(p) => setDownloadTarget(p)} />
+      <ReportPreview payload={preview} onClose={() => setPreview(null)} onDownload={requestDownload} />
       <FormatPicker payload={downloadTarget} onClose={() => setDownloadTarget(null)} />
     </div>
   );

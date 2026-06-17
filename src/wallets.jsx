@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ACCOUNT_TYPES, ALL_CATEGORIES, fmtShort, fmt, formatNominal, nominalFontSize } from './data';
 import { IconBudget, IconPlus, IconChev, IconClose, CatIcon } from './icons';
 import { useScrollLock } from './hooks/useScrollLock';
+import { LockBadge } from './components/PaywallModal';
 
 const WALLET_GLYPH = {
   bank:       <><rect x="3" y="6" width="18" height="13" rx="2" /><path d="M3 10h18" /><path d="M7 15h4" /></>,
@@ -22,7 +23,7 @@ export function WalletGlyph({ type, size = 16 }) {
 
 const typeLabel = (id) => (ACCOUNT_TYPES.find(t => t.id === id) || {}).label || id;
 
-export function AccountSwitcher({ accounts, selected, onSelect, onAdd }) {
+export function AccountSwitcher({ accounts, selected, onSelect, onAdd, addLocked = false }) {
   const { t } = useTranslation();
   const [open, setOpen] = React.useState(false);
   const total = accounts.reduce((s, a) => s + a.balance, 0);
@@ -85,12 +86,14 @@ export function AccountSwitcher({ accounts, selected, onSelect, onAdd }) {
             </div>
             <div style={{ height: 1, background: "var(--line-soft)", margin: "6px 4px" }} />
             <button onClick={() => { setOpen(false); onAdd(); }} style={{
+              position: "relative",
               width: "100%", display: "flex", alignItems: "center", gap: 10,
               padding: "10px 10px", borderRadius: 10, border: 0, background: "transparent",
               color: "var(--ink)", fontSize: 13, fontWeight: 500,
             }}>
-              <span style={{ width: 30, height: 30, borderRadius: 8, background: "var(--ink)", color: "var(--cream)", display: "grid", placeItems: "center" }}>
+              <span style={{ position: "relative", width: 30, height: 30, borderRadius: 8, background: "var(--ink)", color: "var(--cream)", display: "grid", placeItems: "center" }}>
                 <IconPlus size={15} />
+                {addLocked && <LockBadge />}
               </span>
               {t('dompet.tambahAkun')}
             </button>
@@ -117,7 +120,7 @@ function txForAccount(account, transactions) {
   });
 }
 
-export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transactions = [] }) {
+export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transactions = [], addLocked = false }) {
   const { t } = useTranslation();
   const [txSheet, setTxSheet] = React.useState(null);
   const total = accounts.reduce((s, a) => s + a.balance, 0);
@@ -141,8 +144,9 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
             {t('dompet.deskripsi')}
           </div>
         </div>
-        <button onClick={onAdd} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500 }}>
+        <button onClick={onAdd} style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500 }}>
           <IconPlus size={15} /> {t('dompet.tambahAkun')}
+          {addLocked && <LockBadge />}
         </button>
       </div>
 
@@ -199,9 +203,10 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
           </div>
         ))}
 
-        <button onClick={onAdd} className="rise" style={{ border: "1.5px dashed var(--line)", borderRadius: "var(--r-lg)", background: "transparent", color: "var(--muted)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, minHeight: 220, cursor: "pointer" }}>
-          <span style={{ width: 48, height: 48, borderRadius: 14, background: "var(--paper)", border: "1px solid var(--line-soft)", display: "grid", placeItems: "center", color: "var(--sage)" }}>
+        <button onClick={onAdd} className="rise" style={{ position: "relative", border: "1.5px dashed var(--line)", borderRadius: "var(--r-lg)", background: "transparent", color: "var(--muted)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, minHeight: 220, cursor: "pointer" }}>
+          <span style={{ position: "relative", width: 48, height: 48, borderRadius: 14, background: "var(--paper)", border: "1px solid var(--line-soft)", display: "grid", placeItems: "center", color: "var(--sage)" }}>
             <IconPlus size={22} />
+            {addLocked && <LockBadge />}
           </span>
           <span style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink-2)" }}>{t('dompet.tambahAkunBaru')}</span>
           <span style={{ fontSize: 12, maxWidth: 190, textAlign: "center", lineHeight: 1.4 }}>{t('dompet.rekBankEwallet')}</span>

@@ -361,7 +361,10 @@ function AddBudgetModal({ onClose, onAdd, defaultPeriod = "monthly", existingCat
     let categoryId, label, color;
     if (isCustom) {
       if (!onCreateCustom) { setSaving(false); return; }
-      const { category, error } = await onCreateCustom({ name: pendingCustom.name, color: pendingCustom.color });
+      const res = await onCreateCustom({ name: pendingCustom.name, color: pendingCustom.color });
+      // Limit plan tercapai → PaywallModal sudah tampil; batal diam-diam.
+      if (res?.limitReached) { setSaving(false); return; }
+      const { category, error } = res;
       if (error || !category) { setSaving(false); return; }
       categoryId = category.id; label = category.label; color = category.color;
     } else {

@@ -33,6 +33,9 @@ import { useWallets } from './hooks/useWallets';
 import { useNotifications } from './hooks/useNotifications';
 import { useBudgets } from './hooks/useBudgets';
 import { useCustomCategories } from './hooks/useCustomCategories';
+import { useSubscription } from './hooks/useSubscription';
+import { usePaywall } from './components/PaywallModal';
+import { isFontThemeAllowed } from './lib/planLimits';
 
 const TWEAK_DEFAULTS = {
   theme: "light",
@@ -257,8 +260,39 @@ function AuthenticatedApp({ session }) {
     setModal(true);   // buka form transaksi yang sudah terisi otomatis
   }, []);
 
+  // Status langganan (Basic / Pro) + limit fitur — sumber tunggal pembatasan
+  const subscription = useSubscription(session.user.id);
+  const { limits } = subscription;
+  const { openPaywall } = usePaywall();
+
+  // Auto-reset tema font saat downgrade Pro → Basic. Kalau tema aktif tidak
+  // diizinkan di Basic, kembalikan ke 'modern-tech' + tampilkan toast.
+  const [fontResetToast, setFontResetToast] = React.useState(false);
+  const prevIsProRef = React.useRef(undefined);
+  React.useEffect(() => {
+    if (subscription.loading) return;
+    const wasPro = prevIsProRef.current;
+    prevIsProRef.current = subscription.isPro;
+    if (wasPro === true && subscription.isPro === false) {
+      const current = t.fontTheme || 'modern-tech';
+      if (!isFontThemeAllowed(current, limits)) {
+        setTweak('fontTheme', 'modern-tech');
+        setFontResetToast(true);
+      }
+    }
+  }, [subscription.isPro, subscription.loading]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  React.useEffect(() => {
+    if (!fontResetToast) return;
+    const id = setTimeout(() => setFontResetToast(false), 4500);
+    return () => clearTimeout(id);
+  }, [fontResetToast]);
+
   // Multi-wallet state — sinkron dengan Supabase
-  const { accounts, createAccount, setPrimary, deleteAccount: _deleteAccount } = useWallets(session.user.id);
+  const { accounts, createAccount, setPrimary, deleteAccount: _deleteAccount } = useWallets(session.user.id, limits);
+
+  // Tombol "Tambah Wallet" tetap tampil + gemlock saat Basic sudah mencapai limit
+  const walletAddLocked = accounts.length >= (limits?.maxWallets ?? Infinity);
   const [selectedAcct, setSelectedAcct] = React.useState("all");
   const [addAcct, setAddAcct] = React.useState(false);
 
@@ -325,16 +359,35 @@ function AuthenticatedApp({ session }) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Kategori kustom — dipakai bersama menu Anggaran & Transaksi (realtime)
-  const { customCategories, addCustomCategory } = useCustomCategories(session.user.id);
+  const { customCategories, addCustomCategory } = useCustomCategories(session.user.id, limits);
 
   // Notifications
   const { notifications, unreadCount, markAllRead } = useNotifications(transactions, notifSubs, budgets);
 
   // Savings goals — Supabase
-  const { goals, createGoal, deleteGoal, depositToGoal } = useSavings(session.user.id);
+  const { goals, createGoal, deleteGoal, depositToGoal } = useSavings(session.user.id, limits);
   const [addGoal, setAddGoal] = React.useState(false);
   const [depositGoal, setDepositGoal] = React.useState(null);
   const [goalCelebrate, setGoalCelebrate] = React.useState(false);
+
+  // ── Gate fitur (Basic vs Pro) — pre-check di tombol pemicu ─────────
+  // Wallet/goal: cek limit SEBELUM membuka form supaya form tak terbuka
+  // sia-sia (hook tetap punya guard otoritatif sebagai jaring pengaman).
+  const handleAddAcct = React.useCallback(() => {
+    if (accounts.length >= (limits?.maxWallets ?? Infinity)) { openPaywall('Wallet / Dompet tambahan'); return; }
+    setAddAcct(true);
+  }, [accounts.length, limits, openPaywall]);
+
+  const handleAddGoal = React.useCallback(() => {
+    if (goals.length >= (limits?.maxSavingsGoals ?? Infinity)) { openPaywall('Goals / Tabungan tambahan'); return; }
+    setAddGoal(true);
+  }, [goals.length, limits, openPaywall]);
+
+  // Scan nota (OCR): Basic → PaywallModal, scanner tidak terbuka.
+  const handleScan = React.useCallback(() => {
+    if (!limits?.receiptScanEnabled) { openPaywall('Scan Nota'); return; }
+    setScanOpen(true);
+  }, [limits, openPaywall]);
 
   // Deposit + deteksi goal mencapai 100% (dari belum tercapai) → overlay perayaan
   const handleDeposit = React.useCallback(async (id, amount) => {
@@ -359,7 +412,8 @@ function AuthenticatedApp({ session }) {
           accounts={accounts}
           selectedAcct={selectedAcct}
           onSelectAcct={setSelectedAcct}
-          onAddAcct={() => setAddAcct(true)}
+          onAddAcct={handleAddAcct}
+          addAcctLocked={walletAddLocked}
           notifEnabled={t.notifications}
           user={session.user}
           notifications={notifications}
@@ -378,7 +432,7 @@ function AuthenticatedApp({ session }) {
 
             {t.showAI && <InsightsCard transactions={transactions} customCategories={customCategories} />}
 
-            <TransactionsCard onAdd={() => setModal(true)} onScan={() => setScanOpen(true)} limit={8} onSeeAll={() => setActive("transactions")} transactions={transactions} loading={txLoading} customCategories={customCategories} />
+            <TransactionsCard onAdd={() => setModal(true)} onScan={handleScan} scanLocked={!limits.receiptScanEnabled} limit={8} onSeeAll={() => setActive("transactions")} transactions={transactions} loading={txLoading} customCategories={customCategories} />
             <SavingsCard goals={goals} onManage={() => setActive("savings")} />
             <BudgetsCard onManage={() => setActive("budgets")} transactions={transactions} budgets={budgets} />
           </div>
@@ -387,22 +441,22 @@ function AuthenticatedApp({ session }) {
         {active === "budgets" && <BudgetsPage transactions={transactions} budgets={budgets} onAdd={createBudget} onUpdate={updateBudget} onDelete={deleteBudget} customCategories={customCategories} onCreateCustom={addCustomCategory} />}
 
         {active === "wallets" && (
-          <WalletsPage accounts={accounts} onAdd={() => setAddAcct(true)} onSetPrimary={setPrimary} onDelete={deleteAccount} transactions={transactions} />
+          <WalletsPage accounts={accounts} onAdd={handleAddAcct} onSetPrimary={setPrimary} onDelete={deleteAccount} transactions={transactions} addLocked={walletAddLocked} />
         )}
 
-        {active === "reports" && <ReportsPage transactions={transactions} customCategories={customCategories} />}
+        {active === "reports" && <ReportsPage transactions={transactions} customCategories={customCategories} canExport={limits.reportsExportEnabled} />}
 
         {active === "analytics" && <AnalyticsPage transactions={transactions} customCategories={customCategories} />}
 
         {active === "savings" && (
-          <SavingsPage goals={goals} onAdd={() => setAddGoal(true)} onDeposit={setDepositGoal} onDelete={deleteGoal} />
+          <SavingsPage goals={goals} onAdd={handleAddGoal} onDeposit={setDepositGoal} onDelete={deleteGoal} />
         )}
 
         {active === "transactions" && (
-          <TransactionsPage accounts={accounts} onAdd={() => setModal(true)} onScan={() => setScanOpen(true)} transactions={transactions} loading={txLoading} onDelete={deleteTransaction} onUpdate={updateTransaction} customCategories={customCategories} onCreateCustom={addCustomCategory} />
+          <TransactionsPage accounts={accounts} onAdd={() => setModal(true)} onScan={handleScan} scanLocked={!limits.receiptScanEnabled} transactions={transactions} loading={txLoading} onDelete={deleteTransaction} onUpdate={updateTransaction} customCategories={customCategories} onCreateCustom={addCustomCategory} />
         )}
 
-        {active === "settings" && <SettingsPage t={t} setTweak={setTweak} user={session.user} notifSubs={notifSubs} onToggleNotifSub={toggleNotifSub} />}
+        {active === "settings" && <SettingsPage t={t} setTweak={setTweak} user={session.user} notifSubs={notifSubs} onToggleNotifSub={toggleNotifSub} subscription={subscription} />}
 
         {active !== "dashboard" && active !== "budgets" && active !== "wallets" && active !== "reports" && active !== "analytics" && active !== "savings" && active !== "transactions" && active !== "settings" && <Placeholder section={active} />}
       </main>
@@ -414,6 +468,20 @@ function AuthenticatedApp({ session }) {
       <DepositModal goal={depositGoal} onClose={() => setDepositGoal(null)} onConfirm={handleDeposit} />
 
       {goalCelebrate && <GoalCompleteOverlay onClose={() => setGoalCelebrate(false)} />}
+
+      {/* Toast: tema font di-reset karena downgrade ke Basic */}
+      {fontResetToast && (
+        <div role="status" style={{
+          position: "fixed", left: "50%", transform: "translateX(-50%)",
+          bottom: "calc(env(safe-area-inset-bottom, 0px) + 88px)", zIndex: 1150,
+          background: "var(--ink)", color: "var(--cream)", borderRadius: 12,
+          padding: "12px 16px", fontSize: 12.5, lineHeight: 1.45,
+          width: "min(420px, calc(100% - 32px))", boxSizing: "border-box",
+          boxShadow: "0 12px 32px -8px rgba(42,44,32,.45)", animation: "rise .25s ease-out",
+        }}>
+          Tema di-reset ke Modern Tech karena paket Anda sekarang Basic.
+        </div>
+      )}
 
       {/* Toast hasil eksekusi transaksi berulang otomatis */}
       {recurringToasts.length > 0 && (

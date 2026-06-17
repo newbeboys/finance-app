@@ -4,9 +4,10 @@ import { TRANSACTIONS, ALL_CATEGORIES, fmt, formatNominal, nominalFontSize } fro
 import { IconSearch, IconPlus, IconClose, CatIcon } from './icons';
 import { useIsMobile } from './use-mobile';
 import { AddTransactionModal } from './transactions';
+import { LockBadge } from './components/PaywallModal';
 import { resolveCategory, categoryLabel } from './category-field';
 
-export function TransactionsPage({ accounts, onAdd, onScan, transactions: txProp, loading = false, onDelete, onUpdate, customCategories = [], onCreateCustom }) {
+export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, transactions: txProp, loading = false, onDelete, onUpdate, customCategories = [], onCreateCustom }) {
   const { t: tr, i18n } = useTranslation();
   const locale = i18n.language === 'en' ? 'en-US' : 'id-ID';
   const transactions = txProp ?? TRANSACTIONS;
@@ -64,8 +65,9 @@ export function TransactionsPage({ accounts, onAdd, onScan, transactions: txProp
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           {onScan && (
-            <button onClick={onScan} title={tr('transaksi.scanStruk')} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, cursor: "pointer" }}>
+            <button onClick={onScan} title={tr('transaksi.scanStruk')} style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 6, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, cursor: "pointer" }}>
               📷 {tr('transaksi.scan')}
+              {scanLocked && <LockBadge />}
             </button>
           )}
           <button onClick={onAdd} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500 }}>

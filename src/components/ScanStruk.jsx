@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { useScrollLock } from '../hooks/useScrollLock';
 import { parseReceipt } from '../lib/strukParser';
+import { LockBadge } from './PaywallModal';
 
 // Plugin native ML Kit (OCR offline). Di web tak ada implementasi → selalu
 // dijaga oleh Capacitor.isNativePlatform() sebelum dipanggil.
@@ -18,17 +19,20 @@ export const IconCamera = ({ size = 14 }) => (
 );
 
 // Tombol pemicu — dipakai di header kartu transaksi (beranda), di samping "Tambah".
-export function ScanStrukButton({ onClick, isMobile }) {
+// `locked` (Basic): tombol tetap tampil tapi diberi gembok kecil; tap → PaywallModal.
+export function ScanStrukButton({ onClick, isMobile, locked = false }) {
   const { t } = useTranslation();
   return (
     <button onClick={onClick} title={t('scan.scanStruk')}
       style={{
+        position: 'relative',
         padding: isMobile ? '8px 12px' : '7px 12px',
         background: 'var(--paper)', color: 'var(--ink-2)',
         border: '1px solid var(--line-soft)', borderRadius: 10,
         fontSize: 12.5, display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer',
       }}>
       <IconCamera size={14} /> {t('scan.scanStruk')}
+      {locked && <LockBadge />}
     </button>
   );
 }

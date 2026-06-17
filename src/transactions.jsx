@@ -11,7 +11,7 @@ import { CategoryField, CUSTOM_ID, CUSTOM_COLORS, resolveCategory, categoryLabel
 import { playSound } from './lib/sound';
 import incomeSound from './assets/sound/incom-sound.wav';
 
-export function TransactionsCard({ onAdd, onScan, limit, onSeeAll, transactions: txProp, loading = false, customCategories = [] }) {
+export function TransactionsCard({ onAdd, onScan, scanLocked = false, limit, onSeeAll, transactions: txProp, loading = false, customCategories = [] }) {
   const { t: tr } = useTranslation();
   const transactions = txProp ?? TRANSACTIONS;
   const isMobile = useIsMobile();
@@ -54,7 +54,7 @@ export function TransactionsCard({ onAdd, onScan, limit, onSeeAll, transactions:
             ))}
           </div>
           {!isMobile && <button style={ghostBtn}><IconFilter size={13} /></button>}
-          {onScan && <ScanStrukButton onClick={onScan} isMobile={isMobile} />}
+          {onScan && <ScanStrukButton onClick={onScan} isMobile={isMobile} locked={scanLocked} />}
           <button onClick={onAdd} style={{ padding: isMobile ? "8px 12px" : "7px 12px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 10, fontSize: 12.5, display: "inline-flex", alignItems: "center", gap: 6 }}>
             <IconPlus size={13} /> {tr('transaksi.tambah')}
           </button>
@@ -354,7 +354,10 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
         categoryId = pendingCustom.name.trim();
       } else {
         if (!onCreateCustom) { setSaving(false); return; }
-        const { category, error } = await onCreateCustom({ name: pendingCustom.name, color: pendingCustom.color });
+        const res = await onCreateCustom({ name: pendingCustom.name, color: pendingCustom.color });
+        // Limit plan tercapai → PaywallModal sudah tampil; batal diam-diam.
+        if (res?.limitReached) { setSaving(false); return; }
+        const { category, error } = res;
         if (error || !category) {
           setSaveError(tr('transaksi.gagalKategoriKustom'));
           setSaving(false);

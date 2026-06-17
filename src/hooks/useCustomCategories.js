@@ -1,6 +1,7 @@
 import React from 'react';
 import { supabase } from '../supabase';
 import { CATEGORIES, INCOME_CATEGORIES } from '../data';
+import { usePaywall } from '../components/PaywallModal';
 
 // Supabase row → bentuk kategori yang dipakai komponen (sama seperti CATEGORIES)
 function toCustomCat(row) {
@@ -19,9 +20,10 @@ const BUILTIN_NAMES = new Set(
   [...CATEGORIES, ...INCOME_CATEGORIES].map(c => norm(c.label))
 );
 
-export function useCustomCategories(userId) {
+export function useCustomCategories(userId, limits) {
   const [customCategories, setCustomCategories] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
+  const { openPaywall } = usePaywall();
 
   // Load awal + subscribe realtime
   React.useEffect(() => {
@@ -79,9 +81,16 @@ export function useCustomCategories(userId) {
       return { error: null, category: builtin, duplicate: true };
     }
 
-    // Sudah ada di kustom → pakai yang ada
+    // Sudah ada di kustom → pakai yang ada (tak hitung sebagai kategori baru)
     const existing = customCategories.find(c => norm(c.label) === key);
     if (existing) return { error: null, category: existing, duplicate: true };
+
+    // ── Batas plan: tolak kategori kustom baru bila sudah mencapai limit ──
+    const maxCustom = limits?.maxCustomCategories ?? Infinity;
+    if (customCategories.length >= maxCustom) {
+      openPaywall('Kategori kustom tambahan');
+      return { error: null, category: null, limitReached: true };
+    }
 
     const { data, error } = await supabase
       .from('custom_categories')

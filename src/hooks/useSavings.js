@@ -1,5 +1,6 @@
 import React from 'react';
 import { supabase } from '../supabase';
+import { usePaywall } from '../components/PaywallModal';
 
 const MONTHS_ID = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
 const MONTH_MAP = {
@@ -37,9 +38,10 @@ function toAppGoal(row) {
   };
 }
 
-export function useSavings(userId) {
+export function useSavings(userId, limits) {
   const [goals, setGoals]     = React.useState([]);
   const [loading, setLoading] = React.useState(true);
+  const { openPaywall } = usePaywall();
 
   React.useEffect(() => {
     if (!userId) { setLoading(false); return; }
@@ -64,6 +66,13 @@ export function useSavings(userId) {
   }, [userId]);
 
   async function createGoal(g) {
+    // ── Batas plan: tolak insert bila sudah mencapai limit goals ──
+    const maxGoals = limits?.maxSavingsGoals ?? Infinity;
+    if (goals.length >= maxGoals) {
+      openPaywall('Goals / Tabungan tambahan');
+      return { error: null, limitReached: true };
+    }
+
     // ── Kolom base schema (selalu ada) ────────────────────────────
     const basePayload = {
       user_id:  userId,

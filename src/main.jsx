@@ -2,5 +2,10 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import './i18n';
 import App from './app';
+import { PaywallProvider } from './components/PaywallProvider';
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <PaywallProvider>
+    <App />
+  </PaywallProvider>
+);

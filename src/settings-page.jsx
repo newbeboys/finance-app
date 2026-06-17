@@ -8,6 +8,8 @@ import { isPinActive, isBiometricEnabled, clearPin, enableBiometricOnly } from '
 import { isBiometricAvailable } from './lib/biometric';
 import RecurringTransactionPage from './pages/RecurringTransactionPage';
 import { useScrollLock } from './hooks/useScrollLock';
+import { usePaywall } from './components/PaywallModal';
+import { isFontThemeAllowed } from './lib/planLimits';
 
 // ── Halaman Pengaturan (Settings) ──────────────────────────────────
 // Reads & writes the same tweak state (theme, palette, sidebar, showAI,
@@ -168,8 +170,40 @@ function LanguageModal({ onClose, onToast }) {
   );
 }
 
-export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub }) {
+// Badge "Pro" kecil di samping label fitur terkunci.
+function ProTag() {
+  return (
+    <span style={{
+      display: "inline-block", marginLeft: 8, fontSize: 9.5, fontWeight: 700,
+      letterSpacing: ".06em", textTransform: "uppercase", verticalAlign: "middle",
+      color: "var(--gold)", background: "color-mix(in oklch, var(--gold) 16%, transparent)",
+      padding: "2px 7px", borderRadius: 99,
+    }}>Pro</span>
+  );
+}
+
+// Gembok kecil overlay di pojok ikon fitur terkunci.
+function ProLock() {
+  return (
+    <span aria-hidden style={{
+      position: "absolute", top: -5, right: -5,
+      width: 16, height: 16, borderRadius: "50%",
+      background: "var(--gold)", color: "#fff",
+      display: "grid", placeItems: "center", boxShadow: "0 1px 3px rgba(0,0,0,.3)",
+    }}>
+      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" />
+      </svg>
+    </span>
+  );
+}
+
+export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub, subscription }) {
   const { t: tr } = useTranslation();
+  const { openPaywall } = usePaywall();
+  const sub = subscription || {};
+  const isPro = !!sub.isPro;
+  const limits = sub.limits;
   const notifOn = t.notifications !== false;
   const subs = notifSubs ?? { budget: true, income: true, weekly: true, bills: false };
   const toggleSub = onToggleNotifSub ?? (() => {});
@@ -206,6 +240,22 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub })
 
   // Halaman "Transaksi Berulang" (overlay penuh)
   const [showRecurring, setShowRecurring] = React.useState(false);
+
+  // ── Akun & Paket (Basic / Pro) ──────────────────────────────────
+  const recurringEnabled = limits ? limits.recurringTransactionsEnabled : true;
+  const openRecurring = () => {
+    if (!recurringEnabled) { openPaywall('Transaksi berulang'); return; }
+    setShowRecurring(true);
+  };
+
+  // Tombol developer (hanya import.meta.env.DEV) — ganti plan manual untuk testing.
+  const [planBusy, setPlanBusy] = React.useState(false);
+  const handleSetPlan = async (p) => {
+    if (planBusy || !sub.setPlanForTesting) return;
+    setPlanBusy(true);
+    await sub.setPlanForTesting(p);
+    setPlanBusy(false);
+  };
 
   // Pilih metode keamanan via radio
   const selectMethod = async (m) => {
@@ -261,6 +311,50 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub })
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {/* Akun & Paket (Basic / Pro) */}
+        <SettingCard eyebrow="Langganan" title="Akun & Paket">
+          <SettingRow
+            title="Paket Anda"
+            desc={isPro ? "Akses penuh ke semua fitur tanpa batas." : "Beberapa fitur dibatasi. Tingkatkan ke Pro untuk akses penuh."}
+            last={!import.meta.env.DEV}
+          >
+            <span style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              fontSize: 12.5, fontWeight: 600, letterSpacing: ".03em",
+              padding: "6px 14px", borderRadius: 99,
+              background: isPro ? "color-mix(in oklch, var(--gold) 18%, var(--ivory))" : "var(--paper)",
+              color: isPro ? "var(--gold)" : "var(--ink-2)",
+              border: `1px solid ${isPro ? "color-mix(in oklch, var(--gold) 40%, transparent)" : "var(--line-soft)"}`,
+            }}>
+              {isPro ? "👑 Pro" : "Basic"}
+            </span>
+          </SettingRow>
+
+          {import.meta.env.DEV && (
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--line-soft)" }}>
+              <div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 10, lineHeight: 1.45 }}>
+                Mode developer — hanya untuk testing lokal
+              </div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button
+                  onClick={() => handleSetPlan('basic')}
+                  disabled={planBusy}
+                  style={{ padding: "9px 14px", fontSize: 12.5, fontWeight: 500, background: !isPro ? "var(--ivory)" : "var(--paper)", color: "var(--ink-2)", border: `1px solid ${!isPro ? "var(--ink)" : "var(--line-soft)"}`, borderRadius: 10, cursor: planBusy ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: planBusy ? 0.6 : 1 }}
+                >
+                  Set ke Basic (testing)
+                </button>
+                <button
+                  onClick={() => handleSetPlan('pro')}
+                  disabled={planBusy}
+                  style={{ padding: "9px 14px", fontSize: 12.5, fontWeight: 500, background: isPro ? "var(--ivory)" : "var(--paper)", color: "var(--ink-2)", border: `1px solid ${isPro ? "var(--ink)" : "var(--line-soft)"}`, borderRadius: 10, cursor: planBusy ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: planBusy ? 0.6 : 1 }}
+                >
+                  Set ke Pro (testing)
+                </button>
+              </div>
+            </div>
+          )}
+        </SettingCard>
+
         {/* Account */}
         <SettingCard eyebrow={tr('pengaturan.akun')} title={tr('pengaturan.profilSesi')}>
           <SettingRow title={tr('pengaturan.nama')} desc={displayName}>
@@ -314,8 +408,13 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub })
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(128px, 1fr))", gap: 10 }}>
               {FONT_THEME_OPTIONS.map(ft => {
                 const active = (t.fontTheme || 'modern-tech') === ft.id;
+                const allowed = isFontThemeAllowed(ft.id, limits);
+                const onPick = () => {
+                  if (!allowed) { openPaywall('Tema font ini'); return; }
+                  setTweak('fontTheme', ft.id);
+                };
                 return (
-                  <button key={ft.id} onClick={() => setTweak('fontTheme', ft.id)} style={{
+                  <button key={ft.id} onClick={onPick} style={{
                     padding: "14px 12px 12px",
                     background: active ? "color-mix(in oklch, var(--sage) 10%, var(--ivory))" : "var(--paper)",
                     border: `2px solid ${active ? "var(--sage)" : "var(--line-soft)"}`,
@@ -323,17 +422,20 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub })
                     cursor: "pointer",
                     textAlign: "left",
                     position: "relative",
+                    opacity: allowed ? 1 : 0.72,
                     transition: "border-color .15s, background .15s",
                   }}>
-                    {active && (
+                    {active && allowed && (
                       <span style={{ position: "absolute", top: 8, right: 8, color: "var(--sage)" }}>
                         <IconCheck size={14} />
                       </span>
                     )}
+                    {!allowed && <ProLock />}
                     <div style={{ fontSize: 26, fontFamily: ft.heading, fontWeight: 400, color: "var(--ink)", lineHeight: 1.1 }}>Aa</div>
                     <div style={{ fontSize: 12, fontFamily: ft.mono, color: "var(--muted)", marginTop: 2 }}>Bb 1234</div>
-                    <div style={{ fontSize: 11.5, fontFamily: ft.body, color: active ? "var(--sage)" : "var(--ink)", fontWeight: 600, marginTop: 10, lineHeight: 1.3 }}>
+                    <div style={{ fontSize: 11.5, fontFamily: ft.body, color: active && allowed ? "var(--sage)" : "var(--ink)", fontWeight: 600, marginTop: 10, lineHeight: 1.3, display: "flex", alignItems: "center", flexWrap: "wrap" }}>
                       {ft.name}
+                      {!allowed && <ProTag />}
                     </div>
                   </button>
                 );
@@ -412,15 +514,21 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub })
           )}
         </SettingCard>
 
-        {/* Transaksi Berulang — navigasi ke halaman */}
+        {/* Transaksi Berulang — navigasi ke halaman (Pro) */}
         <SettingCard eyebrow={tr('pengaturan.otomatis')} title={tr('pengaturan.jadwal')}>
           <button
-            onClick={() => setShowRecurring(true)}
+            onClick={openRecurring}
             style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "14px 0 4px", background: "transparent", border: 0, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}
           >
-            <span style={{ fontSize: 20, width: 40, height: 40, borderRadius: 11, background: "var(--paper)", border: "1px solid var(--line-soft)", display: "grid", placeItems: "center", flexShrink: 0 }} aria-hidden>🔄</span>
+            <span style={{ position: "relative", fontSize: 20, width: 40, height: 40, borderRadius: 11, background: "var(--paper)", border: "1px solid var(--line-soft)", display: "grid", placeItems: "center", flexShrink: 0 }} aria-hidden>
+              🔄
+              {!recurringEnabled && <ProLock />}
+            </span>
             <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ display: "block", fontSize: 13.5, fontWeight: 500, color: "var(--ink)" }}>{tr('pengaturan.transaksiBerulang')}</span>
+              <span style={{ display: "block", fontSize: 13.5, fontWeight: 500, color: "var(--ink)" }}>
+                {tr('pengaturan.transaksiBerulang')}
+                {!recurringEnabled && <ProTag />}
+              </span>
               <span style={{ display: "block", fontSize: 12, color: "var(--muted)", marginTop: 3, lineHeight: 1.45 }}>{tr('pengaturan.transaksiBerulangDesc')}</span>
             </span>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M9 18l6-6-6-6" /></svg>
