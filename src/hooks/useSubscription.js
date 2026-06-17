@@ -1,6 +1,7 @@
 import React from 'react';
 import { supabase } from '../supabase';
 import { PLAN_LIMITS } from '../lib/planLimits';
+import { lockExcessOnDowngrade, unlockAllOnUpgrade } from '../lib/planReconciliation';
 
 // ── Hook status langganan (Basic / Pro) ────────────────────────────
 // Mengambil baris user_subscriptions milik user yang login.
@@ -56,6 +57,33 @@ export function useSubscription(userId) {
   const notExpired = !expiresAt || new Date(expiresAt) > new Date();
   const isPro = plan === 'pro' && notExpired;
   const limits = PLAN_LIMITS[isPro ? 'pro' : 'basic'];
+
+  // Deteksi transisi plan (downgrade/upgrade) dan trigger rekonsiliasi data.
+  // prevIsProRef = null → belum terinisialisasi (loading pertama kali belum selesai).
+  // Efek pertama mereset ref saat userId berubah; efek kedua mendeteksi transisi.
+  const prevIsProRef = React.useRef(null);
+
+  React.useEffect(() => {
+    prevIsProRef.current = null;
+  }, [userId]);
+
+  React.useEffect(() => {
+    if (loading) return;
+
+    const prev = prevIsProRef.current;
+    if (prev === null) {
+      prevIsProRef.current = isPro;
+      return;
+    }
+
+    if (prev === true && isPro === false) {
+      lockExcessOnDowngrade(supabase, userId, PLAN_LIMITS.basic);
+    } else if (prev === false && isPro === true) {
+      unlockAllOnUpgrade(supabase, userId);
+    }
+
+    prevIsProRef.current = isPro;
+  }, [loading, isPro, userId]);
 
   // Ubah plan secara MANUAL untuk testing. Hanya dipanggil dari UI yang
   // dibungkus import.meta.env.DEV (lihat SettingsPage) → otomatis hilang

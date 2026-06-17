@@ -16,6 +16,7 @@ function toAppWallet(row) {
     color:       row.color || pickColor(row.name),
     primary:     row.is_primary || false,
     last4:       row.last4 || '—',
+    is_locked:   row.is_locked || false,
   };
 }
 
@@ -43,7 +44,22 @@ export function useWallets(userId, limits) {
         setLoading(false);
       });
 
-    return () => { alive = false; };
+    // Realtime UPDATE: picks up is_locked changes from lockExcessOnDowngrade/unlockAllOnUpgrade
+    const channel = supabase
+      .channel(`wallets_lock:${userId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'wallets', filter: `user_id=eq.${userId}` },
+        (payload) => {
+          if (!alive) return;
+          setAccounts(prev => prev.map(a =>
+            a.id === payload.new.id ? toAppWallet(payload.new) : a
+          ));
+        }
+      )
+      .subscribe();
+
+    return () => { alive = false; supabase.removeChannel(channel); };
   }, [userId]);
 
   async function createAccount(a) {

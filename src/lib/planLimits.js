@@ -16,6 +16,7 @@ export const PLAN_LIMITS = {
     recurringTransactionsEnabled: false,
     reportsExportEnabled: false,
     receiptScanEnabled: false,
+    aiInsightsEnabled: false,
     availableFontThemes: ['modern-tech', 'soft-friendly'],
   },
   pro: {
@@ -25,6 +26,7 @@ export const PLAN_LIMITS = {
     recurringTransactionsEnabled: true,
     reportsExportEnabled: true,
     receiptScanEnabled: true,
+    aiInsightsEnabled: true,
     availableFontThemes: 'all',
   },
 };

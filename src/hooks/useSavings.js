@@ -28,13 +28,14 @@ function isoToDeadline(iso) {
 
 function toAppGoal(row) {
   return {
-    id:       row.id,
-    label:    row.name,
-    icon:     row.icon    || 'star',
-    color:    row.color   || '#5C6B4C',
-    target:   Number(row.target)  || 0,
-    current:  Number(row.current) || 0,
-    deadline: row.deadline_label || isoToDeadline(row.deadline),
+    id:        row.id,
+    label:     row.name,
+    icon:      row.icon    || 'star',
+    color:     row.color   || '#5C6B4C',
+    target:    Number(row.target)  || 0,
+    current:   Number(row.current) || 0,
+    deadline:  row.deadline_label || isoToDeadline(row.deadline),
+    is_locked: row.is_locked || false,
   };
 }
 
@@ -62,7 +63,24 @@ export function useSavings(userId, limits) {
         setLoading(false);
       });
 
-    return () => { alive = false; };
+    // Realtime UPDATE: picks up is_locked changes from lockExcessOnDowngrade/unlockAllOnUpgrade
+    const channel = supabase
+      .channel(`savings_lock:${userId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'savings', filter: `user_id=eq.${userId}` },
+        (payload) => {
+          if (!alive) return;
+          setGoals(prev => prev.map(g =>
+            g.id === payload.new.id
+              ? { ...toAppGoal(payload.new), deadline: g.deadline }
+              : g
+          ));
+        }
+      )
+      .subscribe();
+
+    return () => { alive = false; supabase.removeChannel(channel); };
   }, [userId]);
 
   async function createGoal(g) {
@@ -126,6 +144,7 @@ export function useSavings(userId, limits) {
   async function depositToGoal(id, amount) {
     const goal = goals.find(g => g.id === id);
     if (!goal) return { error: new Error('Goal not found') };
+    if (goal.is_locked) return { error: new Error('Goal is locked'), locked: true };
     const newCurrent = goal.current + amount;
     const { error } = await supabase
       .from('savings').update({ current: newCurrent }).eq('id', id).eq('user_id', userId);

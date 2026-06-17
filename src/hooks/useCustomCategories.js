@@ -6,10 +6,11 @@ import { usePaywall } from '../components/PaywallModal';
 // Supabase row → bentuk kategori yang dipakai komponen (sama seperti CATEGORIES)
 function toCustomCat(row) {
   return {
-    id:     row.id,                       // uuid — disimpan sebagai `category` di transaksi/budget
-    label:  row.name,
-    color:  row.color || 'var(--sage)',
-    custom: true,
+    id:        row.id,                    // uuid — disimpan sebagai `category` di transaksi/budget
+    label:     row.name,
+    color:     row.color || 'var(--sage)',
+    custom:    true,
+    is_locked: row.is_locked || false,
   };
 }
 

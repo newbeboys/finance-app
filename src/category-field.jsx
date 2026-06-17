@@ -130,24 +130,32 @@ export function CategoryField({
             border: '1px solid var(--line-soft)', borderRadius: 10,
             boxShadow: '0 8px 28px -8px rgba(42,44,32,.3)', zIndex: 9999,
           }}>
-            {merged.map((c) => (
-              <button key={c.id} type="button" onClick={() => pick(c.id)}
-                style={{
-                  width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '10px 14px', background: c.id === value ? 'var(--ivory)' : 'transparent',
-                  border: 0, borderBottom: '1px solid var(--line-soft)', fontSize: 14,
-                  color: 'var(--ink)', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
-                }}>
-                <Dot color={c.color} />
-                {categoryLabel(c, t)}
-                {c.custom && <span style={{ fontSize: 10, color: 'var(--muted)', marginLeft: 4 }}>{t('kategori.kustomBadge')}</span>}
-                {c.id === value && (
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto', color: 'var(--sage)' }}>
-                    <path d="M20 6L9 17l-5-5" />
-                  </svg>
-                )}
-              </button>
-            ))}
+            {merged.map((c) => {
+              const locked = !!c.is_locked;
+              return (
+                <button key={c.id} type="button"
+                  onClick={() => { if (!locked) pick(c.id); }}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '10px 14px', background: c.id === value ? 'var(--ivory)' : 'transparent',
+                    border: 0, borderBottom: '1px solid var(--line-soft)', fontSize: 14,
+                    color: locked ? 'var(--muted)' : 'var(--ink)',
+                    cursor: locked ? 'not-allowed' : 'pointer',
+                    textAlign: 'left', fontFamily: 'inherit',
+                    opacity: locked ? 0.6 : 1,
+                  }}>
+                  <Dot color={c.color} />
+                  {categoryLabel(c, t)}
+                  {c.custom && !locked && <span style={{ fontSize: 10, color: 'var(--muted)', marginLeft: 4 }}>{t('kategori.kustomBadge')}</span>}
+                  {locked && <span style={{ fontSize: 11, marginLeft: 4 }}>🔒</span>}
+                  {c.id === value && !locked && (
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto', color: 'var(--sage)' }}>
+                      <path d="M20 6L9 17l-5-5" />
+                    </svg>
+                  )}
+                </button>
+              );
+            })}
 
             {allowCustom && (
               <button type="button" onClick={() => pick(CUSTOM_ID)}

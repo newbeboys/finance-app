@@ -5,6 +5,7 @@ import { IconPlus, IconClose } from './icons';
 import { Ring } from './charts';
 import { useIsMobile } from './use-mobile';
 import { useScrollLock } from './hooks/useScrollLock';
+import { usePaywall } from './components/PaywallModal';
 
 const GOAL_ICONS = {
   emergency: <><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z" /><path d="m9 12 2 2 4-4" /></>,
@@ -41,6 +42,7 @@ const GOAL_COLORS = ["#5C6B4C", "#B68A3E", "#C9886D", "#2A6FDB", "#1FA8A0", "#9A
 export function SavingsPage({ goals, onAdd, onDeposit, onDelete }) {
   const { t: tr } = useTranslation();
   const isMobile = useIsMobile();
+  const { openPaywall } = usePaywall();
   const totalSaved = goals.reduce((s, g) => s + g.current, 0);
   const totalTarget = goals.reduce((s, g) => s + g.target, 0);
   const completed = goals.filter(g => g.current >= g.target).length;
@@ -85,7 +87,12 @@ export function SavingsPage({ goals, onAdd, onDeposit, onDelete }) {
           const done = g.current >= g.target;
           const remaining = Math.max(g.target - g.current, 0);
           return (
-            <div key={g.id} className="card rise" style={{ padding: 0, overflow: "hidden", animationDelay: `${i * 0.04}s`, display: "flex", flexDirection: "column" }}>
+            <div key={g.id} className="card rise" style={{ padding: 0, overflow: "hidden", animationDelay: `${i * 0.04}s`, display: "flex", flexDirection: "column", opacity: g.is_locked ? 0.6 : 1, position: "relative" }}>
+              {g.is_locked && (
+                <div style={{ position: "absolute", top: 10, right: 10, zIndex: 2, background: "rgba(42,44,32,.72)", color: "#fff", borderRadius: 99, fontSize: 10.5, fontWeight: 600, padding: "2px 9px", letterSpacing: ".04em", display: "flex", alignItems: "center", gap: 4 }}>
+                  🔒 {tr('tabungan.terkunci', { defaultValue: 'Terkunci' })}
+                </div>
+              )}
               <div style={{ height: 6, background: g.color }} />
               <div style={{ padding: 18, flex: 1, display: "flex", flexDirection: "column" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -116,8 +123,11 @@ export function SavingsPage({ goals, onAdd, onDeposit, onDelete }) {
                 </div>
               </div>
               <div className="hairline" style={{ display: "flex" }}>
-                <button onClick={() => onDeposit(g)} style={{ flex: 1, padding: "12px 0", background: "transparent", border: 0, fontSize: 12.5, fontWeight: 500, color: "var(--ink)", display: "inline-flex", gap: 7, alignItems: "center", justifyContent: "center" }}>
+                <button
+                  onClick={() => g.is_locked ? openPaywall('Tabungan') : onDeposit(g)}
+                  style={{ flex: 1, padding: "12px 0", background: "transparent", border: 0, fontSize: 12.5, fontWeight: 500, color: g.is_locked ? "var(--muted)" : "var(--ink)", display: "inline-flex", gap: 7, alignItems: "center", justifyContent: "center", cursor: g.is_locked ? "not-allowed" : "pointer" }}>
                   <IconPlus size={14} /> {tr('tabungan.tambahDana')}
+                  {g.is_locked && <span style={{ fontSize: 11 }}>🔒</span>}
                 </button>
                 <div style={{ width: 1, background: "var(--line-soft)" }} />
                 <button onClick={() => onDelete(g.id)} title={tr('tabungan.hapusGoal')} style={{ flex: "0 0 50px", padding: "12px 0", background: "transparent", border: 0, color: "var(--terra)", display: "grid", placeItems: "center" }}>

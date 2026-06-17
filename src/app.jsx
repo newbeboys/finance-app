@@ -430,7 +430,7 @@ function AuthenticatedApp({ session }) {
             <CashflowCard transactions={transactions} />
             <SpendingCard transactions={transactions} />
 
-            {t.showAI && <InsightsCard transactions={transactions} customCategories={customCategories} />}
+            {t.showAI && <InsightsCard transactions={transactions} customCategories={customCategories} limits={limits} />}
 
             <TransactionsCard onAdd={() => setModal(true)} onScan={handleScan} scanLocked={!limits.receiptScanEnabled} limit={8} onSeeAll={() => setActive("transactions")} transactions={transactions} loading={txLoading} customCategories={customCategories} />
             <SavingsCard goals={goals} onManage={() => setActive("savings")} />

@@ -72,12 +72,12 @@ export function AccountSwitcher({ accounts, selected, onSelect, onAdd, addLocked
             <div style={{ height: 1, background: "var(--line-soft)", margin: "6px 4px" }} />
             <div style={{ maxHeight: 260, overflowY: "auto" }}>
               {accounts.map(a => (
-                <button key={a.id} onClick={() => { onSelect(a.id); setOpen(false); }} style={switcherRow(selected === a.id)}>
+                <button key={a.id} onClick={() => { onSelect(a.id); setOpen(false); }} style={{ ...switcherRow(selected === a.id), opacity: a.is_locked ? 0.65 : 1 }}>
                   <span style={{ width: 30, height: 30, borderRadius: 8, background: `color-mix(in oklch, ${a.color} 18%, var(--ivory))`, color: a.color, display: "grid", placeItems: "center" }}>
                     <WalletGlyph type={a.type} size={15} />
                   </span>
                   <span style={{ flex: 1, textAlign: "left", minWidth: 0 }}>
-                    <span style={{ display: "block", fontSize: 13, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.name}</span>
+                    <span style={{ display: "block", fontSize: 13, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.name}{a.is_locked ? " 🔒" : ""}</span>
                     <span style={{ display: "block", fontSize: 11, color: "var(--muted)" }}>{typeLabel(a.type)}{a.last4 !== "—" ? ` •• ${a.last4}` : ""}</span>
                   </span>
                   <span className="tnum" style={{ fontSize: 12.5 }}>{fmtShort(a.balance)}</span>
@@ -168,16 +168,23 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
 
       <div className="stat-grid-4 wallet-cards-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
         {accounts.map((a, i) => (
-          <div key={a.id} className="card rise" style={{ padding: 0, overflow: "hidden", animationDelay: `${i * 0.04}s`, display: "flex", flexDirection: "column" }}>
+          <div key={a.id} className="card rise" style={{ padding: 0, overflow: "hidden", animationDelay: `${i * 0.04}s`, display: "flex", flexDirection: "column", opacity: a.is_locked ? 0.6 : 1, position: "relative" }}>
+            {a.is_locked && (
+              <div style={{ position: "absolute", top: 10, right: 10, zIndex: 2, background: "rgba(42,44,32,.72)", color: "#fff", borderRadius: 99, fontSize: 10.5, fontWeight: 600, padding: "2px 9px", letterSpacing: ".04em", display: "flex", alignItems: "center", gap: 4 }}>
+                🔒 {t('dompet.terkunci', { defaultValue: 'Terkunci' })}
+              </div>
+            )}
             <div style={{ height: 6, background: a.color }} />
             <div className="wallet-card-body" style={{ padding: 18, flex: 1, display: "flex", flexDirection: "column" }}>
               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
                 <span style={{ width: 40, height: 40, borderRadius: 11, background: `color-mix(in oklch, ${a.color} 16%, var(--ivory))`, color: a.color, display: "grid", placeItems: "center" }}>
                   <WalletGlyph type={a.type} size={19} />
                 </span>
-                {a.primary
-                  ? <span style={{ fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--sage)", background: "rgba(92,107,76,.14)", padding: "3px 8px", borderRadius: 999, fontWeight: 500 }}>{t('dompet.utama')}</span>
-                  : <button onClick={() => onSetPrimary(a.id)} title={t('dompet.setUtama')} style={{ fontSize: 11, color: "var(--muted)", background: "transparent", border: "1px solid var(--line-soft)", borderRadius: 999, padding: "3px 9px" }}>{t('dompet.setUtama')}</button>}
+                {a.is_locked
+                  ? <span style={{ fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--muted)", background: "var(--paper)", padding: "3px 8px", borderRadius: 999, fontWeight: 500, border: "1px solid var(--line-soft)" }}>Soft Lock</span>
+                  : a.primary
+                    ? <span style={{ fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--sage)", background: "rgba(92,107,76,.14)", padding: "3px 8px", borderRadius: 999, fontWeight: 500 }}>{t('dompet.utama')}</span>
+                    : <button onClick={() => onSetPrimary(a.id)} title={t('dompet.setUtama')} style={{ fontSize: 11, color: "var(--muted)", background: "transparent", border: "1px solid var(--line-soft)", borderRadius: 999, padding: "3px 9px" }}>{t('dompet.setUtama')}</button>}
               </div>
               <div style={{ marginTop: 16 }}>
                 <div style={{ fontSize: 14.5, fontWeight: 500 }}>{a.name}</div>
