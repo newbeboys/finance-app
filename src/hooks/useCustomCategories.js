@@ -9,6 +9,7 @@ function toCustomCat(row) {
     id:        row.id,                    // uuid — disimpan sebagai `category` di transaksi/budget
     label:     row.name,
     color:     row.color || 'var(--sage)',
+    type:      row.type || 'expense',     // 'income' | 'expense' — dipakai filter tampilan
     custom:    true,
     is_locked: row.is_locked || false,
   };
@@ -70,7 +71,7 @@ export function useCustomCategories(userId, limits) {
   // Tambah kategori kustom. Mengembalikan objek kategori siap pakai
   // ({ id, label, color }). Anti-duplikat: kalau nama sudah ada
   // (bawaan ATAU kustom), kembalikan yang sudah ada tanpa insert baru.
-  async function addCustomCategory({ name, color }) {
+  async function addCustomCategory({ name, color, type = 'expense' }) {
     const clean = (name || '').trim();
     if (!clean) return { error: 'Nama kategori kosong', category: null };
 
@@ -95,7 +96,7 @@ export function useCustomCategories(userId, limits) {
 
     const { data, error } = await supabase
       .from('custom_categories')
-      .insert({ user_id: userId, name: clean, color: color || 'var(--sage)' })
+      .insert({ user_id: userId, name: clean, color: color || 'var(--sage)', type })
       .select()
       .single();
 

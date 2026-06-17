@@ -328,7 +328,7 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
   if (!open) return null;
 
   const activeCats = type === "income" ? INCOME_CATEGORIES : CATEGORIES;
-  const activeCustom = customCategories;
+  const activeCustom = customCategories.filter(c => c.type === type);
   const isCustom = cat === CUSTOM_ID;
 
   const switchType = (newType) => {
@@ -348,7 +348,7 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
     let categoryId = cat;
     if (isCustom) {
       if (!onCreateCustom) { setSaving(false); return; }
-      const res = await onCreateCustom({ name: pendingCustom.name, color: pendingCustom.color });
+      const res = await onCreateCustom({ name: pendingCustom.name, color: pendingCustom.color, type });
       if (res?.limitReached) { setSaving(false); return; }
       const { category, error } = res;
       if (error || !category) {
