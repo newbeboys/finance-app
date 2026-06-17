@@ -297,8 +297,9 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
       const t = initial.amount < 0 ? "expense" : "income";
       setType(t);
       setAmount(String(Math.abs(initial.amount)));
-      // Pemasukan dengan kategori bebas (kustom) → buka lagi sebagai mode Kustom
-      if (t === "income" && initial.category && !INCOME_CATEGORIES.some(c => c.id === initial.category)) {
+      // Data lama: kategori pemasukan custom disimpan sebagai free-text (bukan UUID)
+      const isKnownCustom = customCategories.some(c => c.id === initial.category);
+      if (t === "income" && initial.category && !INCOME_CATEGORIES.some(c => c.id === initial.category) && !isKnownCustom) {
         setCat(CUSTOM_ID);
         setPendingCustom({ name: initial.category, color: CUSTOM_COLORS[0] });
       } else {
@@ -326,9 +327,8 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
 
   if (!open) return null;
 
-  // Kategori kustom hanya untuk pengeluaran (sinkron dengan menu Anggaran)
   const activeCats = type === "income" ? INCOME_CATEGORIES : CATEGORIES;
-  const activeCustom = type === "income" ? [] : customCategories;
+  const activeCustom = customCategories;
   const isCustom = cat === CUSTOM_ID;
 
   const switchType = (newType) => {
@@ -345,26 +345,18 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
     setSaving(true);
     setSaveError('');
 
-    // Kategori Kustom → simpan dulu ke Supabase, lalu pakai id-nya
     let categoryId = cat;
     if (isCustom) {
-      if (type === 'income') {
-        // Pemasukan: simpan nama kustom langsung di transaksi (free text).
-        // Tidak dibuat di custom_categories agar tak bocor ke Pengeluaran/Anggaran.
-        categoryId = pendingCustom.name.trim();
-      } else {
-        if (!onCreateCustom) { setSaving(false); return; }
-        const res = await onCreateCustom({ name: pendingCustom.name, color: pendingCustom.color });
-        // Limit plan tercapai → PaywallModal sudah tampil; batal diam-diam.
-        if (res?.limitReached) { setSaving(false); return; }
-        const { category, error } = res;
-        if (error || !category) {
-          setSaveError(tr('transaksi.gagalKategoriKustom'));
-          setSaving(false);
-          return;
-        }
-        categoryId = category.id;
+      if (!onCreateCustom) { setSaving(false); return; }
+      const res = await onCreateCustom({ name: pendingCustom.name, color: pendingCustom.color });
+      if (res?.limitReached) { setSaving(false); return; }
+      const { category, error } = res;
+      if (error || !category) {
+        setSaveError(tr('transaksi.gagalKategoriKustom'));
+        setSaving(false);
+        return;
       }
+      categoryId = category.id;
     }
 
     const now = new Date();
