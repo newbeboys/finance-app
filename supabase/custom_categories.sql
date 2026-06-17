@@ -10,7 +10,8 @@ create table if not exists public.custom_categories (
   user_id    uuid not null references auth.users (id) on delete cascade,
   name       text not null,
   color      text not null default 'var(--sage)',
-  type       text not null default 'expense',   -- 'income' | 'expense'
+  type       text not null default 'expense',     -- 'income' | 'expense'
+  is_deleted boolean not null default false,     -- soft delete: set true saat user hapus
   created_at timestamptz not null default now()
 );
 

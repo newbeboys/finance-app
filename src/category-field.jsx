@@ -62,10 +62,11 @@ const PlusDot = () => (
  *  - allowCustom      tampilkan opsi "Kustom (nama bebas)" (default true)
  *  - pending          { name, color } saat mode kustom
  *  - onPendingChange  set { name, color } saat user mengetik nama / pilih warna
+ *  - onDeleteCustom   callback(id) dipanggil setelah user konfirmasi hapus kategori custom
  */
 export function CategoryField({
   value, onChange, categories = [], customCategories = [],
-  allowCustom = true, pending, onPendingChange,
+  allowCustom = true, pending, onPendingChange, onDeleteCustom,
 }) {
   const { t } = useTranslation();
   const merged = [...categories, ...customCategories];
@@ -148,11 +149,42 @@ export function CategoryField({
                   {categoryLabel(c, t)}
                   {c.custom && !locked && <span style={{ fontSize: 10, color: 'var(--muted)', marginLeft: 4 }}>{t('kategori.kustomBadge')}</span>}
                   {locked && <span style={{ fontSize: 11, marginLeft: 4 }}>🔒</span>}
-                  {c.id === value && !locked && (
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto', color: 'var(--sage)' }}>
-                      <path d="M20 6L9 17l-5-5" />
-                    </svg>
-                  )}
+                  <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                    {c.id === value && !locked && (
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--sage)' }}>
+                        <path d="M20 6L9 17l-5-5" />
+                      </svg>
+                    )}
+                    {c.custom && onDeleteCustom && (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        title={t('kategori.hapusKustom', { defaultValue: 'Hapus kategori ini' })}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm(`Hapus kategori "${c.label}"?\nTransaksi lama yang sudah pakai kategori ini tetap aman.`)) {
+                            onDeleteCustom(c.id);
+                          }
+                        }}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.click(); }}
+                        style={{
+                          display: 'grid', placeItems: 'center',
+                          width: 22, height: 22, borderRadius: 6,
+                          color: 'var(--muted)', cursor: 'pointer',
+                          transition: 'color .15s, background .15s',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.color = 'var(--terra)'; e.currentTarget.style.background = 'color-mix(in oklch, var(--terra) 12%, transparent)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.background = 'transparent'; }}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
+                          <path d="M10 11v6M14 11v6" />
+                          <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2" />
+                        </svg>
+                      </span>
+                    )}
+                  </span>
                 </button>
               );
             })}

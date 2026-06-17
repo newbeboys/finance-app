@@ -26,3 +26,9 @@ ALTER TABLE public.transactions
 -- Default 'expense' agar data lama (tanpa type) otomatis masuk ke expense.
 ALTER TABLE public.custom_categories
   ADD COLUMN IF NOT EXISTS type text NOT NULL DEFAULT 'expense';
+
+-- custom_categories: soft delete — kategori dihapus user tidak langsung dibuang dari DB.
+-- Ini penting karena transaksi lama menyimpan UUID kategori dan me-resolve namanya secara live.
+-- Hard delete akan membuat transaksi lama menampilkan UUID mentah sebagai nama kategori.
+ALTER TABLE public.custom_categories
+  ADD COLUMN IF NOT EXISTS is_deleted boolean NOT NULL DEFAULT false;

@@ -1,11 +1,10 @@
 // Kunci item berlebih (index >= maxAllowed) dan buka kunci item dalam kuota (index < maxAllowed).
 // Urutan berdasarkan created_at ASC: yang paling lama tetap aktif.
-async function reconcileTable(supabase, table, userId, maxAllowed) {
-  const { data: items, error } = await supabase
-    .from(table)
-    .select('id')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: true });
+// excludeDeleted: true untuk custom_categories agar soft-deleted rows tidak ikut dihitung kuota.
+async function reconcileTable(supabase, table, userId, maxAllowed, excludeDeleted = false) {
+  let q = supabase.from(table).select('id').eq('user_id', userId).order('created_at', { ascending: true });
+  if (excludeDeleted) q = q.eq('is_deleted', false);
+  const { data: items, error } = await q;
 
   if (error || !items) return;
 
@@ -25,7 +24,7 @@ async function reconcileTable(supabase, table, userId, maxAllowed) {
 export async function lockExcessOnDowngrade(supabase, userId, limits) {
   await reconcileTable(supabase, 'wallets',           userId, limits.maxWallets);
   await reconcileTable(supabase, 'savings',           userId, limits.maxSavingsGoals);
-  await reconcileTable(supabase, 'custom_categories', userId, limits.maxCustomCategories);
+  await reconcileTable(supabase, 'custom_categories', userId, limits.maxCustomCategories, true);
 }
 
 // Dipanggil saat Basic → Pro: buka kunci semua item di 3 tabel.

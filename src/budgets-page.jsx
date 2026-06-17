@@ -7,7 +7,7 @@ import { useIsMobile } from './use-mobile';
 import { CategoryField, CUSTOM_ID } from './category-field';
 import { useScrollLock } from './hooks/useScrollLock';
 
-export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, onDelete, customCategories = [], onCreateCustom }) {
+export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, onDelete, customCategories = [], onCreateCustom, onDeleteCustom }) {
   const { t: tr, i18n: i18nObj } = useTranslation();
   const isMobile = useIsMobile();
 
@@ -329,6 +329,7 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
           existingCategoryIds={rows.map(r => r.categoryId).filter(Boolean)}
           customCategories={customCategories}
           onCreateCustom={onCreateCustom}
+          onDeleteCustom={onDeleteCustom}
           onClose={() => setShowAddModal(false)}
           onAdd={row => { onAdd(row); setShowAddModal(false); }}
         />
@@ -337,7 +338,7 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
   );
 }
 
-function AddBudgetModal({ onClose, onAdd, defaultPeriod = "monthly", existingCategoryIds = [], customCategories = [], onCreateCustom }) {
+function AddBudgetModal({ onClose, onAdd, defaultPeriod = "monthly", existingCategoryIds = [], customCategories = [], onCreateCustom, onDeleteCustom }) {
   const { t: tr } = useTranslation();
   useScrollLock(true);
   const [selectedCatId, setSelectedCatId] = React.useState("");
@@ -349,7 +350,7 @@ function AddBudgetModal({ onClose, onAdd, defaultPeriod = "monthly", existingCat
   const isCustom = selectedCatId === CUSTOM_ID;
 
   const availableCats   = CATEGORIES.filter(c => !existingCategoryIds.includes(c.id));
-  const availableCustom = customCategories.filter(c => !existingCategoryIds.includes(c.id));
+  const availableCustom = customCategories.filter(c => !c.is_deleted && !existingCategoryIds.includes(c.id));
 
   const customNameValid = (pendingCustom?.name || "").trim().length > 0;
   const valid = +limit > 0 && selectedCatId !== "" && (!isCustom || customNameValid);
@@ -412,6 +413,7 @@ function AddBudgetModal({ onClose, onAdd, defaultPeriod = "monthly", existingCat
               customCategories={availableCustom}
               pending={pendingCustom}
               onPendingChange={setPendingCustom}
+              onDeleteCustom={onDeleteCustom}
             />
           </label>
 

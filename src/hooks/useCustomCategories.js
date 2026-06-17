@@ -6,12 +6,13 @@ import { usePaywall } from '../components/PaywallModal';
 // Supabase row → bentuk kategori yang dipakai komponen (sama seperti CATEGORIES)
 function toCustomCat(row) {
   return {
-    id:        row.id,                    // uuid — disimpan sebagai `category` di transaksi/budget
-    label:     row.name,
-    color:     row.color || 'var(--sage)',
-    type:      row.type || 'expense',     // 'income' | 'expense' — dipakai filter tampilan
-    custom:    true,
-    is_locked: row.is_locked || false,
+    id:         row.id,                    // uuid — disimpan sebagai `category` di transaksi/budget
+    label:      row.name,
+    color:      row.color || 'var(--sage)',
+    type:       row.type || 'expense',     // 'income' | 'expense' — dipakai filter tampilan
+    custom:     true,
+    is_locked:  row.is_locked  || false,
+    is_deleted: row.is_deleted || false,   // soft delete — tetap ada di state untuk resolve transaksi lama
   };
 }
 
@@ -88,8 +89,9 @@ export function useCustomCategories(userId, limits) {
     if (existing) return { error: null, category: existing, duplicate: true };
 
     // ── Batas plan: tolak kategori kustom baru bila sudah mencapai limit ──
+    // Hitung hanya yang aktif (belum dihapus) — yang sudah soft-deleted tidak pakai kuota.
     const maxCustom = limits?.maxCustomCategories ?? Infinity;
-    if (customCategories.length >= maxCustom) {
+    if (customCategories.filter(c => !c.is_deleted).length >= maxCustom) {
       openPaywall('Kategori kustom tambahan');
       return { error: null, category: null, limitReached: true };
     }
@@ -124,12 +126,13 @@ export function useCustomCategories(userId, limits) {
   }
 
   async function deleteCustomCategory(id) {
+    // Soft delete: kategori tetap di DB agar transaksi lama masih bisa resolve nama/warna-nya.
     const { error } = await supabase
       .from('custom_categories')
-      .delete()
+      .update({ is_deleted: true })
       .eq('id', id)
       .eq('user_id', userId);
-    if (!error) setCustomCategories(prev => prev.filter(c => c.id !== id));
+    if (!error) setCustomCategories(prev => prev.map(c => c.id === id ? { ...c, is_deleted: true } : c));
     return { error };
   }
 

@@ -359,7 +359,7 @@ function AuthenticatedApp({ session }) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Kategori kustom — dipakai bersama menu Anggaran & Transaksi (realtime)
-  const { customCategories, addCustomCategory } = useCustomCategories(session.user.id, limits);
+  const { customCategories, addCustomCategory, deleteCustomCategory } = useCustomCategories(session.user.id, limits);
 
   // Notifications
   const { notifications, unreadCount, markAllRead } = useNotifications(transactions, notifSubs, budgets);
@@ -438,7 +438,7 @@ function AuthenticatedApp({ session }) {
           </div>
         )}
 
-        {active === "budgets" && <BudgetsPage transactions={transactions} budgets={budgets} onAdd={createBudget} onUpdate={updateBudget} onDelete={deleteBudget} customCategories={customCategories} onCreateCustom={addCustomCategory} />}
+        {active === "budgets" && <BudgetsPage transactions={transactions} budgets={budgets} onAdd={createBudget} onUpdate={updateBudget} onDelete={deleteBudget} customCategories={customCategories} onCreateCustom={addCustomCategory} onDeleteCustom={deleteCustomCategory} />}
 
         {active === "wallets" && (
           <WalletsPage accounts={accounts} onAdd={handleAddAcct} onSetPrimary={setPrimary} onDelete={deleteAccount} transactions={transactions} addLocked={walletAddLocked} />
@@ -453,7 +453,7 @@ function AuthenticatedApp({ session }) {
         )}
 
         {active === "transactions" && (
-          <TransactionsPage accounts={accounts} onAdd={() => setModal(true)} onScan={handleScan} scanLocked={!limits.receiptScanEnabled} transactions={transactions} loading={txLoading} onDelete={deleteTransaction} onUpdate={updateTransaction} customCategories={customCategories} onCreateCustom={addCustomCategory} />
+          <TransactionsPage accounts={accounts} onAdd={() => setModal(true)} onScan={handleScan} scanLocked={!limits.receiptScanEnabled} transactions={transactions} loading={txLoading} onDelete={deleteTransaction} onUpdate={updateTransaction} customCategories={customCategories} onCreateCustom={addCustomCategory} onDeleteCustom={deleteCustomCategory} />
         )}
 
         {active === "settings" && <SettingsPage t={t} setTweak={setTweak} user={session.user} notifSubs={notifSubs} onToggleNotifSub={toggleNotifSub} subscription={subscription} />}
@@ -461,7 +461,7 @@ function AuthenticatedApp({ session }) {
         {active !== "dashboard" && active !== "budgets" && active !== "wallets" && active !== "reports" && active !== "analytics" && active !== "savings" && active !== "transactions" && active !== "settings" && <Placeholder section={active} />}
       </main>
 
-      <AddTransactionModal open={modal} onClose={closeAddModal} onSave={createTransaction} customCategories={customCategories} onCreateCustom={addCustomCategory} prefill={scanPrefill} notice={scanNotice} previewImage={scanPreview} />
+      <AddTransactionModal open={modal} onClose={closeAddModal} onSave={createTransaction} customCategories={customCategories} onCreateCustom={addCustomCategory} onDeleteCustom={deleteCustomCategory} prefill={scanPrefill} notice={scanNotice} previewImage={scanPreview} />
       <ScanStrukSheet open={scanOpen} onClose={() => setScanOpen(false)} onResult={handleScanResult} />
       <AddAccountModal open={addAcct} onClose={() => setAddAcct(false)} onCreate={createAccount} />
       <AddGoalModal open={addGoal} onClose={() => setAddGoal(false)} onCreate={createGoal} />

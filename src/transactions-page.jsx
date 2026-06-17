@@ -7,7 +7,7 @@ import { AddTransactionModal } from './transactions';
 import { LockBadge } from './components/PaywallModal';
 import { resolveCategory, categoryLabel } from './category-field';
 
-export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, transactions: txProp, loading = false, onDelete, onUpdate, customCategories = [], onCreateCustom }) {
+export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, transactions: txProp, loading = false, onDelete, onUpdate, customCategories = [], onCreateCustom, onDeleteCustom }) {
   const { t: tr, i18n } = useTranslation();
   const locale = i18n.language === 'en' ? 'en-US' : 'id-ID';
   const transactions = txProp ?? TRANSACTIONS;
@@ -256,6 +256,7 @@ export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, 
         onUpdate={onUpdate}
         customCategories={customCategories}
         onCreateCustom={onCreateCustom}
+        onDeleteCustom={onDeleteCustom}
       />
     </div>
   );
