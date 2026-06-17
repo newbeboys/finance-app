@@ -65,7 +65,7 @@ export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, 
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           {onScan && (
-            <button onClick={onScan} title={tr('transaksi.scanStruk')} style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 6, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, cursor: "pointer" }}>
+            <button onClick={onScan} title={tr('transaksi.scanStruk')} style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 6, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, opacity: scanLocked ? 0.6 : 1, cursor: scanLocked ? "not-allowed" : "pointer" }}>
               📷 {tr('transaksi.scan')}
               {scanLocked && <LockBadge />}
             </button>

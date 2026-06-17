@@ -29,7 +29,8 @@ export function ScanStrukButton({ onClick, isMobile, locked = false }) {
         padding: isMobile ? '8px 12px' : '7px 12px',
         background: 'var(--paper)', color: 'var(--ink-2)',
         border: '1px solid var(--line-soft)', borderRadius: 10,
-        fontSize: 12.5, display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer',
+        fontSize: 12.5, display: 'inline-flex', alignItems: 'center', gap: 6,
+        opacity: locked ? 0.6 : 1, cursor: locked ? 'not-allowed' : 'pointer',
       }}>
       <IconCamera size={14} /> {t('scan.scanStruk')}
       {locked && <LockBadge />}

@@ -90,6 +90,7 @@ export function AccountSwitcher({ accounts, selected, onSelect, onAdd, addLocked
               width: "100%", display: "flex", alignItems: "center", gap: 10,
               padding: "10px 10px", borderRadius: 10, border: 0, background: "transparent",
               color: "var(--ink)", fontSize: 13, fontWeight: 500,
+              opacity: addLocked ? 0.6 : 1, cursor: addLocked ? "not-allowed" : "pointer",
             }}>
               <span style={{ position: "relative", width: 30, height: 30, borderRadius: 8, background: "var(--ink)", color: "var(--cream)", display: "grid", placeItems: "center" }}>
                 <IconPlus size={15} />
@@ -144,7 +145,7 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
             {t('dompet.deskripsi')}
           </div>
         </div>
-        <button onClick={onAdd} style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500 }}>
+        <button onClick={onAdd} style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, opacity: addLocked ? 0.6 : 1, cursor: addLocked ? "not-allowed" : "pointer" }}>
           <IconPlus size={15} /> {t('dompet.tambahAkun')}
           {addLocked && <LockBadge />}
         </button>
@@ -203,7 +204,7 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
           </div>
         ))}
 
-        <button onClick={onAdd} className="rise" style={{ position: "relative", border: "1.5px dashed var(--line)", borderRadius: "var(--r-lg)", background: "transparent", color: "var(--muted)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, minHeight: 220, cursor: "pointer" }}>
+        <button onClick={onAdd} className="rise" style={{ position: "relative", border: "1.5px dashed var(--line)", borderRadius: "var(--r-lg)", background: "transparent", color: "var(--muted)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, minHeight: 220, opacity: addLocked ? 0.6 : 1, cursor: addLocked ? "not-allowed" : "pointer" }}>
           <span style={{ position: "relative", width: 48, height: 48, borderRadius: 14, background: "var(--paper)", border: "1px solid var(--line-soft)", display: "grid", placeItems: "center", color: "var(--sage)" }}>
             <IconPlus size={22} />
             {addLocked && <LockBadge />}
