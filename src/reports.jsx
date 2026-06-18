@@ -650,37 +650,234 @@ function printReport(p) {
   w.onload = () => setTimeout(() => w.print(), 400);
 }
 
+// ── Excel preview — HTML table representation of the report data ───
+function ExcelPreviewRenderer({ payload }) {
+  const { income, expense, net, cats, incomeCats, transactions, months, periodLabel } = payload;
+  const savingsRate = income ? Math.round((net / income) * 100) : 0;
+  const rupiah = (n) => 'Rp ' + new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(Math.round(n || 0));
+  const fmtDay = (iso) => { const parts = (iso || '').split('-'); return parts[2] && parts[1] ? `${parts[2]}/${parts[1]}/${parts[0]}` : '—'; };
+  const resolveDotColor = (color, fallback) => color && !color.startsWith('var') ? color : fallback;
+
+  const TH  = { background: '#2A2C20', color: '#fff', padding: '8px 12px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', border: '1px solid #D8D2BE', textAlign: 'left' };
+  const THR = { ...TH, textAlign: 'right' };
+  const TD  = { padding: '7px 12px', fontSize: 12.5, border: '1px solid #D8D2BE', color: '#2A2C20', background: '#FBF8EE' };
+  const TDR = { ...TD, textAlign: 'right', fontVariantNumeric: 'tabular-nums' };
+  const TDF = { ...TD, fontWeight: 700, background: '#EAE5D5' };
+  const TDFR = { ...TDF, textAlign: 'right', fontVariantNumeric: 'tabular-nums' };
+
+  const sectionHead = (title) => (
+    <div style={{ fontSize: 13, fontWeight: 700, color: '#2A2C20', marginBottom: 8, paddingBottom: 6, borderBottom: '2px solid #2A2C20' }}>{title}</div>
+  );
+
+  return (
+    <div style={{ fontFamily: "'Geist', -apple-system, sans-serif", maxWidth: 760, margin: '0 auto', paddingBottom: 16 }}>
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase', color: '#6E6B58', marginBottom: 4 }}>FinanceApp — Pratinjau Excel</div>
+        <div style={{ fontSize: 20, fontWeight: 600, color: '#2A2C20', letterSpacing: '-.01em' }}>Laporan Keuangan</div>
+        <div style={{ fontSize: 13, color: '#6E6B58', marginTop: 2 }}>{periodLabel}</div>
+      </div>
+
+      <div style={{ marginBottom: 28 }}>
+        {sectionHead('Ringkasan')}
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <tbody>
+            <tr><td style={TD}>Total Pemasukan</td><td style={{ ...TDR, color: '#5C6B4C', fontWeight: 600 }}>{rupiah(income)}</td></tr>
+            <tr><td style={TD}>Total Pengeluaran</td><td style={{ ...TDR, color: '#B26A4A', fontWeight: 600 }}>{rupiah(expense)}</td></tr>
+            <tr><td style={TDF}>Selisih Bersih</td><td style={TDFR}>{rupiah(net)}</td></tr>
+            <tr><td style={TD}>Tingkat Menabung</td><td style={TDR}>{savingsRate}%</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      {months && months.length > 0 && (
+        <div style={{ marginBottom: 28 }}>
+          {sectionHead('Tren Bulanan')}
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead><tr><th style={TH}>Bulan</th><th style={THR}>Pemasukan</th><th style={THR}>Pengeluaran</th><th style={THR}>Selisih</th></tr></thead>
+            <tbody>
+              {months.map((m, i) => (
+                <tr key={i}>
+                  <td style={TD}>{m.full} {m.year}</td>
+                  <td style={{ ...TDR, color: '#5C6B4C' }}>{rupiah(m.income)}</td>
+                  <td style={{ ...TDR, color: '#B26A4A' }}>{rupiah(m.expense)}</td>
+                  <td style={TDR}>{rupiah(m.net)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot><tr><td style={TDF}>Total</td><td style={{ ...TDFR, color: '#5C6B4C' }}>{rupiah(income)}</td><td style={{ ...TDFR, color: '#B26A4A' }}>{rupiah(expense)}</td><td style={TDFR}>{rupiah(net)}</td></tr></tfoot>
+          </table>
+        </div>
+      )}
+
+      {incomeCats && incomeCats.length > 0 && (
+        <div style={{ marginBottom: 28 }}>
+          {sectionHead('Pemasukan per Kategori')}
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead><tr><th style={TH}>Kategori</th><th style={THR}>Total</th><th style={THR}>%</th></tr></thead>
+            <tbody>
+              {incomeCats.map((cat, i) => (
+                <tr key={i}>
+                  <td style={TD}>
+                    <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: resolveDotColor(cat.color, '#5C6B4C'), marginRight: 8, verticalAlign: 'middle' }} />
+                    {cat.label}
+                  </td>
+                  <td style={{ ...TDR, color: '#5C6B4C' }}>{rupiah(cat.amount)}</td>
+                  <td style={TDR}>{income ? Math.round(cat.amount / income * 100) : 0}%</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot><tr><td style={TDF}>Total Pemasukan</td><td style={{ ...TDFR, color: '#5C6B4C' }}>{rupiah(income)}</td><td style={TDFR}>100%</td></tr></tfoot>
+          </table>
+        </div>
+      )}
+
+      {cats && cats.length > 0 && (
+        <div style={{ marginBottom: 28 }}>
+          {sectionHead('Pengeluaran per Kategori')}
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead><tr><th style={TH}>Kategori</th><th style={THR}>Total</th><th style={THR}>%</th></tr></thead>
+            <tbody>
+              {cats.map((cat, i) => (
+                <tr key={i}>
+                  <td style={TD}>
+                    <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: resolveDotColor(cat.color, '#8C7B5C'), marginRight: 8, verticalAlign: 'middle' }} />
+                    {cat.label}
+                  </td>
+                  <td style={{ ...TDR, color: '#B26A4A' }}>{rupiah(cat.amount)}</td>
+                  <td style={TDR}>{expense ? Math.round(cat.amount / expense * 100) : 0}%</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot><tr><td style={TDF}>Total Pengeluaran</td><td style={{ ...TDFR, color: '#B26A4A' }}>{rupiah(expense)}</td><td style={TDFR}>100%</td></tr></tfoot>
+          </table>
+        </div>
+      )}
+
+      {transactions && transactions.length > 0 && (
+        <div style={{ marginBottom: 28 }}>
+          {sectionHead('Detail Transaksi')}
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={{ ...TH, width: 36 }}>No</th>
+                <th style={TH}>Tanggal</th>
+                <th style={TH}>Kategori</th>
+                <th style={TH}>Keterangan</th>
+                <th style={TH}>Tipe</th>
+                <th style={THR}>Jumlah</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transactions.map((t, i) => {
+                const isIncome = t.amount >= 0;
+                const ket = [t.merchant, t.note].filter(Boolean).join(' · ') || '—';
+                const rowBg = isIncome ? '#E3EFDD' : '#F6E3DC';
+                return (
+                  <tr key={i}>
+                    <td style={{ ...TD, background: rowBg, textAlign: 'center' }}>{i + 1}</td>
+                    <td style={{ ...TD, background: rowBg }}>{fmtDay(t.dateRaw)}</td>
+                    <td style={{ ...TD, background: rowBg }}>{t.catLabel || '—'}</td>
+                    <td style={{ ...TD, background: rowBg, maxWidth: 200, wordBreak: 'break-word' }}>{ket}</td>
+                    <td style={{ ...TD, background: rowBg, textAlign: 'center' }}>{isIncome ? 'Pemasukan' : 'Pengeluaran'}</td>
+                    <td style={{ ...TDR, background: rowBg, color: isIncome ? '#5C6B4C' : '#B26A4A' }}>{rupiah(Math.abs(t.amount))}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Preview modal ──────────────────────────────────────────────────
-function ReportPreview({ payload, onClose, onDownload }) {
+function ReportPreview({ payload, onClose, canExport }) {
   const { t: tr } = useTranslation();
+  const { openPaywall } = usePaywall();
   useScrollLock(!!payload);
-  const ref = React.useRef(null);
+  const iframeRef = React.useRef(null);
+  const [selectedFormat, setSelectedFormat] = React.useState('pdf');
+  const [downloading, setDownloading] = React.useState(false);
+
   React.useEffect(() => {
-    if (payload && ref.current) ref.current.srcdoc = buildReportDoc(payload);
-  }, [payload]);
+    if (payload && iframeRef.current && selectedFormat === 'pdf') {
+      iframeRef.current.srcdoc = buildReportDoc(payload);
+    }
+  }, [payload, selectedFormat]);
+
   if (!payload) return null;
   const p = payload;
+
+  const handleDownload = async () => {
+    if (!canExport) { openPaywall('Unduh laporan PDF/Excel'); return; }
+    setDownloading(true);
+    try {
+      if (selectedFormat === 'pdf') await downloadPdf(p);
+      else await downloadExcel(p);
+    } catch (e) {
+      alert("Gagal membuat file: " + (e?.message || e));
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   return (
     <div className="report-preview-backdrop" onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(42,44,32,.4)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 24, animation: "rise .25s ease-out" }}>
       <div className="report-preview-container" onClick={e => e.stopPropagation()} style={{ width: 820, maxWidth: "100%", height: "88vh", display: "flex", flexDirection: "column", background: "var(--ivory)", borderRadius: 16, overflow: "hidden", boxShadow: "0 30px 80px -20px rgba(42,44,32,.5)" }}>
-        <div className="report-preview-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", borderBottom: "1px solid var(--line-soft)", gap: 10, flexWrap: "wrap" }}>
+
+        <div className="report-preview-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px", borderBottom: "1px solid var(--line-soft)", gap: 10, flexWrap: "wrap" }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{p.title}</div>
-            <div className="serif" style={{ fontSize: 22, letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.periodLabel}</div>
+            <div className="serif" style={{ fontSize: 20, letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.periodLabel}</div>
           </div>
+
+          {/* Format selector — PDF / Excel toggle */}
+          <div style={{ display: "flex", padding: 3, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10, flexShrink: 0 }}>
+            {[{ id: "pdf", label: "PDF" }, { id: "excel", label: "Excel" }].map(f => (
+              <button key={f.id} onClick={() => setSelectedFormat(f.id)} style={{
+                padding: "6px 14px", fontSize: 12, cursor: "pointer",
+                background: selectedFormat === f.id ? "var(--ivory)" : "transparent",
+                border: selectedFormat === f.id ? "1px solid var(--line-soft)" : "1px solid transparent",
+                borderRadius: 8, color: selectedFormat === f.id ? "var(--ink)" : "var(--muted)",
+                fontWeight: selectedFormat === f.id ? 500 : 400,
+              }}>{f.label}</button>
+            ))}
+          </div>
+
           <div className="report-preview-actions" style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
-            <button className="report-preview-btn-print" onClick={() => printReport(p)} style={{ padding: "9px 14px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10, fontSize: 12.5, display: "inline-flex", gap: 7, alignItems: "center" }}>
-              <IconReport size={14} /> {tr('laporan.cetakPdf')}
-            </button>
-            <button onClick={() => onDownload(p)} style={{ padding: "9px 14px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 10, fontSize: 12.5, display: "inline-flex", gap: 7, alignItems: "center" }}>
-              <IconArrowDown size={14} /> <span className="report-preview-btn-label">{tr('laporan.unduh')}</span>
-            </button>
+            {selectedFormat === 'pdf' && (
+              <button className="report-preview-btn-print" onClick={() => printReport(p)} style={{ padding: "9px 14px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10, fontSize: 12.5, display: "inline-flex", gap: 7, alignItems: "center" }}>
+                <IconReport size={14} /> {tr('laporan.cetakPdf')}
+              </button>
+            )}
+            {canExport && (
+              <button onClick={handleDownload} disabled={downloading} style={{ padding: "9px 14px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 10, fontSize: 12.5, display: "inline-flex", gap: 7, alignItems: "center", opacity: downloading ? 0.7 : 1, cursor: downloading ? "default" : "pointer" }}>
+                {downloading ? <Spinner /> : <IconArrowDown size={14} />}
+                <span className="report-preview-btn-label">{tr('laporan.unduh')} ({selectedFormat.toUpperCase()})</span>
+              </button>
+            )}
             <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: 10, border: "1px solid var(--line-soft)", background: "var(--paper)", display: "grid", placeItems: "center", color: "var(--ink-2)", flexShrink: 0 }}>
               <IconClose size={15} />
             </button>
           </div>
         </div>
-        <iframe ref={ref} title="preview" style={{ flex: 1, border: 0, background: "#cfc9b8" }} />
+
+        {/* Preview content — iframe for PDF, HTML table for Excel */}
+        {selectedFormat === 'pdf' ? (
+          <iframe ref={iframeRef} title="preview" style={{ flex: 1, border: 0, background: "#cfc9b8" }} />
+        ) : (
+          <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", background: "#f0ece0" }}>
+            <ExcelPreviewRenderer payload={p} />
+          </div>
+        )}
+
+        {/* Upgrade hint — shown only for Basic users */}
+        {!canExport && (
+          <div style={{ padding: "10px 20px", textAlign: "center", fontSize: 12.5, color: "var(--muted)", borderTop: "1px solid var(--line-soft)", background: "var(--paper)" }}>
+            Upgrade ke Pro untuk download laporan.
+          </div>
+        )}
       </div>
     </div>
   );
@@ -846,7 +1043,7 @@ export function ReportsPage({ transactions = [], customCategories = [], canExpor
         </div>
       )}
 
-      <ReportPreview payload={preview} onClose={() => setPreview(null)} onDownload={requestDownload} />
+      <ReportPreview payload={preview} onClose={() => setPreview(null)} canExport={canExport} />
       <FormatPicker payload={downloadTarget} onClose={() => setDownloadTarget(null)} />
     </div>
   );

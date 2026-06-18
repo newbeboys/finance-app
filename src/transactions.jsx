@@ -269,7 +269,7 @@ export function DatePickerPopup({ valueISO, onConfirm, onClose }) {
   );
 }
 
-export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial = null, customCategories = [], onCreateCustom, onDeleteCustom, prefill = null, notice = null, previewImage = null }) {
+export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial = null, customCategories = [], onCreateCustom, onDeleteCustom, prefill = null, notice = null, previewImage = null, isPro = false, isBasicAtMax = false, userId }) {
   const { t: tr, i18n } = useTranslation();
   const locale = i18n.language === 'en' ? 'en-US' : 'id-ID';
   useScrollLock(open);   // kunci scroll latar saat modal terbuka
@@ -466,6 +466,9 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
               pending={pendingCustom}
               onPendingChange={setPendingCustom}
               onDeleteCustom={onDeleteCustom}
+              isPro={isPro}
+              isBasicAtMax={isBasicAtMax}
+              userId={userId}
             />
           </Field>
           <Field label={tr('transaksi.catatanOpsional')}>

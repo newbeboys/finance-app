@@ -1,6 +1,9 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { ALL_CATEGORIES } from './data';
+import { PLAN_LIMITS } from './lib/planLimits';
+import { DeleteCategoryModal } from './components/DeleteCategoryModal';
+import { EditCategoryModal } from './components/EditCategoryModal';
 
 // Nilai khusus untuk opsi "Kustom (nama bebas)" di dropdown
 export const CUSTOM_ID = '__custom__';
@@ -51,6 +54,29 @@ const PlusDot = () => (
   </span>
 );
 
+const IconTrash = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="3 6 5 6 21 6" />
+    <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
+    <path d="M10 11v6M14 11v6" />
+    <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2" />
+  </svg>
+);
+
+const IconEdit = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+    <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+  </svg>
+);
+
+const IconLock = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="5" y="11" width="14" height="10" rx="2" />
+    <path d="M8 11V7a4 4 0 018 0v4" />
+  </svg>
+);
+
 /**
  * Dropdown kategori dengan titik warna — dipakai di menu Transaksi & Anggaran.
  *
@@ -62,11 +88,15 @@ const PlusDot = () => (
  *  - allowCustom      tampilkan opsi "Kustom (nama bebas)" (default true)
  *  - pending          { name, color } saat mode kustom
  *  - onPendingChange  set { name, color } saat user mengetik nama / pilih warna
- *  - onDeleteCustom   callback(id) dipanggil setelah user konfirmasi hapus kategori custom
+ *  - onDeleteCustom   callback(id) dipanggil setelah user konfirmasi hapus (Pro only)
+ *  - isPro            true = Pro tier
+ *  - isBasicAtMax     true = Basic sudah di batas maksimal kategori kustom
+ *  - userId           untuk modal edit/delete
  */
 export function CategoryField({
   value, onChange, categories = [], customCategories = [],
   allowCustom = true, pending, onPendingChange, onDeleteCustom,
+  isPro = false, isBasicAtMax = false, userId,
 }) {
   const { t } = useTranslation();
   const merged = [...categories, ...customCategories];
@@ -76,6 +106,14 @@ export function CategoryField({
   const [open, setOpen] = React.useState(false);
   const [pos, setPos] = React.useState(null);
   const wrapRef = React.useRef(null);
+
+  // Modal state
+  const [deletingCat, setDeletingCat] = React.useState(null);
+  const [editingCat, setEditingCat] = React.useState(null);
+
+  // Hitung kategori kustom aktif (non-deleted) dari prop — dipakai untuk gating edit button
+  const activeCustomCount = customCategories.filter(c => !c.is_deleted).length;
+  const basicMax = PLAN_LIMITS.basic.maxCustomCategories;
 
   const toggle = () => {
     if (!open && wrapRef.current) {
@@ -102,6 +140,10 @@ export function CategoryField({
     onChange(id);
     if (id === CUSTOM_ID) onPendingChange?.({ name: pending?.name || '', color: pending?.color || CUSTOM_COLORS[0] });
     setOpen(false);
+  };
+
+  const handleDeleteConfirm = async (id) => {
+    await onDeleteCustom?.(id);
   };
 
   const triggerLabel = isCustom ? t('kategori.kustom') : (selected ? categoryLabel(selected, t) : t('kategori.pilihKategori'));
@@ -133,6 +175,10 @@ export function CategoryField({
           }}>
             {merged.map((c) => {
               const locked = !!c.is_locked;
+              const canDelete = isPro && c.custom && !locked && !!onDeleteCustom;
+              const canEdit = !isPro && activeCustomCount >= basicMax && c.custom && !locked && !!userId;
+              const showLock = !isPro && c.custom && !locked && !canEdit;
+
               return (
                 <button key={c.id} type="button"
                   onClick={() => { if (!locked) pick(c.id); }}
@@ -155,16 +201,17 @@ export function CategoryField({
                         <path d="M20 6L9 17l-5-5" />
                       </svg>
                     )}
-                    {c.custom && onDeleteCustom && (
+
+                    {/* Hapus — hanya Pro */}
+                    {canDelete && (
                       <span
                         role="button"
                         tabIndex={0}
-                        title={t('kategori.hapusKustom', { defaultValue: 'Hapus kategori ini' })}
+                        title="Hapus kategori (Pro)"
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (window.confirm(`Hapus kategori "${c.label}"?\nTransaksi lama yang sudah pakai kategori ini tetap aman.`)) {
-                            onDeleteCustom(c.id);
-                          }
+                          setOpen(false);
+                          setDeletingCat(c);
                         }}
                         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.click(); }}
                         style={{
@@ -176,12 +223,42 @@ export function CategoryField({
                         onMouseEnter={e => { e.currentTarget.style.color = 'var(--terra)'; e.currentTarget.style.background = 'color-mix(in oklch, var(--terra) 12%, transparent)'; }}
                         onMouseLeave={e => { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.background = 'transparent'; }}
                       >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="3 6 5 6 21 6" />
-                          <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
-                          <path d="M10 11v6M14 11v6" />
-                          <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2" />
-                        </svg>
+                        <IconTrash />
+                      </span>
+                    )}
+
+                    {/* Edit — hanya Basic saat maximal */}
+                    {canEdit && (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        title="Edit kategori"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpen(false);
+                          setEditingCat(c);
+                        }}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.click(); }}
+                        style={{
+                          display: 'grid', placeItems: 'center',
+                          width: 22, height: 22, borderRadius: 6,
+                          color: 'var(--muted)', cursor: 'pointer',
+                          transition: 'color .15s, background .15s',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.color = 'var(--sage)'; e.currentTarget.style.background = 'color-mix(in oklch, var(--sage) 12%, transparent)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.background = 'transparent'; }}
+                      >
+                        <IconEdit />
+                      </span>
+                    )}
+
+                    {/* Gemlock — Basic custom, belum maximal (tidak bisa edit/hapus) */}
+                    {showLock && (
+                      <span
+                        title="Upgrade ke Pro untuk lebih fleksibel"
+                        style={{ display: 'grid', placeItems: 'center', width: 22, height: 22, color: 'var(--muted)', opacity: 0.5 }}
+                      >
+                        <IconLock />
                       </span>
                     )}
                   </span>
@@ -228,6 +305,22 @@ export function CategoryField({
           </div>
         </div>
       )}
+
+      {/* Delete modal — Pro only */}
+      <DeleteCategoryModal
+        open={!!deletingCat}
+        category={deletingCat}
+        onClose={() => setDeletingCat(null)}
+        onConfirm={handleDeleteConfirm}
+      />
+
+      {/* Edit modal — Basic at max only */}
+      <EditCategoryModal
+        open={!!editingCat}
+        category={editingCat}
+        userId={userId}
+        onClose={() => setEditingCat(null)}
+      />
     </div>
   );
 }

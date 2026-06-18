@@ -7,7 +7,7 @@ import { useIsMobile } from './use-mobile';
 import { CategoryField, CUSTOM_ID } from './category-field';
 import { useScrollLock } from './hooks/useScrollLock';
 
-export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, onDelete, customCategories = [], onCreateCustom, onDeleteCustom }) {
+export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, onDelete, customCategories = [], onCreateCustom, onDeleteCustom, isPro = false, isBasicAtMax = false, userId }) {
   const { t: tr, i18n: i18nObj } = useTranslation();
   const isMobile = useIsMobile();
 
@@ -332,13 +332,16 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
           onDeleteCustom={onDeleteCustom}
           onClose={() => setShowAddModal(false)}
           onAdd={row => { onAdd(row); setShowAddModal(false); }}
+          isPro={isPro}
+          isBasicAtMax={isBasicAtMax}
+          userId={userId}
         />
       )}
     </div>
   );
 }
 
-function AddBudgetModal({ onClose, onAdd, defaultPeriod = "monthly", existingCategoryIds = [], customCategories = [], onCreateCustom, onDeleteCustom }) {
+function AddBudgetModal({ onClose, onAdd, defaultPeriod = "monthly", existingCategoryIds = [], customCategories = [], onCreateCustom, onDeleteCustom, isPro = false, isBasicAtMax = false, userId }) {
   const { t: tr } = useTranslation();
   useScrollLock(true);
   const [selectedCatId, setSelectedCatId] = React.useState("");
@@ -414,6 +417,9 @@ function AddBudgetModal({ onClose, onAdd, defaultPeriod = "monthly", existingCat
               pending={pendingCustom}
               onPendingChange={setPendingCustom}
               onDeleteCustom={onDeleteCustom}
+              isPro={isPro}
+              isBasicAtMax={isBasicAtMax}
+              userId={userId}
             />
           </label>
 

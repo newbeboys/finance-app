@@ -125,7 +125,24 @@ export function useCustomCategories(userId, limits) {
     return { error: null, category: cat };
   }
 
-  async function deleteCustomCategory(id) {
+  async function updateCustomCategory(categoryId, updates) {
+    const { error } = await supabase
+      .from('custom_categories')
+      .update(updates)
+      .eq('id', categoryId)
+      .eq('user_id', userId);
+    if (!error) {
+      setCustomCategories(prev => prev.map(c =>
+        c.id === categoryId
+          ? { ...c, ...(updates.name ? { label: updates.name } : {}), ...(updates.color ? { color: updates.color } : {}), ...(updates.type ? { type: updates.type } : {}) }
+          : c
+      ));
+    }
+    return { error };
+  }
+
+  async function deleteCustomCategory(id, isPro) {
+    if (!isPro) return { error: { message: 'NOT_ALLOWED' } };
     // Soft delete: kategori tetap di DB agar transaksi lama masih bisa resolve nama/warna-nya.
     const { error } = await supabase
       .from('custom_categories')
@@ -136,5 +153,5 @@ export function useCustomCategories(userId, limits) {
     return { error };
   }
 
-  return { customCategories, loading, addCustomCategory, deleteCustomCategory };
+  return { customCategories, loading, addCustomCategory, updateCustomCategory, deleteCustomCategory };
 }

@@ -108,6 +108,21 @@ export function useSubscription(userId) {
     return { error: null };
   }, [userId, fetchRow]);
 
+  const getCategoryEditCooldownInfo = React.useCallback(() => {
+    if (isPro) return null;
+    if (!row?.last_custom_category_edit_at) return { isOnCooldown: false };
+    const lastEdit = new Date(row.last_custom_category_edit_at);
+    const daysSinceEdit = (Date.now() - lastEdit.getTime()) / (1000 * 60 * 60 * 24);
+    if (daysSinceEdit < 30) {
+      return {
+        isOnCooldown: true,
+        daysRemaining: Math.ceil(30 - daysSinceEdit),
+        nextEditDate: new Date(lastEdit.getTime() + 30 * 24 * 60 * 60 * 1000),
+      };
+    }
+    return { isOnCooldown: false };
+  }, [isPro, row]);
+
   return {
     plan: isPro ? 'pro' : 'basic',
     isPro,
@@ -117,5 +132,6 @@ export function useSubscription(userId) {
     limits,
     refresh: fetchRow,
     setPlanForTesting,
+    getCategoryEditCooldownInfo,
   };
 }
