@@ -1,0 +1,204 @@
+.um-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  background: rgba(42, 44, 32, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: flex-end;
+  animation: um-rise 0.25s ease-out;
+}
+
+@keyframes um-rise {
+  from { opacity: 0; transform: translateY(40px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.um-sheet {
+  background: var(--paper);
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  padding: 28px 24px;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  width: 100%;
+  box-shadow: 0 -4px 32px rgba(42, 44, 32, 0.15);
+  position: relative;
+}
+
+.um-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  background: var(--cream);
+  border: 1px solid var(--line-soft);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 5px 9px;
+  border-radius: var(--r-sm);
+  color: var(--muted);
+  line-height: 1;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+.um-close:active { background: var(--line); }
+
+.um-header {
+  text-align: center;
+  margin-bottom: 18px;
+}
+
+.um-icon {
+  font-size: 38px;
+  line-height: 1;
+  margin-bottom: 10px;
+}
+
+.um-title {
+  margin: 0;
+  font-size: 22px;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+.um-reason {
+  text-align: center;
+  margin-bottom: 18px;
+}
+
+.um-reason p {
+  margin: 5px 0;
+  font-size: 13.5px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.um-limit {
+  font-weight: 600;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.um-plans {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.um-plan {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  background: var(--ivory);
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.um-plan--active {
+  border-color: var(--gold);
+  background: color-mix(in oklch, var(--gold) 7%, var(--ivory));
+}
+
+.um-plan input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  margin-top: 3px;
+  cursor: pointer;
+  accent-color: var(--gold);
+  flex-shrink: 0;
+}
+
+.um-plan-body { flex: 1; }
+
+.um-plan-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.um-plan-label {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.um-plan-badge {
+  font-size: 10px;
+  background: var(--gold);
+  color: var(--paper);
+  padding: 3px 8px;
+  border-radius: 99px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.um-plan-price-row {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.um-plan-price {
+  font-weight: 700;
+  font-size: 17px;
+  color: var(--ink);
+}
+
+.um-plan-period {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.um-plan-monthly {
+  font-size: 11.5px;
+  color: var(--muted-2);
+  margin-top: 3px;
+}
+
+.um-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.um-btn-primary {
+  width: 100%;
+  padding: 14px;
+  background: var(--ink);
+  color: var(--cream);
+  border: none;
+  border-radius: var(--r-md);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity 0.15s;
+}
+.um-btn-primary:active { opacity: 0.8; }
+
+.um-btn-secondary {
+  width: 100%;
+  padding: 12px;
+  background: transparent;
+  color: var(--muted);
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-md);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+.um-btn-secondary:active { background: var(--cream); }
+
+.um-terms {
+  text-align: center;
+  font-size: 11px;
+  color: var(--muted-2);
+  margin: 0;
+  line-height: 1.5;
+}

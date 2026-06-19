@@ -1,0 +1,114 @@
+.ss-card {
+  border-radius: var(--r-lg);
+  padding: 18px;
+  border: 1.5px solid var(--line);
+  background: var(--ivory);
+}
+
+.ss-pro {
+  border-color: color-mix(in oklch, var(--gold) 40%, transparent);
+  background: color-mix(in oklch, var(--gold) 7%, var(--ivory));
+}
+
+.ss-basic {
+  border-color: var(--line-soft);
+}
+
+.ss-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.ss-icon {
+  font-size: 26px;
+  line-height: 1;
+  margin-top: 1px;
+}
+
+.ss-meta { flex: 1; }
+
+.ss-plan-name {
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--ink);
+  line-height: 1.2;
+}
+
+.ss-plan-detail {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+
+.ss-billing {
+  font-size: 12px;
+  color: var(--muted-2);
+  margin-top: 2px;
+}
+
+.ss-desc {
+  margin: 0 0 10px 0;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.ss-pricing {
+  margin: 0 0 14px 0;
+  padding-left: 16px;
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.9;
+}
+
+.ss-save {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gold);
+  margin-left: 4px;
+}
+
+.ss-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ss-btn {
+  width: 100%;
+  padding: 11px;
+  border-radius: var(--r-md);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity 0.15s;
+  border: none;
+}
+.ss-btn:active { opacity: 0.75; }
+
+.ss-btn-primary {
+  background: var(--ink);
+  color: var(--cream);
+}
+
+.ss-btn-outline {
+  background: transparent;
+  color: var(--ink);
+  border: 1.5px solid var(--line);
+}
+
+.ss-btn-danger {
+  background: transparent;
+  color: #c0392b;
+  border: 1.5px solid color-mix(in oklch, #c0392b 35%, transparent);
+  font-weight: 500;
+  font-size: 13px;
+}
+
+html.dark .ss-btn-danger {
+  color: #e07070;
+  border-color: color-mix(in oklch, #e07070 30%, transparent);
+}

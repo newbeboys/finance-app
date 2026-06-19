@@ -1,0 +1,44 @@
+.rpb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 10px 16px;
+  border-radius: var(--r-md);
+  border: 1.5px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+
+.rpb:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.rpb--loading {
+  color: var(--muted-2);
+  border-color: var(--line-soft);
+}
+
+.rpb--success {
+  color: var(--sage);
+  border-color: color-mix(in oklch, var(--sage) 35%, transparent);
+  background: color-mix(in oklch, var(--sage) 8%, transparent);
+}
+
+.rpb--error {
+  color: #c0392b;
+  border-color: color-mix(in oklch, #c0392b 30%, transparent);
+  background: color-mix(in oklch, #c0392b 6%, transparent);
+}
+
+html.dark .rpb--error {
+  color: #e07070;
+  border-color: color-mix(in oklch, #e07070 25%, transparent);
+  background: color-mix(in oklch, #e07070 8%, transparent);
+}

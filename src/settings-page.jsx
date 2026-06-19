@@ -10,6 +10,10 @@ import RecurringTransactionPage from './pages/RecurringTransactionPage';
 import { useScrollLock } from './hooks/useScrollLock';
 import { usePaywall } from './components/PaywallModal';
 import { isFontThemeAllowed } from './lib/planLimits';
+import { UpgradeModal } from './components/subscription/UpgradeModal';
+import { SubscriptionStatus } from './components/subscription/SubscriptionStatus';
+import { FeatureComparison } from './components/subscription/FeatureComparison';
+import { RestorePurchaseButton } from './components/subscription/RestorePurchaseButton';
 
 // ── Halaman Pengaturan (Settings) ──────────────────────────────────
 // Reads & writes the same tweak state (theme, palette, sidebar, showAI,
@@ -236,7 +240,12 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub, s
   const [pinSetup, setPinSetup] = React.useState(null); // null | 'create' | 'change'
   const [bioNote, setBioNote] = React.useState('');
   const [confirmNone, setConfirmNone] = React.useState(false);
-  useScrollLock(confirmNone || !!pinSetup || showLangModal);
+
+  // Upgrade modal state
+  const [showUpgradeModal, setShowUpgradeModal] = React.useState(false);
+  const [showFeatureComparison, setShowFeatureComparison] = React.useState(false);
+
+  useScrollLock(confirmNone || !!pinSetup || showLangModal || showUpgradeModal);
 
   // Halaman "Transaksi Berulang" (overlay penuh)
   const [showRecurring, setShowRecurring] = React.useState(false);
@@ -255,6 +264,20 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub, s
     setPlanBusy(true);
     await sub.setPlanForTesting(p);
     setPlanBusy(false);
+  };
+
+  const handleSelectPlan = (planId) => {
+    setShowUpgradeModal(false);
+    if (import.meta.env.DEV && sub.setPlanForTesting) {
+      sub.setPlanForTesting('pro');
+    }
+    // TODO: trigger Google Play Billing flow with planId
+    console.log('[UpgradeModal] Plan selected:', planId);
+  };
+
+  const handleRestorePurchase = async () => {
+    // TODO: implement Google Play Billing restore
+    await new Promise(r => setTimeout(r, 1200));
   };
 
   // Pilih metode keamanan via radio
@@ -313,22 +336,35 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub, s
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {/* Akun & Paket (Basic / Pro) */}
         <SettingCard eyebrow="Langganan" title="Akun & Paket">
-          <SettingRow
-            title="Paket Anda"
-            desc={isPro ? "Akses penuh ke semua fitur tanpa batas." : "Beberapa fitur dibatasi. Tingkatkan ke Pro untuk akses penuh."}
-            last={!import.meta.env.DEV}
+          <SubscriptionStatus
+            isPro={isPro}
+            billingCycle={sub.billingCycle}
+            expiresAt={sub.expiresAt}
+            onUpgrade={() => setShowUpgradeModal(true)}
+            onCancel={isPro ? () => alert('Hubungi support untuk membatalkan langganan.') : undefined}
+          />
+
+          {!isPro && (
+            <div style={{ marginTop: 12 }}>
+              <RestorePurchaseButton onRestore={handleRestorePurchase} />
+            </div>
+          )}
+
+          <div
+            style={{ marginTop: 12, cursor: 'pointer', textAlign: 'center', fontSize: 12.5, color: 'var(--muted)', textDecoration: 'underline' }}
+            onClick={() => setShowFeatureComparison(v => !v)}
           >
-            <span style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              fontSize: 12.5, fontWeight: 600, letterSpacing: ".03em",
-              padding: "6px 14px", borderRadius: 99,
-              background: isPro ? "color-mix(in oklch, var(--gold) 18%, var(--ivory))" : "var(--paper)",
-              color: isPro ? "var(--gold)" : "var(--ink-2)",
-              border: `1px solid ${isPro ? "color-mix(in oklch, var(--gold) 40%, transparent)" : "var(--line-soft)"}`,
-            }}>
-              {isPro ? "👑 Pro" : "Basic"}
-            </span>
-          </SettingRow>
+            {showFeatureComparison ? 'Sembunyikan perbandingan fitur ▲' : 'Lihat perbandingan fitur Basic vs Pro ▼'}
+          </div>
+
+          {showFeatureComparison && (
+            <div style={{ marginTop: 16 }}>
+              <FeatureComparison
+                defaultPlan="annual"
+                onSelectPlan={(planId) => { setShowFeatureComparison(false); setShowUpgradeModal(true); }}
+              />
+            </div>
+          )}
 
           {import.meta.env.DEV && (
             <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--line-soft)" }}>
@@ -622,6 +658,12 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub, s
       )}
 
       <RecurringTransactionPage open={showRecurring} onClose={() => setShowRecurring(false)} />
+
+      <UpgradeModal
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        onSelectPlan={handleSelectPlan}
+      />
     </div>
   );
 }
