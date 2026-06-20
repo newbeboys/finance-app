@@ -55,6 +55,7 @@ export const IconFilter = Ic(<><path d="M3 5h18M6 12h12M10 19h4" /></>);
 export const IconChev   = Ic(<><path d="m6 9 6 6 6-6" /></>);
 export const IconWallet = Ic(<><rect x="3" y="6" width="18" height="13" rx="2" /><path d="M16 12h.01" /><path d="M3 9h13a2 2 0 0 1 2 2v0" /></>);
 export const IconCalendar = Ic(<><rect x="3" y="4.5" width="18" height="17" rx="2.5" /><path d="M3 9.5h18M8 2.5v4M16 2.5v4" /></>);
+export const IconEdit   = Ic(<><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></>);
 export const IconEye    = Ic(<><path d="M2 12s3.5-8 10-8 10 8 10 8-3.5 8-10 8-10-8-10-8z" /><circle cx="12" cy="12" r="3" /></>);
 export const IconEyeOff = Ic(<><path d="M17.9 17.9A10.5 10.5 0 0 1 12 20C5.5 20 2 12 2 12a18 18 0 0 1 5.1-6" /><path d="M9.9 4.2A9.4 9.4 0 0 1 12 4c6.5 0 10 8 10 8a18 18 0 0 1-2.2 3.2" /><path d="m3 3 18 18" /><path d="M14.1 14.1A3 3 0 0 1 9.9 9.9" /></>);
 

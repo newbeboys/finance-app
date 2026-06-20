@@ -2,7 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import i18n from './i18n';
 import { fmt, fmtShort, formatNominal, nominalFontSize, CATEGORIES } from './data';
-import { IconPlus, IconSpark, IconClose, CatIcon } from './icons';
+import { IconPlus, IconSpark, IconClose, IconEdit, CatIcon } from './icons';
 import { useIsMobile } from './use-mobile';
 import { CategoryField, CUSTOM_ID } from './category-field';
 import { useScrollLock } from './hooks/useScrollLock';
@@ -12,28 +12,11 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
   const { t: tr, i18n: i18nObj } = useTranslation();
   const isMobile = useIsMobile();
 
-  // Local draft limits while slider is being dragged (flushed to Supabase on release)
-  const [draftLimits, setDraftLimits] = React.useState({});
-  const [editing, setEditing] = React.useState(null);
   const [period, setPeriod] = React.useState("monthly");
   const [showAddModal, setShowAddModal] = React.useState(false);
+  const [editingBudget, setEditingBudget] = React.useState(null);
 
-  const getLimit = (r) => draftLimits[r.id] ?? r.limit;
-
-  const onSliderChange = (id, val) =>
-    setDraftLimits(prev => ({ ...prev, [id]: Math.max(0, val) }));
-
-  const onLimitCommit = (id, val) => {
-    const limit = Math.max(0, val);
-    onUpdate(id, { limit });
-    setDraftLimits(prev => { const n = { ...prev }; delete n[id]; return n; });
-  };
-
-  const toggle    = (id, enabled) => onUpdate(id, { enabled: !enabled });
-  const deleteRow = (id)          => {
-    onDelete(id);
-    setDraftLimits(prev => { const n = { ...prev }; delete n[id]; return n; });
-  };
+  const deleteRow = (id) => onDelete(id);
 
   const spentByCategory = React.useMemo(() => {
     const now = new Date();
@@ -60,10 +43,10 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
   const rows = budgets;
   const visibleRows = rows.filter(r => (r.periode || "monthly") === period);
   const active      = visibleRows.filter(r => r.enabled);
-  const totalLimit  = active.reduce((s, r) => s + getLimit(r), 0);
+  const totalLimit  = active.reduce((s, r) => s + r.limit, 0);
   const totalSpent  = active.reduce((s, r) => s + getSpent(r), 0);
   const totalPct    = totalLimit ? totalSpent / totalLimit : 0;
-  const overCount   = active.filter(r => getSpent(r) > getLimit(r)).length;
+  const overCount   = active.filter(r => getSpent(r) > r.limit).length;
 
   const locale = i18nObj.language === 'en' ? 'en-US' : 'id-ID';
   const monthLabel = new Date().toLocaleDateString(locale, { month: 'long', year: 'numeric' }).toUpperCase();
@@ -174,10 +157,9 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
           {/* ── Budget rows card ── */}
           <div className="card rise" style={{ padding: isMobile ? "8px 16px 16px" : "8px 24px 16px" }}>
             {!isMobile && (
-              <div style={{ display: "grid", gridTemplateColumns: "minmax(200px,1.4fr) 1.6fr 150px 90px 48px", padding: "16px 0 10px", borderBottom: "1px solid var(--line-soft)", fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)", alignItems: "center", gap: 16 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "minmax(200px,1.4fr) 1.6fr 150px 80px", padding: "16px 0 10px", borderBottom: "1px solid var(--line-soft)", fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)", alignItems: "center", gap: 16 }}>
                 <span>{tr('anggaran.tableKategori')}</span><span>{tr('anggaran.tableProgress')}</span>
                 <span style={{ textAlign: "right" }}>{isBulanan ? tr('anggaran.tableBatasBulanan') : tr('anggaran.tableBatasMingguan')}</span>
-                <span style={{ textAlign: "right" }}>{tr('anggaran.tableAktif')}</span>
                 <span />
               </div>
             )}
@@ -198,14 +180,13 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
 
             {visibleRows.map((r, i) => {
               const computedSpent = getSpent(r);
-              const currentLimit  = getLimit(r);
+              const currentLimit  = r.limit;
               const pct  = currentLimit ? computedSpent / currentLimit : 0;
               const over = computedSpent > currentLimit;
-              const isEditing = editing === r.id;
 
               if (isMobile) {
                 return (
-                  <div key={r.id} style={{ padding: "16px 0", borderBottom: i < visibleRows.length - 1 ? "1px solid var(--line-soft)" : 0, opacity: r.enabled ? 1 : 0.5, transition: "opacity .2s ease" }}>
+                  <div key={r.id} style={{ padding: "16px 0", borderBottom: i < visibleRows.length - 1 ? "1px solid var(--line-soft)" : 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
                       <span style={{ width: 38, height: 38, borderRadius: 10, flexShrink: 0, background: `color-mix(in oklch, ${r.color} 16%, var(--ivory))`, color: r.color, display: "grid", placeItems: "center" }}>
                         <CatIcon kind={r.categoryId || r.id} size={17} />
@@ -217,45 +198,22 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
                           {over && <span style={{ marginLeft: 6, color: "var(--terra)" }}>• {tr('anggaran.over')}</span>}
                         </div>
                       </div>
-                      <button onClick={() => toggle(r.id, r.enabled)} role="switch" aria-checked={r.enabled}
-                        style={{ width: 44, height: 26, borderRadius: 99, border: 0, padding: 3, background: r.enabled ? "var(--sage)" : "var(--line)", display: "flex", justifyContent: r.enabled ? "flex-end" : "flex-start", transition: "background .2s ease", flexShrink: 0 }}>
-                        <span style={{ width: 20, height: 20, borderRadius: "50%", background: "var(--paper)", boxShadow: "0 1px 2px rgba(0,0,0,.2)" }} />
+                      <button onClick={() => setEditingBudget(r)} title={tr('umum.edit')} aria-label={tr('umum.edit')} style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid var(--line-soft)", background: "var(--paper)", color: "var(--ink-2)", display: "grid", placeItems: "center", flexShrink: 0 }}>
+                        <IconEdit size={14} />
                       </button>
-                      <button onClick={() => deleteRow(r.id)} title={tr('umum.hapus')} style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid var(--line-soft)", background: "var(--paper)", color: "var(--terra)", display: "grid", placeItems: "center", flexShrink: 0 }}>
+                      <button onClick={() => deleteRow(r.id)} title={tr('umum.hapus')} aria-label={tr('umum.hapus')} style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid var(--line-soft)", background: "var(--paper)", color: "var(--terra)", display: "grid", placeItems: "center", flexShrink: 0 }}>
                         <IconClose size={13} />
                       </button>
                     </div>
-                    <div style={{ height: 7, background: "var(--line-soft)", borderRadius: 99, overflow: "hidden", marginBottom: 10 }}>
+                    <div style={{ height: 7, background: "var(--line-soft)", borderRadius: 99, overflow: "hidden" }}>
                       <div style={{ height: "100%", width: `${Math.min(pct, 1) * 100}%`, background: over ? "var(--terra)" : r.color, borderRadius: 99, transition: "width .35s ease" }} />
                     </div>
-                    {r.enabled && (
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <input type="range" min="0" max={Math.max(computedSpent * 2, 2_000_000)} step="50000"
-                          value={getLimit(r)}
-                          onChange={e => onSliderChange(r.id, +e.target.value)}
-                          onMouseUp={e => onLimitCommit(r.id, +e.target.value)}
-                          onTouchEnd={() => onLimitCommit(r.id, getLimit(r))}
-                          style={{ flex: 1, accentColor: r.color, cursor: "pointer", height: 20 }} />
-                        {isEditing ? (
-                          <input autoFocus type="text" value={getLimit(r).toLocaleString("id-ID")}
-                            onChange={e => onSliderChange(r.id, +e.target.value.replace(/\D/g, "") || 0)}
-                            onBlur={() => { onLimitCommit(r.id, getLimit(r)); setEditing(null); }}
-                            onKeyDown={e => { if (e.key === "Enter") { onLimitCommit(r.id, getLimit(r)); setEditing(null); } }}
-                            style={{ width: 110, padding: "8px 10px", textAlign: "right", fontFamily: "'Geist Mono', monospace", fontSize: 12.5, background: "var(--paper)", border: "1px solid var(--ink)", borderRadius: 8, color: "var(--ink)", outline: "none", flexShrink: 0 }} />
-                        ) : (
-                          <button onClick={() => setEditing(r.id)}
-                            style={{ padding: "8px 10px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 8, fontSize: 12.5, color: "var(--ink)", fontVariantNumeric: "tabular-nums", minWidth: 100, textAlign: "right", flexShrink: 0 }}>
-                            {fmt(getLimit(r))}
-                          </button>
-                        )}
-                      </div>
-                    )}
                   </div>
                 );
               }
 
               return (
-                <div key={r.id} style={{ display: "grid", gridTemplateColumns: "minmax(200px,1.4fr) 1.6fr 150px 90px 48px", alignItems: "center", gap: 16, padding: "16px 0", borderBottom: i < visibleRows.length - 1 ? "1px solid var(--line-soft)" : 0, opacity: r.enabled ? 1 : 0.5, transition: "opacity .2s ease" }}>
+                <div key={r.id} style={{ display: "grid", gridTemplateColumns: "minmax(200px,1.4fr) 1.6fr 150px 80px", alignItems: "center", gap: 16, padding: "16px 0", borderBottom: i < visibleRows.length - 1 ? "1px solid var(--line-soft)" : 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
                     <span style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: `color-mix(in oklch, ${r.color} 16%, var(--ivory))`, color: r.color, display: "grid", placeItems: "center" }}>
                       <CatIcon kind={r.categoryId || r.id} size={16} />
@@ -270,36 +228,17 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
                     <div style={{ height: 6, background: "var(--line-soft)", borderRadius: 99, overflow: "hidden" }}>
                       <div style={{ height: "100%", width: `${Math.min(pct, 1) * 100}%`, background: over ? "var(--terra)" : r.color, borderRadius: 99, transition: "width .35s ease" }} />
                     </div>
-                    {r.enabled && (
-                      <input type="range" min="0" max={Math.max(computedSpent * 2, 2_000_000)} step="50000"
-                        value={getLimit(r)}
-                        onChange={e => onSliderChange(r.id, +e.target.value)}
-                        onMouseUp={e => onLimitCommit(r.id, +e.target.value)}
-                        onTouchEnd={() => onLimitCommit(r.id, getLimit(r))}
-                        style={{ width: "100%", marginTop: 8, accentColor: r.color, cursor: "pointer" }} />
-                    )}
                   </div>
 
-                  <div style={{ textAlign: "right" }}>
-                    {isEditing ? (
-                      <input autoFocus type="text" value={getLimit(r).toLocaleString("id-ID")}
-                        onChange={e => onSliderChange(r.id, +e.target.value.replace(/\D/g, "") || 0)}
-                        onBlur={() => { onLimitCommit(r.id, getLimit(r)); setEditing(null); }}
-                        onKeyDown={e => { if (e.key === "Enter") { onLimitCommit(r.id, getLimit(r)); setEditing(null); } }}
-                        style={{ width: 130, padding: "7px 10px", textAlign: "right", fontFamily: "'Geist Mono', monospace", fontSize: 12.5, background: "var(--paper)", border: "1px solid var(--ink)", borderRadius: 8, color: "var(--ink)", outline: "none" }} />
-                    ) : (
-                      <button onClick={() => r.enabled && setEditing(r.id)} disabled={!r.enabled} style={{ padding: "7px 12px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 8, fontSize: 12.5, color: "var(--ink)", fontVariantNumeric: "tabular-nums", cursor: r.enabled ? "pointer" : "default", minWidth: 130 }}>{fmt(getLimit(r))}</button>
-                    )}
+                  <div className="tnum" style={{ textAlign: "right", fontSize: 12.5, color: "var(--ink)", fontVariantNumeric: "tabular-nums" }}>
+                    {fmt(r.limit)}
                   </div>
 
-                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                    <button onClick={() => toggle(r.id, r.enabled)} role="switch" aria-checked={r.enabled} style={{ width: 42, height: 24, borderRadius: 99, border: 0, padding: 3, background: r.enabled ? "var(--sage)" : "var(--line)", display: "flex", justifyContent: r.enabled ? "flex-end" : "flex-start", transition: "background .2s ease" }}>
-                      <span style={{ width: 18, height: 18, borderRadius: "50%", background: "var(--paper)", boxShadow: "0 1px 2px rgba(0,0,0,.2)" }} />
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                    <button onClick={() => setEditingBudget(r)} title={tr('umum.edit')} aria-label={tr('umum.edit')} style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid var(--line-soft)", background: "var(--paper)", color: "var(--ink-2)", display: "grid", placeItems: "center" }}>
+                      <IconEdit size={14} />
                     </button>
-                  </div>
-
-                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                    <button onClick={() => deleteRow(r.id)} title={tr('umum.hapus')} style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid var(--line-soft)", background: "var(--paper)", color: "var(--terra)", display: "grid", placeItems: "center" }}>
+                    <button onClick={() => deleteRow(r.id)} title={tr('umum.hapus')} aria-label={tr('umum.hapus')} style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid var(--line-soft)", background: "var(--paper)", color: "var(--terra)", display: "grid", placeItems: "center" }}>
                       <IconClose size={13} />
                     </button>
                   </div>
@@ -324,15 +263,17 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
         </>
       )}
 
-      {showAddModal && (
+      {(showAddModal || editingBudget) && (
         <AddBudgetModal
+          initial={editingBudget}
           defaultPeriod={period}
           existingCategoryIds={rows.map(r => r.categoryId).filter(Boolean)}
           customCategories={customCategories}
           onCreateCustom={onCreateCustom}
           onDeleteCustom={onDeleteCustom}
-          onClose={() => setShowAddModal(false)}
+          onClose={() => { setShowAddModal(false); setEditingBudget(null); }}
           onAdd={row => { onAdd(row); setShowAddModal(false); }}
+          onUpdate={(id, patch) => { onUpdate(id, patch); setEditingBudget(null); }}
           isPro={isPro}
           isBasicAtMax={isBasicAtMax}
           userId={userId}
@@ -342,26 +283,48 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
   );
 }
 
-function AddBudgetModal({ onClose, onAdd, defaultPeriod = "monthly", existingCategoryIds = [], customCategories = [], onCreateCustom, onDeleteCustom, isPro = false, isBasicAtMax = false, userId }) {
+function AddBudgetModal({ onClose, onAdd, onUpdate, initial = null, defaultPeriod = "monthly", existingCategoryIds = [], customCategories = [], onCreateCustom, onDeleteCustom, isPro = false, isBasicAtMax = false, userId }) {
   const { t: tr } = useTranslation();
   useScrollLock(true);
-  const [selectedCatId, setSelectedCatId] = React.useState("");
+  const isEdit = !!initial;
+  const [selectedCatId, setSelectedCatId] = React.useState(initial?.categoryId || "");
   const [pendingCustom, setPendingCustom] = React.useState(null);
-  const [limit, setLimit]                 = React.useState("");
-  const [periode, setPeriode]             = React.useState(defaultPeriod);
+  const [limit, setLimit]                 = React.useState(initial ? String(initial.limit ?? "") : "");
+  const [periode, setPeriode]             = React.useState(initial?.periode || defaultPeriod);
   const [saving, setSaving]               = React.useState(false);
 
   const isCustom = selectedCatId === CUSTOM_ID;
 
-  const availableCats   = CATEGORIES.filter(c => !existingCategoryIds.includes(c.id));
-  const availableCustom = customCategories.filter(c => !c.is_deleted && !existingCategoryIds.includes(c.id));
+  // EDIT: kategori milik budget yang sedang diedit tidak dianggap "sudah dipakai",
+  // supaya user bisa mempertahankannya atau berpindah ke kategori lain yang masih bebas.
+  const usedCatIds = isEdit ? existingCategoryIds.filter(id => id !== initial.categoryId) : existingCategoryIds;
+  const availableCats   = CATEGORIES.filter(c => !usedCatIds.includes(c.id));
+  const availableCustom = customCategories.filter(c => !c.is_deleted && !usedCatIds.includes(c.id));
 
   const customNameValid = (pendingCustom?.name || "").trim().length > 0;
-  const valid = +limit > 0 && selectedCatId !== "" && (!isCustom || customNameValid);
+  // EDIT: pembuatan kategori kustom baru tidak diizinkan (alur create di-skip demi keamanan).
+  const valid = +limit > 0 && selectedCatId !== "" && (isEdit ? !isCustom : (!isCustom || customNameValid));
 
   const submit = async () => {
     if (!valid || saving) return;
     setSaving(true);
+
+    // ── EDIT: tidak pernah memanggil onCreateCustom (skip alur kategori kustom, risiko #4). ──
+    // Catatan: useBudgets.updateBudget hanya mem-patch limit/label/color ke Supabase
+    // (kolom category & period tidak ikut ter-update — lihat catatan di laporan).
+    if (isEdit) {
+      const cat = [...CATEGORIES, ...customCategories].find(c => c.id === selectedCatId);
+      onUpdate(initial.id, {
+        category: selectedCatId,
+        categoryId: selectedCatId,
+        label: cat?.label || initial.label || "",
+        color: cat?.color || initial.color || "var(--sage)",
+        limit: +limit,
+        period: periode,
+        periode,
+      });
+      return;
+    }
 
     let categoryId, label, color;
     if (isCustom) {
@@ -399,8 +362,8 @@ function AddBudgetModal({ onClose, onAdd, defaultPeriod = "monthly", existingCat
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
           <div>
-            <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{tr('anggaran.anggaranBaru')}</div>
-            <div className="serif" style={{ fontSize: 24, marginTop: 4, letterSpacing: "-0.01em" }}>{tr('anggaran.tambahKategoriLabel')}</div>
+            <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{isEdit ? tr('anggaran.editAnggaran') : tr('anggaran.anggaranBaru')}</div>
+            <div className="serif" style={{ fontSize: 24, marginTop: 4, letterSpacing: "-0.01em" }}>{isEdit ? tr('anggaran.editKategoriLabel') : tr('anggaran.tambahKategoriLabel')}</div>
           </div>
           <button onClick={onClose} style={{ width: 36, height: 36, borderRadius: 10, border: "1px solid var(--line-soft)", background: "var(--paper)", display: "grid", placeItems: "center", color: "var(--ink-2)" }}>
             <IconClose size={14} />
@@ -449,7 +412,7 @@ function AddBudgetModal({ onClose, onAdd, defaultPeriod = "monthly", existingCat
           <button onClick={onClose} style={{ flex: 1, padding: "13px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 12, fontSize: 14, color: "var(--ink-2)" }}>{tr('umum.batal')}</button>
           <button onClick={submit} disabled={!valid || saving}
             style={{ flex: 2, padding: "13px", background: (valid && !saving) ? "var(--ink)" : "var(--line-soft)", color: (valid && !saving) ? "var(--cream)" : "var(--muted-2)", border: 0, borderRadius: 12, fontSize: 14, fontWeight: 500, cursor: (valid && !saving) ? "pointer" : "default" }}>
-            {saving ? tr('anggaran.menyimpan') : tr('anggaran.tambahKategori')}
+            {saving ? tr('anggaran.menyimpan') : (isEdit ? tr('anggaran.simpanPerubahan') : tr('anggaran.tambahKategori'))}
           </button>
         </div>
       </div>
