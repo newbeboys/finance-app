@@ -1,6 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../supabase';
+import { IconEye, IconEyeOff } from '../icons';
 
 export function RegisterPage({ onSwitch, onAuthSuccess }) {
   const { t } = useTranslation();
@@ -10,6 +11,7 @@ export function RegisterPage({ onSwitch, onAuthSuccess }) {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
   const [success, setSuccess] = React.useState(false);
+  const [showPassword, setShowPassword] = React.useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -88,15 +90,25 @@ export function RegisterPage({ onSwitch, onAuthSuccess }) {
 
           <div>
             <label style={labelStyle}>{t('auth.password')}</label>
-            <input
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              placeholder={t('auth.minPassword')}
-              minLength={6}
-              required
-              style={inputStyle}
-            />
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder={t('auth.minPassword')}
+                minLength={6}
+                required
+                style={{ ...inputStyle, paddingRight: 44 }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(v => !v)}
+                style={eyeBtnStyle}
+                aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+              >
+                {showPassword ? <IconEyeOff size={16} stroke={1.6} /> : <IconEye size={16} stroke={1.6} />}
+              </button>
+            </div>
           </div>
 
           {error && (
@@ -163,6 +175,22 @@ const inputStyle = {
   outline: 'none',
   fontFamily: 'inherit',
   boxSizing: 'border-box',
+};
+
+const eyeBtnStyle = {
+  position: 'absolute',
+  right: 10,
+  top: '50%',
+  transform: 'translateY(-50%)',
+  background: 'none',
+  border: 0,
+  padding: 6,
+  cursor: 'pointer',
+  color: 'var(--muted)',
+  display: 'flex',
+  alignItems: 'center',
+  lineHeight: 0,
+  borderRadius: 6,
 };
 
 const btnStyle = (disabled) => ({

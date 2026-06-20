@@ -6,6 +6,7 @@ import { IconPlus, IconSpark, IconClose, CatIcon } from './icons';
 import { useIsMobile } from './use-mobile';
 import { CategoryField, CUSTOM_ID } from './category-field';
 import { useScrollLock } from './hooks/useScrollLock';
+import { formatRupiahInput } from './utils/numberFormat';
 
 export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, onDelete, customCategories = [], onCreateCustom, onDeleteCustom, isPro = false, isBasicAtMax = false, userId }) {
   const { t: tr, i18n: i18nObj } = useTranslation();
@@ -425,9 +426,9 @@ function AddBudgetModal({ onClose, onAdd, defaultPeriod = "monthly", existingCat
 
           <label style={{ display: "block" }}>
             <span style={{ display: "block", fontSize: 11, color: "var(--muted)", letterSpacing: ".05em", textTransform: "uppercase", marginBottom: 6 }}>{tr('anggaran.batasAnggaranLabel')}</span>
-            <input value={limit} onChange={e => setLimit(e.target.value.replace(/[^\d]/g, ""))}
+            <input inputMode="numeric" value={formatRupiahInput(limit)} onChange={e => setLimit(e.target.value.replace(/\D/g, ""))}
               onKeyDown={e => e.key === "Enter" && submit()}
-              placeholder="500000"
+              placeholder="500.000"
               style={{ width: "100%", padding: "11px 12px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10, color: "var(--ink)", fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
           </label>
 

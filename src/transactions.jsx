@@ -10,6 +10,7 @@ import { useScrollLock } from './hooks/useScrollLock';
 import { CategoryField, CUSTOM_ID, CUSTOM_COLORS, resolveCategory, categoryLabel } from './category-field';
 import { playSound } from './lib/sound';
 import incomeSound from './assets/sound/incom-sound.wav';
+import { formatRupiahInput } from './utils/numberFormat';
 
 export function TransactionsCard({ onAdd, onScan, scanLocked = false, limit, onSeeAll, transactions: txProp, loading = false, customCategories = [] }) {
   const { t: tr } = useTranslation();
@@ -447,7 +448,7 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
           <div style={{ fontSize: 10.5, color: "var(--muted)", letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 6 }}>{tr('transaksi.jumlah')}</div>
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", gap: 6 }}>
             <span className="serif" style={{ fontSize: 28, color: "var(--muted)" }}>{type === "expense" ? "−" : "+"}Rp</span>
-            <input autoFocus value={amount} onChange={e => setAmount(e.target.value.replace(/[^\d.]/g, ""))} placeholder="0"
+            <input autoFocus inputMode="numeric" value={formatRupiahInput(amount)} onChange={e => setAmount(e.target.value.replace(/\D/g, ""))} placeholder="0"
               style={{ fontFamily: "'Instrument Serif', serif", fontSize: 40, lineHeight: 1, color: "var(--ink)", background: "transparent", border: 0, outline: "none", width: "min(240px, 55vw)", textAlign: "left", letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }} />
           </div>
         </div>
