@@ -1,8 +1,9 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { IconSearch, IconBell, IconSun, IconMoon, IconPlus } from './icons';
+import { IconSearch, IconBell, IconSun, IconMoon, IconPlus, IconClose } from './icons';
 import { AccountSwitcher } from './wallets';
 import { useIsMobile } from './use-mobile';
+import { useScrollLock } from './hooks/useScrollLock';
 
 // Pilih sapaan berdasarkan jam perangkat: pagi (<11) · siang (<18) · malam
 function greetingKey(hour) {
@@ -123,6 +124,7 @@ const iconBtnMobile = {
 
 function Notifications({ onClose, enabled = true, mobile = false, notifications = [], unreadCount = 0, onMarkAllRead }) {
   const { t } = useTranslation();
+  useScrollLock(true);   // kunci scroll latar selama panel notifikasi terbuka (pola sama dgn AddBudgetModal)
   // Notifikasi tersimpan dengan key+params (reaktif terhadap bahasa); fallback ke
   // string literal lama (n.message/n.detail) bila objek dibuat sebelum upgrade i18n.
   const notifText = (n) => (n.msgKey ? t(n.msgKey, n.msgParams || {}) : n.message);
@@ -137,22 +139,37 @@ function Notifications({ onClose, enabled = true, mobile = false, notifications 
         right: mobile ? 12 : 188,
         left: mobile ? 12 : undefined,
         width: mobile ? undefined : 320,
-        zIndex: 31, padding: 12,
+        zIndex: 31, padding: 0,
+        maxHeight: mobile ? "calc(100dvh - 140px)" : "min(440px, calc(100dvh - 96px))",
+        overflowY: "auto",
       }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 6px 10px" }}>
+        {/* Header sticky: judul + "Semua terbaca" + tombol X selalu terlihat saat scroll */}
+        <div style={{
+          position: "sticky", top: 0, zIndex: 1,
+          background: "var(--ivory)",   // solid, sewarna .card → konten tak tembus saat scroll
+          display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8,
+          padding: "12px 12px 10px",
+          borderBottom: "1px solid var(--line-soft)",
+        }}>
           <div style={{ fontSize: 13, fontWeight: 500 }}>{t('topbar.notifikasi')}</div>
-          {enabled && unreadCount > 0 ? (
-            <button onClick={onMarkAllRead} style={{ fontSize: 11.5, color: "var(--sage)", background: "transparent", border: 0, cursor: "pointer", padding: 0, fontFamily: "inherit" }}>
-              {t('topbar.tandaiSemuaDibaca')}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {enabled && unreadCount > 0 ? (
+              <button onClick={onMarkAllRead} style={{ fontSize: 11.5, color: "var(--sage)", background: "transparent", border: 0, cursor: "pointer", padding: 0, fontFamily: "inherit" }}>
+                {t('topbar.tandaiSemuaDibaca')}
+              </button>
+            ) : (
+              <div style={{ fontSize: 11.5, color: "var(--muted)" }}>
+                {!enabled ? t('topbar.nonaktif') : notifications.length > 0 ? t('topbar.semuaTerbaca') : ""}
+              </div>
+            )}
+            <button onClick={onClose} aria-label={t('umum.tutup')} title={t('umum.tutup')}
+              style={{ width: 30, height: 30, flexShrink: 0, borderRadius: 8, border: "1px solid var(--line-soft)", background: "var(--paper)", display: "grid", placeItems: "center", color: "var(--ink-2)", cursor: "pointer" }}>
+              <IconClose size={13} />
             </button>
-          ) : (
-            <div style={{ fontSize: 11.5, color: "var(--muted)" }}>
-              {!enabled ? t('topbar.nonaktif') : notifications.length > 0 ? t('topbar.semuaTerbaca') : ""}
-            </div>
-          )}
+          </div>
         </div>
         {enabled && notifications.length > 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 2, maxHeight: 380, overflowY: "auto" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 2, padding: "8px 12px 12px" }}>
             {notifications.map((n) => (
               <div key={n.id} style={{
                 display: "flex", gap: 10, padding: "10px 8px", borderRadius: 10, alignItems: "flex-start",
