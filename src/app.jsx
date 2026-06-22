@@ -365,7 +365,7 @@ function AuthenticatedApp({ session }) {
   const handleDeleteCustomCategory = React.useCallback((id) => deleteCustomCategory(id, subscription.isPro), [deleteCustomCategory, subscription.isPro]);
 
   // Notifications
-  const { notifications, unreadCount, markAllRead } = useNotifications(transactions, notifSubs, budgets);
+  const { notifications, unreadCount, markAllRead, markRead, cleanupExpired } = useNotifications(transactions, notifSubs, budgets);
 
   // Savings goals — Supabase
   const { goals, createGoal, deleteGoal, depositToGoal } = useSavings(session.user.id, limits);
@@ -422,6 +422,8 @@ function AuthenticatedApp({ session }) {
           notifications={notifications}
           unreadCount={unreadCount}
           onMarkAllRead={markAllRead}
+          onMarkRead={markRead}
+          onOpenNotif={cleanupExpired}
         />
 
         {active === "dashboard" && (

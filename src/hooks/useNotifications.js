@@ -8,6 +8,7 @@ const PREFS_KEY    = 'notif_prefs';
 const WEEKLY_KEY   = 'notif_weekly_sent';
 const INC_IDS_KEY  = 'notif_income_ids';
 const MAX_NOTIFS   = 50;
+const READ_RETENTION_MS = 5 * 24 * 60 * 60 * 1000; // notif sudah dibaca > 5 hari → dihapus
 
 const DEFAULT_PREFS = { budget: true, income: true, weekly: true, bills: false };
 
@@ -209,16 +210,20 @@ export function useNotifications(transactions, prefs, budgets) {
   }, [transactions, resolvedPrefs, budgets]);
 
   const markAllRead = React.useCallback(() => {
+    const now = Date.now();
     setNotifs(prev => {
-      const updated = prev.map(n => ({ ...n, read: true }));
+      // read_at hanya di-set untuk yang belum punya → jam retensi 5 hari
+      // dihitung dari saat PERTAMA ditandai dibaca (tidak menimpa nilai lama).
+      const updated = prev.map(n => ({ ...n, read: true, read_at: n.read_at ?? now }));
       save(NOTIF_KEY, updated);
       return updated;
     });
   }, []);
 
   const markRead = React.useCallback((id) => {
+    const now = Date.now();
     setNotifs(prev => {
-      const updated = prev.map(n => n.id === id ? { ...n, read: true } : n);
+      const updated = prev.map(n => n.id === id ? { ...n, read: true, read_at: n.read_at ?? now } : n);
       save(NOTIF_KEY, updated);
       return updated;
     });
@@ -227,6 +232,20 @@ export function useNotifications(transactions, prefs, budgets) {
   const clearAll = React.useCallback(() => {
     setNotifs([]);
     save(NOTIF_KEY, []);
+  }, []);
+
+  // Cleanup: hard-delete notif yang SUDAH DIBACA dan read_at-nya > 5 hari lalu.
+  // Notif belum dibaca (read=false) TIDAK PERNAH dihapus — keputusan produk.
+  // read_at = epoch ms (konsisten dgn `ts`); selisih umur tz-safe, tanpa
+  // toISOString (lihat memori proyek). Dipanggil saat panel dibuka (TopBar).
+  const cleanupExpired = React.useCallback(() => {
+    const cutoff = Date.now() - READ_RETENTION_MS;
+    setNotifs(prev => {
+      const kept = prev.filter(n => !(n.read && n.read_at && n.read_at <= cutoff));
+      if (kept.length === prev.length) return prev; // tidak ada yg kedaluwarsa → no-op
+      save(NOTIF_KEY, kept);
+      return kept;
+    });
   }, []);
 
   // Only show notifications from categories the user has enabled
@@ -240,5 +259,5 @@ export function useNotifications(transactions, prefs, budgets) {
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  return { notifications, unreadCount, markAllRead, markRead, clearAll };
+  return { notifications, unreadCount, markAllRead, markRead, clearAll, cleanupExpired };
 }

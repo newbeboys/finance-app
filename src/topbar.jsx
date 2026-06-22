@@ -12,7 +12,7 @@ function greetingKey(hour) {
   return 'sapaan.malam';
 }
 
-export function TopBar({ theme, onTheme, onAdd, accounts, selectedAcct, onSelectAcct, onAddAcct, addAcctLocked = false, notifEnabled, user, notifications = [], unreadCount = 0, onMarkAllRead }) {
+export function TopBar({ theme, onTheme, onAdd, accounts, selectedAcct, onSelectAcct, onAddAcct, addAcctLocked = false, notifEnabled, user, notifications = [], unreadCount = 0, onMarkAllRead, onMarkRead, onOpenNotif }) {
   const { t, i18n } = useTranslation();
   const [q, setQ] = React.useState("");
   const [bell, setBell] = React.useState(false);
@@ -61,7 +61,7 @@ export function TopBar({ theme, onTheme, onAdd, accounts, selectedAcct, onSelect
           <IconPlus size={18} />
         </button>
 
-        {bell && <Notifications onClose={() => setBell(false)} enabled={notifEnabled !== false} mobile notifications={notifications} unreadCount={unreadCount} onMarkAllRead={onMarkAllRead} />}
+        {bell && <Notifications onClose={() => setBell(false)} enabled={notifEnabled !== false} mobile notifications={notifications} unreadCount={unreadCount} onMarkAllRead={onMarkAllRead} onMarkRead={onMarkRead} onOpen={onOpenNotif} />}
       </header>
     );
   }
@@ -103,7 +103,7 @@ export function TopBar({ theme, onTheme, onAdd, accounts, selectedAcct, onSelect
         <IconPlus size={15} /> {t('topbar.tambahTransaksi')}
       </button>
 
-      {bell && <Notifications onClose={() => setBell(false)} enabled={notifEnabled !== false} notifications={notifications} unreadCount={unreadCount} onMarkAllRead={onMarkAllRead} />}
+      {bell && <Notifications onClose={() => setBell(false)} enabled={notifEnabled !== false} notifications={notifications} unreadCount={unreadCount} onMarkAllRead={onMarkAllRead} onMarkRead={onMarkRead} onOpen={onOpenNotif} />}
     </header>
   );
 }
@@ -122,9 +122,12 @@ const iconBtnMobile = {
   borderRadius: 12, color: "var(--ink)", flexShrink: 0,
 };
 
-function Notifications({ onClose, enabled = true, mobile = false, notifications = [], unreadCount = 0, onMarkAllRead }) {
+function Notifications({ onClose, enabled = true, mobile = false, notifications = [], unreadCount = 0, onMarkAllRead, onMarkRead, onOpen }) {
   const { t } = useTranslation();
   useScrollLock(true);   // kunci scroll latar selama panel notifikasi terbuka (pola sama dgn AddBudgetModal)
+  // Saat panel dibuka → cleanup notif kedaluwarsa (client-side, bukan cron;
+  // pola sama spt checkRecurringTransactions yang dicek saat app dibuka).
+  React.useEffect(() => { onOpen?.(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // Notifikasi tersimpan dengan key+params (reaktif terhadap bahasa); fallback ke
   // string literal lama (n.message/n.detail) bila objek dibuat sebelum upgrade i18n.
   const notifText = (n) => (n.msgKey ? t(n.msgKey, n.msgParams || {}) : n.message);
@@ -171,9 +174,13 @@ function Notifications({ onClose, enabled = true, mobile = false, notifications 
         {enabled && notifications.length > 0 ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 2, padding: "8px 12px 12px" }}>
             {notifications.map((n) => (
-              <div key={n.id} style={{
+              <div key={n.id}
+                onClick={() => { if (!n.read) onMarkRead?.(n.id); }}
+                role={!n.read ? "button" : undefined}
+                style={{
                 display: "flex", gap: 10, padding: "10px 8px", borderRadius: 10, alignItems: "flex-start",
                 background: n.read ? "transparent" : "color-mix(in oklch, var(--sage) 8%, transparent)",
+                cursor: n.read ? "default" : "pointer",
               }}>
                 <span style={{ fontSize: 15, lineHeight: 1.5, flexShrink: 0 }}>{n.icon}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
