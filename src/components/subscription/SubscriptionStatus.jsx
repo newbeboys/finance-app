@@ -39,7 +39,7 @@ export function SubscriptionStatus({
 
       <p className="ss-desc">
         {isPro
-          ? 'Akses penuh: laporan PDF/Excel, scan nota, transaksi berulang, AI insights, dan semua tema font.'
+          ? 'Akses penuh: laporan PDF/Excel, scan nota, transaksi berulang, Money IQ, dan semua tema font.'
           : 'Beberapa fitur dibatasi. Upgrade ke Pro untuk akses tanpa batas.'}
       </p>
 

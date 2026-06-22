@@ -15,7 +15,7 @@ const FEATURES = [
   { label: 'Transaksi berulang',     basic: false,           pro: true },
   { label: 'Laporan PDF / Excel',    basic: false,           pro: true },
   { label: 'Scan nota',              basic: false,           pro: true },
-  { label: 'AI Insights',            basic: false,           pro: true },
+  { label: 'Money IQ',               basic: false,           pro: true },
   { label: 'Tema font premium',      basic: '2 tema',        pro: 'Semua tema' },
   { label: 'Widget layar utama',     basic: false,           pro: true },
 ];

@@ -514,7 +514,7 @@ function AuthenticatedApp({ session }) {
             ]} />
         </TweakSection>
         <TweakSection label="Layout">
-          <TweakToggle label="Tampilkan wawasan AI" value={t.showAI} onChange={v => setTweak("showAI", v)} />
+          <TweakToggle label="Tampilkan Money IQ" value={t.showAI} onChange={v => setTweak("showAI", v)} />
         </TweakSection>
       </TweaksPanel>
     </div>

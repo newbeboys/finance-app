@@ -599,7 +599,7 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub, s
             {limits?.aiInsightsEnabled === false ? (
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ fontSize: 10, background: "color-mix(in oklch, var(--gold) 18%, var(--ivory))", color: "var(--gold)", border: "1px solid color-mix(in oklch, var(--gold) 40%, transparent)", borderRadius: 99, padding: "2px 8px", fontWeight: 600, letterSpacing: ".04em" }}>Pro</span>
-                <div onClick={() => openPaywall('Wawasan AI')} style={{ cursor: "pointer", opacity: 0.45, pointerEvents: "auto" }}>
+                <div onClick={() => openPaywall('Money IQ')} style={{ cursor: "pointer", opacity: 0.45, pointerEvents: "auto" }}>
                   <Switch on={t.showAI !== false} onClick={() => {}} color="var(--gold)" />
                 </div>
               </div>
