@@ -272,7 +272,7 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
           onCreateCustom={onCreateCustom}
           onDeleteCustom={onDeleteCustom}
           onClose={() => { setShowAddModal(false); setEditingBudget(null); }}
-          onAdd={row => { onAdd(row); setShowAddModal(false); }}
+          onAdd={onAdd}
           onUpdate={(id, patch) => { onUpdate(id, patch); setEditingBudget(null); }}
           isPro={isPro}
           isBasicAtMax={isBasicAtMax}
@@ -342,7 +342,7 @@ function AddBudgetModal({ onClose, onAdd, onUpdate, initial = null, defaultPerio
       color = cat?.color || "var(--sage)";
     }
 
-    onAdd({
+    const res = await onAdd({
       id: `cat-${Date.now()}`,
       categoryId,
       label,
@@ -352,6 +352,10 @@ function AddBudgetModal({ onClose, onAdd, onUpdate, initial = null, defaultPerio
       enabled: true,
       periode,
     });
+    // Limit anggaran tercapai → PaywallModal sudah tampil; batal diam-diam (modal tetap terbuka).
+    if (res?.limitReached) { setSaving(false); return; }
+    if (res?.error) { setSaving(false); return; }
+    onClose();
   };
 
   return (

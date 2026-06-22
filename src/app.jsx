@@ -313,7 +313,7 @@ function AuthenticatedApp({ session }) {
   }, []);
 
   // Transactions — sinkron dengan Supabase per user yang login
-  const { transactions, loading: txLoading, createTransaction, deleteTransaction, updateTransaction } = useTransactions(session.user.id);
+  const { transactions, loading: txLoading, createTransaction, deleteTransaction, updateTransaction } = useTransactions(session.user.id, limits);
 
   // Transaksi berulang — saat app dibuka, eksekusi jadwal yang sudah jatuh tempo.
   // Ref guard memastikan hanya jalan sekali per sesi app.
@@ -333,7 +333,7 @@ function AuthenticatedApp({ session }) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Budgets — Supabase
-  const { budgets, createBudget, updateBudget, deleteBudget } = useBudgets(session.user.id);
+  const { budgets, createBudget, updateBudget, deleteBudget } = useBudgets(session.user.id, limits);
 
   // Sinkronkan ringkasan ke widget home-screen Android (no-op di web/dev).
   React.useEffect(() => {

@@ -11,6 +11,10 @@ import { useScrollLock } from '../hooks/useScrollLock';
 //
 //   const { openPaywall } = usePaywall();
 //   openPaywall('Scan Nota');   // → "Scan Nota adalah fitur khusus Pro."
+//
+// Untuk pesan kustom (mis. limit kuota tercapai) oper objek dengan
+// `message` — modal & visual tetap sama, hanya teks deskripsi diganti:
+//   openPaywall({ message: 'Penggunaan transaksi sudah maksimal bulan ini. ...' });
 
 const PaywallContext = React.createContext({
   openPaywall: () => {},
@@ -22,17 +26,24 @@ export function usePaywall() {
 }
 
 export function PaywallProvider({ children }) {
-  const [feature, setFeature] = React.useState(null); // null = tertutup
+  const [state, setState] = React.useState(null); // null = tertutup
 
-  const openPaywall = React.useCallback((featureName) => setFeature(featureName || ''), []);
-  const closePaywall = React.useCallback(() => setFeature(null), []);
+  // Terima string (nama fitur — pola lama) ATAU objek { featureName, message }.
+  const openPaywall = React.useCallback((arg) => {
+    if (arg && typeof arg === 'object') {
+      setState({ featureName: arg.featureName || '', message: arg.message || '' });
+    } else {
+      setState({ featureName: arg || '', message: '' });
+    }
+  }, []);
+  const closePaywall = React.useCallback(() => setState(null), []);
 
   const value = React.useMemo(() => ({ openPaywall, closePaywall }), [openPaywall, closePaywall]);
 
   return (
     <PaywallContext.Provider value={value}>
       {children}
-      <PaywallModal open={feature !== null} featureName={feature} onClose={closePaywall} />
+      <PaywallModal open={state !== null} featureName={state?.featureName} message={state?.message} onClose={closePaywall} />
     </PaywallContext.Provider>
   );
 }
@@ -58,7 +69,7 @@ export function LockBadge() {
 
 // Modal presentational. Dark/light aware via CSS vars yang sudah ada.
 // Terima `open` (dipakai provider) atau `isOpen` (sesuai spec) — alias.
-export function PaywallModal({ open, isOpen, featureName, onClose }) {
+export function PaywallModal({ open, isOpen, featureName, message, onClose }) {
   const visible = open ?? isOpen ?? false;
   useScrollLock(visible);
 
@@ -71,9 +82,13 @@ export function PaywallModal({ open, isOpen, featureName, onClose }) {
 
   if (!visible) return null;
 
-  const desc = featureName
-    ? `${featureName} adalah fitur khusus Pro.`
-    : 'Fitur ini khusus untuk pengguna Pro.';
+  // Pesan kustom (mis. kuota habis) dipakai apa adanya; selain itu pakai
+  // kalimat baku berbasis nama fitur.
+  const desc = message
+    ? message
+    : (featureName
+        ? `${featureName} adalah fitur khusus Pro.`
+        : 'Fitur ini khusus untuk pengguna Pro.');
 
   return (
     <div
@@ -123,7 +138,7 @@ export function PaywallModal({ open, isOpen, featureName, onClose }) {
         </div>
         <div style={{ fontSize: 13.5, color: 'var(--muted)', marginTop: 10, lineHeight: 1.55 }}>
           {desc}
-          {' '}Tingkatkan ke Pro untuk membuka fitur ini tanpa batas.
+          {!message && <>{' '}Tingkatkan ke Pro untuk membuka fitur ini tanpa batas.</>}
         </div>
 
         <button

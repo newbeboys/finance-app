@@ -376,6 +376,8 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
       amount:   type === "expense" ? -(+amount || 0) : (+amount || 0),
     };
     const res = isEdit ? await onUpdate?.(initial.id, tx) : await onSave?.(tx);
+    // Limit transaksi bulanan tercapai → PaywallModal sudah tampil; batal diam-diam.
+    if (res?.limitReached) { setSaving(false); return; }
     if (res?.error) {
       // Simpan gagal → tetap buka modal, beri tahu user (data tidak hilang)
       setSaveError(tr('transaksi.gagalSimpan'));

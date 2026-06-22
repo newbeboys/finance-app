@@ -13,6 +13,8 @@ export const PLAN_LIMITS = {
     maxCustomCategories: 3,
     maxWallets: 1,
     maxSavingsGoals: 2,
+    maxBudgets: 7,
+    maxTransactionsPerMonth: 75,   // per BULAN KALENDER (berdasar tanggal transaksi, bukan created_at)
     recurringTransactionsEnabled: false,
     reportsExportEnabled: false,
     receiptScanEnabled: false,
@@ -23,6 +25,8 @@ export const PLAN_LIMITS = {
     maxCustomCategories: Infinity,
     maxWallets: Infinity,
     maxSavingsGoals: Infinity,
+    maxBudgets: Infinity,
+    maxTransactionsPerMonth: Infinity,
     recurringTransactionsEnabled: true,
     reportsExportEnabled: true,
     receiptScanEnabled: true,

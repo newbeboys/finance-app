@@ -1,5 +1,6 @@
 import React from 'react';
 import { supabase } from '../supabase';
+import { usePaywall } from '../components/PaywallModal';
 
 // Actual Supabase columns: id, user_id, category, label, color, limit, enabled, spent, created_at
 // Note: no "period" column in DB — periode is UI-only, defaults to "monthly"
@@ -44,9 +45,10 @@ async function migrateFromLocalStorage(userId) {
   return [];
 }
 
-export function useBudgets(userId) {
+export function useBudgets(userId, limits) {
   const [budgets, setBudgets] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
+  const { openPaywall } = usePaywall();
 
   React.useEffect(() => {
     if (!userId) { setLoading(false); return; }
@@ -79,6 +81,15 @@ export function useBudgets(userId) {
   }, [userId]);
 
   async function createBudget(row) {
+    // ── Batas plan: tolak anggaran baru bila sudah mencapai limit ──
+    // Hitung semua budget (semua tampil di UI; kolom enabled tak lagi
+    // memengaruhi tampilan setelah toggle dihapus).
+    const maxBudgets = limits?.maxBudgets ?? Infinity;
+    if (budgets.length >= maxBudgets) {
+      openPaywall({ message: 'Penggunaan anggaran sudah maksimal. Upgrade ke Pro untuk fleksibilitas tanpa batas.' });
+      return { error: null, limitReached: true };
+    }
+
     const { data, error } = await supabase
       .from('budgets')
       .insert({

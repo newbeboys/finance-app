@@ -1,5 +1,6 @@
 import React from 'react';
 import { supabase } from '../supabase';
+import { usePaywall } from '../components/PaywallModal';
 
 const MONTHS = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
 
@@ -19,10 +20,11 @@ function toAppTx(row) {
   };
 }
 
-export function useTransactions(userId) {
+export function useTransactions(userId, limits) {
   const [transactions, setTransactions] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState(null);
+  const { openPaywall } = usePaywall();
 
   React.useEffect(() => {
     if (!userId) { setLoading(false); return; }
@@ -54,6 +56,32 @@ export function useTransactions(userId) {
     const todayISO = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
     // Tanggal pilihan user (ISO yyyy-mm-dd); fallback ke hari ini
     const isoDate = tx.dateRaw || todayISO;
+
+    // ── Batas plan: maks N transaksi per BULAN KALENDER ────────────────
+    // Bulan ditentukan dari tanggal transaksi yang dipilih user (isoDate),
+    // bukan created_at. Count via Supabase (head:true) — tidak fetch row.
+    const maxPerMonth = limits?.maxTransactionsPerMonth ?? Infinity;
+    if (maxPerMonth !== Infinity) {
+      const [y, m] = isoDate.split('-').map(Number);
+      const monthStart = `${y}-${String(m).padStart(2, '0')}-01`;
+      const nextY = m === 12 ? y + 1 : y;
+      const nextM = m === 12 ? 1 : m + 1;
+      const monthEndExclusive = `${nextY}-${String(nextM).padStart(2, '0')}-01`;
+
+      const { count, error: cErr } = await supabase
+        .from('transactions')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .gte('date', monthStart)
+        .lt('date', monthEndExclusive);
+
+      if (cErr) {
+        console.error('[useTransactions] count error:', cErr.code, cErr.message);
+      } else if ((count ?? 0) >= maxPerMonth) {
+        openPaywall({ message: 'Penggunaan transaksi sudah maksimal bulan ini. Upgrade ke Pro untuk fleksibilitas tanpa batas.' });
+        return { error: null, limitReached: true };
+      }
+    }
 
     const { data, error: err } = await supabase
       .from('transactions')

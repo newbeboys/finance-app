@@ -163,8 +163,9 @@ export async function checkRecurringTransactions(createTransaction) {
       };
 
       const res = await createTransaction(tx);
-      // Gagal insert (mis. offline) → hentikan item ini, coba lagi saat app dibuka berikutnya
-      if (res && res.error) break;
+      // Gagal insert (mis. offline) atau limit transaksi bulanan tercapai →
+      // hentikan item ini TANPA memajukan nextDueDate, coba lagi nanti.
+      if (res && (res.error || res.limitReached)) break;
 
       executed.push({ nama: item.nama, jumlah: item.jumlah, tipe: item.tipe });
       item.nextDueDate = advanceDueDate(item.nextDueDate, item.frekuensi);
