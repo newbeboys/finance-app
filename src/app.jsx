@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useTweaks, TweaksPanel, TweakSection, TweakRadio, TweakSelect, TweakToggle } from './tweaks-panel';
 import { BottomNav } from './components/BottomNav';
 import { TopBar } from './topbar';
-import { KpiCards, CashflowCard, SpendingCard, InsightsCard, SavingsCard, BudgetsCard } from './widgets';
+import { KpiCards, CashflowCard, SpendingCard, InsightsCard, SavingsCard, BudgetsCard, WeeklySummaryCard } from './widgets';
 import { WalletsPage, AddAccountModal } from './wallets';
 import { ReportsPage } from './reports';
 import { AnalyticsPage } from './analytics';
@@ -438,6 +438,7 @@ function AuthenticatedApp({ session }) {
             <TransactionsCard onAdd={() => setModal(true)} onScan={handleScan} scanLocked={!limits.receiptScanEnabled} limit={8} onSeeAll={() => setActive("transactions")} transactions={transactions} loading={txLoading} customCategories={customCategories} />
             <SavingsCard goals={goals} onManage={() => setActive("savings")} />
             <BudgetsCard onManage={() => setActive("budgets")} transactions={transactions} budgets={budgets} />
+            <WeeklySummaryCard transactions={transactions} />
           </div>
         )}
 

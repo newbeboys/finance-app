@@ -95,7 +95,9 @@
     "posisiSekarang": "Where you stand now",
     "belumAdaAnggaranAktif": "No active budgets",
     "aturAnggaran": "Set up budget",
-    "diAtasAnggaran": "{{jumlah}} over budget"
+    "diAtasAnggaran": "{{jumlah}} over budget",
+    "ringkasanMingguan": "Weekly summary",
+    "mingguLalu": "Last week"
   },
   "insight": {
     "pengeluaranTerbesar": "Biggest expense: {{kategori}}",

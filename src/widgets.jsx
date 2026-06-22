@@ -610,6 +610,87 @@ export function BudgetsCard({ onManage, transactions = [], budgets: allBudgets =
   );
 }
 
+// ── Ringkasan Mingguan ─────────────────────────────────────────────
+// Tanggal LOKAL (bukan toISOString) supaya cocok dgn dateRaw transaksi
+// yang disimpan lokal di useTransactions, dan dgn zona WIB.
+const pad2 = (n) => String(n).padStart(2, '0');
+const localISO = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
+// Range minggu lalu (Senin–Minggu penuh) + Senin minggu berjalan.
+function lastWeekRange(now = new Date()) {
+  const mon = new Date(now);
+  mon.setHours(0, 0, 0, 0);
+  const day = mon.getDay() || 7;          // Minggu=7
+  mon.setDate(mon.getDate() - day + 1);   // Senin minggu ini
+  const lastMon = new Date(mon); lastMon.setDate(mon.getDate() - 7);
+  const lastSun = new Date(mon); lastSun.setDate(mon.getDate() - 1);
+  return { thisMon: localISO(mon), from: localISO(lastMon), to: localISO(lastSun), lastMon, lastSun };
+}
+
+const WEEKLY_DISMISS_PREFIX = 'weeklyKpiDismissed_';
+
+export function WeeklySummaryCard({ transactions = [] }) {
+  const { t: tr, i18n } = useTranslation();
+  const locale = localeOf(i18n);
+
+  // Hitung live tiap mount Beranda dari Date saat ini — tidak depend ke
+  // notifikasi weeklyNotif lama. Otomatis ganti tiap Senin baru.
+  const range = React.useMemo(() => lastWeekRange(), []);
+  const dismissKey = WEEKLY_DISMISS_PREFIX + range.thisMon;
+
+  // Disembunyikan HANYA jika key untuk Senin minggu berjalan SAAT INI ada.
+  const [dismissed, setDismissed] = React.useState(() => {
+    try { return localStorage.getItem(dismissKey) === '1'; } catch { return false; }
+  });
+
+  const { income, expenses } = React.useMemo(() => {
+    let income = 0, expenses = 0;
+    transactions.forEach(t => {
+      if (!t.dateRaw || t.dateRaw < range.from || t.dateRaw > range.to) return;
+      if (t.amount > 0) income += t.amount;
+      else expenses += Math.abs(t.amount);
+    });
+    return { income, expenses };
+  }, [transactions, range]);
+
+  if (dismissed) return null;
+
+  const net = income - expenses;
+  const dismiss = () => {
+    try { localStorage.setItem(dismissKey, '1'); } catch {}
+    setDismissed(true);
+  };
+
+  const dateLabel = `${range.lastMon.toLocaleDateString(locale, { day: 'numeric', month: 'short' })} – ${range.lastSun.toLocaleDateString(locale, { day: 'numeric', month: 'short' })}`;
+
+  const rows = [
+    { label: tr('beranda.pemasukan'),   value: income,   color: 'var(--sage)' },
+    { label: tr('beranda.pengeluaran'), value: expenses, color: 'var(--terra)' },
+    { label: tr('beranda.selisih'),     value: net,      color: net >= 0 ? 'var(--sage)' : 'var(--terra)', strong: true },
+  ];
+
+  return (
+    <div className="card rise" style={{ padding: 16, position: 'relative' }}>
+      <button onClick={dismiss} aria-label={tr('umum.tutup')}
+        style={{ position: 'absolute', top: 10, right: 10, width: 26, height: 26, display: 'grid', placeItems: 'center', borderRadius: 8, background: 'transparent', border: 0, color: 'var(--muted)', fontSize: 17, lineHeight: 1, padding: 0 }}>×</button>
+
+      <div style={{ paddingRight: 28 }}>
+        <div style={{ fontSize: 11.5, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--muted)' }}>{tr('beranda.ringkasanMingguan')}</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{tr('beranda.mingguLalu')} · {dateLabel}</div>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
+        {rows.map((r, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, minWidth: 0, ...(r.strong ? { borderTop: '1px solid var(--line-soft)', paddingTop: 8, marginTop: 2 } : null) }}>
+            <span style={{ fontSize: 12.5, color: 'var(--ink-2)', whiteSpace: 'nowrap', flexShrink: 0 }}>{r.label}</span>
+            <span className="tnum" style={{ fontSize: r.strong ? 14.5 : 13.5, fontWeight: r.strong ? 600 : 500, color: r.color, fontVariantNumeric: 'tabular-nums', textAlign: 'right', minWidth: 0, overflowWrap: 'anywhere' }}>{formatNominal(r.value)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export const ghostBtn = {
   padding: "6px 10px", background: "var(--paper)",
   border: "1px solid var(--line-soft)", borderRadius: 8,

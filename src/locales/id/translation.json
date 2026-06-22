@@ -95,7 +95,9 @@
     "posisiSekarang": "Posisi kamu sekarang",
     "belumAdaAnggaranAktif": "Belum ada anggaran aktif",
     "aturAnggaran": "Atur anggaran",
-    "diAtasAnggaran": "{{jumlah}} di atas anggaran"
+    "diAtasAnggaran": "{{jumlah}} di atas anggaran",
+    "ringkasanMingguan": "Ringkasan mingguan",
+    "mingguLalu": "Minggu lalu"
   },
   "insight": {
     "pengeluaranTerbesar": "Pengeluaran terbesar: {{kategori}}",

@@ -20,13 +20,20 @@ function save(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
 }
 
-// Senin minggu ini → "2026-06-01"
+// Tanggal LOKAL "YYYY-MM-DD" (bukan toISOString yang berbasis UTC).
+// Wajib lokal supaya cocok dgn tx.dateRaw yang juga disimpan lokal
+// (useTransactions) — di zona WIB toISOString menggeser tanggal 1 hari.
+// Pola sama dgn WeeklySummaryCard di widgets.jsx.
+const pad2 = (n) => String(n).padStart(2, '0');
+const localISO = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
+// Senin minggu ini → "2026-06-22"
 function thisWeekKey() {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
   const day = d.getDay() || 7;
   d.setDate(d.getDate() - day + 1);
-  return d.toISOString().slice(0, 10);
+  return localISO(d);
 }
 
 // ── Generate: Peringatan Anggaran ──────────────────────────────────
@@ -84,7 +91,7 @@ function budgetNotifs(transactions, budgets) {
 
 // ── Generate: Transaksi Masuk (hari ini saja) ─────────────────────
 function incomeNotifs(transactions) {
-  const today    = new Date().toISOString().slice(0, 10);
+  const today    = localISO(new Date()); // tanggal lokal — bukan UTC (lihat thisWeekKey)
   const done     = new Set(load(INC_IDS_KEY, []));
   const notifs   = [];
 
@@ -120,8 +127,8 @@ function weeklyNotif(transactions) {
   const mon  = new Date(wKey + 'T00:00:00');
   const sun  = new Date(mon); sun.setDate(mon.getDate() - 1);
   const lastMon = new Date(mon); lastMon.setDate(mon.getDate() - 7);
-  const from = lastMon.toISOString().slice(0, 10);
-  const to   = sun.toISOString().slice(0, 10);
+  const from = localISO(lastMon);
+  const to   = localISO(sun);
 
   const week   = transactions.filter(tx => tx.dateRaw >= from && tx.dateRaw <= to);
   const income = week.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
