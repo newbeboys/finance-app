@@ -8,16 +8,17 @@ const PLANS = [
 ];
 
 const FEATURES = [
-  { label: 'Transaksi',              basic: 'Tak terbatas', pro: 'Tak terbatas' },
-  { label: 'Custom kategori',        basic: 'Maks. 3',      pro: 'Tak terbatas' },
-  { label: 'Dompet',                 basic: '1 dompet',     pro: 'Tak terbatas' },
-  { label: 'Goals tabungan',         basic: 'Maks. 2',      pro: 'Tak terbatas' },
-  { label: 'Transaksi berulang',     basic: false,           pro: true },
-  { label: 'Laporan PDF / Excel',    basic: false,           pro: true },
-  { label: 'Scan nota',              basic: false,           pro: true },
-  { label: 'Money IQ',               basic: false,           pro: true },
-  { label: 'Tema font premium',      basic: '2 tema',        pro: 'Semua tema' },
-  { label: 'Widget layar utama',     basic: false,           pro: true },
+  { label: 'Transaksi',              basic: '75/bulan',      pro: 'Tak terbatas' },
+  { label: 'Custom kategori',        basic: 'Maks. 3',       pro: 'Tak terbatas' },
+  { label: 'Dompet',                 basic: '1 dompet',      pro: 'Tak terbatas' },
+  { label: 'Goals tabungan',         basic: 'Maks. 2',       pro: 'Tak terbatas' },
+  { label: 'Anggaran',               basic: 'Maks. 7',       pro: 'Tak terbatas' },
+  { label: 'Transaksi berulang',     basic: false,            pro: true },
+  { label: 'Laporan PDF / Excel',    basic: 'Preview saja',  pro: true },
+  { label: 'Scan nota',              basic: false,            pro: true },
+  { label: 'Money IQ',               basic: false,            pro: true },
+  { label: 'Tema font premium',      basic: '2 tema',         pro: 'Semua tema' },
+  { label: 'Widget layar utama',     basic: false,            pro: true },
 ];
 
 function Cell({ value }) {
