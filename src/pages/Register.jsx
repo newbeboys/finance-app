@@ -20,7 +20,10 @@ export function RegisterPage({ onSwitch, onAuthSuccess }) {
     const { error: err } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: name } },
+      options: {
+        data: { full_name: name },
+        emailRedirectTo: 'https://newbeboys.github.io/financeapp-email-verification/email-confirmed.html',
+      },
     });
     setLoading(false);
     if (err) {
