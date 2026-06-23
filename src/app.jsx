@@ -27,6 +27,7 @@ import PinLock from './components/PinLock';
 import BiometricLock from './components/BiometricLock';
 import { isPinActive, isBiometricEnabled, clearPin } from './lib/pin';
 import { useAutoLock } from './hooks/useAutoLock';
+import { validateUserStillExists, logoutDeletedUser } from './utils/sessionValidator';
 import { useTransactions } from './hooks/useTransactions';
 import { useSavings } from './hooks/useSavings';
 import { useWallets } from './hooks/useWallets';
@@ -80,7 +81,17 @@ export default function App() {
   }, []);
 
   React.useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session ?? null));
+    supabase.auth.getSession().then(async ({ data }) => {
+      const currentSession = data.session ?? null;
+      if (currentSession) {
+        const valid = await validateUserStillExists();
+        if (!valid) {
+          await logoutDeletedUser(); // triggers onAuthStateChange → session = null
+          return;
+        }
+      }
+      setSession(currentSession);
+    });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s ?? null);
       if (!s) setShowOnboarding(false); // logout → bersihkan flag onboarding
@@ -181,6 +192,14 @@ function AuthenticatedApp({ session }) {
   }), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [t, setTweakRaw] = useTweaks(defaults);
+
+  // Validasi user masih ada di Supabase auth saat dashboard dibuka
+  React.useEffect(() => {
+    (async () => {
+      const valid = await validateUserStillExists();
+      if (!valid) await logoutDeletedUser();
+    })();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Wrap setTweak agar setiap perubahan disimpan ke localStorage
   const setTweak = React.useCallback((key, val) => {

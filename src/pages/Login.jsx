@@ -2,6 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../supabase';
 import { IconEye, IconEyeOff } from '../icons';
+import { validateUserStillExists, logoutDeletedUser, getAndClearExpiredMessage } from '../utils/sessionValidator';
 
 export function LoginPage({ onSwitch, onAuthSuccess }) {
   const { t } = useTranslation();
@@ -10,15 +11,26 @@ export function LoginPage({ onSwitch, onAuthSuccess }) {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
   const [showPassword, setShowPassword] = React.useState(false);
+  const [sessionMsg] = React.useState(() => getAndClearExpiredMessage());
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
     setLoading(true);
     const { error: err } = await supabase.auth.signInWithPassword({ email, password });
+    if (err) {
+      setLoading(false);
+      setError(err.message);
+      return;
+    }
+    const valid = await validateUserStillExists();
     setLoading(false);
-    if (err) setError(err.message);
-    else onAuthSuccess?.(); // login berhasil → tampilkan onboarding
+    if (!valid) {
+      await logoutDeletedUser();
+      setError('Akun tidak ditemukan. Silakan hubungi dukungan.');
+      return;
+    }
+    onAuthSuccess?.(); // login berhasil → tampilkan onboarding
   }
 
   return (
@@ -64,6 +76,12 @@ export function LoginPage({ onSwitch, onAuthSuccess }) {
               </button>
             </div>
           </div>
+
+          {sessionMsg && (
+            <div style={{ fontSize: 13, color: 'var(--terra)', background: 'color-mix(in oklch, var(--terra) 10%, transparent)', border: '1px solid color-mix(in oklch, var(--terra) 25%, transparent)', borderRadius: 10, padding: '10px 12px', lineHeight: 1.4 }}>
+              {sessionMsg}
+            </div>
+          )}
 
           {error && (
             <div style={{ fontSize: 13, color: 'var(--terra)', background: 'color-mix(in oklch, var(--terra) 10%, transparent)', border: '1px solid color-mix(in oklch, var(--terra) 25%, transparent)', borderRadius: 10, padding: '10px 12px', lineHeight: 1.4 }}>
