@@ -480,23 +480,6 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub, s
           </div>
         </SettingCard>
 
-        {/* Layout */}
-        <SettingCard eyebrow={tr('pengaturan.layout')} title={tr('pengaturan.tataLetak')}>
-          <SettingRow title={tr('pengaturan.gayaSidebar')} desc={tr('pengaturan.gayaSidebarDesc')} last>
-            <div style={{ display: "flex", padding: 3, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10 }}>
-              {[{ id: "labeled", labelKey: "pengaturan.berlabel" }, { id: "compact", labelKey: "pengaturan.ringkas" }].map(o => (
-                <button key={o.id} onClick={() => setTweak("sidebarVariant", o.id)} style={{
-                  padding: "10px 20px", fontSize: 13,
-                  background: (t.sidebarVariant || "labeled") === o.id ? "var(--ivory)" : "transparent",
-                  border: (t.sidebarVariant || "labeled") === o.id ? "1px solid var(--line-soft)" : "1px solid transparent",
-                  borderRadius: 8, color: (t.sidebarVariant || "labeled") === o.id ? "var(--ink)" : "var(--muted)",
-                  fontWeight: (t.sidebarVariant || "labeled") === o.id ? 500 : 400,
-                }}>{tr(o.labelKey)}</button>
-              ))}
-            </div>
-          </SettingRow>
-        </SettingCard>
-
         {/* Language */}
         <SettingCard eyebrow={tr('pengaturan.bahasa')} title={tr('bahasa.pilih')}>
           <button
