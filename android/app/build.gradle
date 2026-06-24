@@ -3,6 +3,19 @@ apply plugin: 'com.android.application'
 android {
     namespace = "com.Financeapp.app"
     compileSdk = rootProject.ext.compileSdkVersion
+
+    signingConfigs {
+        release {
+            def keystorePath = System.getenv("KEYSTORE_PATH")
+            if (keystorePath) {
+                storeFile file(keystorePath)
+            }
+            storePassword System.getenv("KEYSTOREPASSWORD")
+            keyAlias System.getenv("KEYALIAS")
+            keyPassword System.getenv("KEYPASSWORD")
+        }
+    }
+
     defaultConfig {
         applicationId "com.Financeapp.app"
         minSdkVersion rootProject.ext.minSdkVersion
@@ -20,6 +33,7 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
         }
     }
 }

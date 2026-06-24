@@ -1,4 +1,4 @@
-name: Build APK
+name: Build AAB
 
 on:
   push:
@@ -37,15 +37,27 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
-      - name: Build APK
+      - name: Decode keystore
+        run: echo "${{ secrets.KEYSTOREBASE64 }}" | base64 --decode > android/app/financeapp-release.keystore
+
+      - name: Build AAB (signed release)
+        env:
+          KEYSTORE_PATH: financeapp-release.keystore
+          KEYSTOREPASSWORD: ${{ secrets.KEYSTOREPASSWORD }}
+          KEYALIAS: ${{ secrets.KEYALIAS }}
+          KEYPASSWORD: ${{ secrets.KEYPASSWORD }}
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew bundleRelease
 
-      - name: Upload APK artifact
+      - name: Cleanup keystore
+        if: always()
+        run: rm -f android/app/financeapp-release.keystore
+
+      - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
         with:
-          name: finance-app-debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: finance-app-release
+          path: android/app/build/outputs/bundle/release/app-release.aab
           retention-days: 30
