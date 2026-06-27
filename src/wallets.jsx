@@ -46,7 +46,7 @@ export function AccountSwitcher({ accounts, selected, onSelect, onAdd, addLocked
         </span>
         <span style={{ textAlign: "left", lineHeight: 1.15 }}>
           <span style={{ display: "block", fontSize: 12.5, fontWeight: 500 }}>
-            {current ? current.name : t('dompet.semuaAkun')}
+            {current ? current.name : t('dompet.semuadompet')}
           </span>
           <span className="tnum" style={{ display: "block", fontSize: 10.5, color: "var(--muted)" }}>
             {fmtShort(current ? current.balance : total)}
@@ -64,7 +64,7 @@ export function AccountSwitcher({ accounts, selected, onSelect, onAdd, addLocked
                 <IconBudget size={15} />
               </span>
               <span style={{ flex: 1, textAlign: "left" }}>
-                <span style={{ display: "block", fontSize: 13, fontWeight: 500 }}>{t('dompet.semuaAkun')}</span>
+                <span style={{ display: "block", fontSize: 13, fontWeight: 500 }}>{t('dompet.semuadompet')}</span>
                 <span style={{ display: "block", fontSize: 11, color: "var(--muted)" }}>{t('dompet.dompetGabungan', { count: accounts.length })}</span>
               </span>
               <span className="tnum" style={{ fontSize: 12.5, fontWeight: 500 }}>{fmtShort(total)}</span>
@@ -96,7 +96,7 @@ export function AccountSwitcher({ accounts, selected, onSelect, onAdd, addLocked
                 <IconPlus size={15} />
                 {addLocked && <LockBadge />}
               </span>
-              {t('dompet.tambahAkun')}
+              {t('dompet.tambahdompet')}
             </button>
           </div>
         </>
@@ -146,7 +146,7 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
           </div>
         </div>
         <button onClick={onAdd} style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, opacity: addLocked ? 0.6 : 1, cursor: addLocked ? "not-allowed" : "pointer" }}>
-          <IconPlus size={15} /> {t('dompet.tambahAkun')}
+          <IconPlus size={15} /> {t('dompet.tambahdompet')}
           {addLocked && <LockBadge />}
         </button>
       </div>
@@ -202,7 +202,7 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
               {!a.primary && accounts.length > 1 && (
                 <div className="wallet-card-delete-wrap" style={{ display: "flex", flexShrink: 0 }}>
                   <div style={{ width: 1, background: "var(--line-soft)" }} />
-                  <button onClick={() => onDelete(a.id)} style={{ ...cardFootBtn, color: "var(--terra)", flex: "none", width: 46 }} title="Hapus akun">
+                  <button onClick={() => onDelete(a.id)} style={{ ...cardFootBtn, color: "var(--terra)", flex: "none", width: 46 }} title="Hapus dompet">
                     <IconClose size={14} />
                   </button>
                 </div>
@@ -216,7 +216,7 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
             <IconPlus size={22} />
             {addLocked && <LockBadge />}
           </span>
-          <span style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink-2)" }}>{t('dompet.tambahAkunBaru')}</span>
+          <span style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink-2)" }}>{t('dompet.tambahdompetBaru')}</span>
           <span style={{ fontSize: 12, maxWidth: 190, textAlign: "center", lineHeight: 1.4 }}>{t('dompet.rekBankEwallet')}</span>
         </button>
       </div>
@@ -245,7 +245,7 @@ function AccountTxSheet({ account, transactions, onClose }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 18px 14px", borderBottom: "1px solid var(--line-soft)", position: "sticky", top: 0, background: "var(--ivory)", zIndex: 1 }}>
           <div>
             <div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{t('dompet.riwayat')}</div>
-            <div className="serif" style={{ fontSize: 20, letterSpacing: "-0.01em", marginTop: 2 }}>{t('dompet.transaksiAkun', { nama: account.name })}</div>
+            <div className="serif" style={{ fontSize: 20, letterSpacing: "-0.01em", marginTop: 2 }}>{t('dompet.transaksidompet', { nama: account.name })}</div>
           </div>
           <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: 10, border: "1px solid var(--line-soft)", background: "var(--paper)", display: "grid", placeItems: "center", color: "var(--ink-2)", flexShrink: 0 }}>
             <IconClose size={14} />
@@ -327,7 +327,7 @@ export function AddAccountModal({ open, onClose, onCreate }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
             <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{t('dompet.dompetBaru')}</div>
-            <div className="serif" style={{ fontSize: 28, marginTop: 4, letterSpacing: "-0.01em" }}>{t('dompet.tambahAkunModal')}</div>
+            <div className="serif" style={{ fontSize: 28, marginTop: 4, letterSpacing: "-0.01em" }}>{t('dompet.tambahdompetModal')}</div>
           </div>
           <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 10, border: "1px solid var(--line-soft)", background: "var(--paper)", display: "grid", placeItems: "center", color: "var(--ink-2)" }}>
             <IconClose size={14} />
@@ -335,7 +335,7 @@ export function AddAccountModal({ open, onClose, onCreate }) {
         </div>
 
         <div style={{ marginTop: 20 }}>
-          <span style={fieldLabel}>{t('dompet.jenisAkun')}</span>
+          <span style={fieldLabel}>{t('dompet.jenisdompet')}</span>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
             {ACCOUNT_TYPES.map(t => (
               <button key={t.id} onClick={() => setType(t.id)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 7, padding: "12px 6px", borderRadius: 12, background: type === t.id ? "var(--ivory)" : "var(--paper)", border: "1px solid " + (type === t.id ? "var(--ink)" : "var(--line-soft)"), color: "var(--ink)" }}>
@@ -348,7 +348,7 @@ export function AddAccountModal({ open, onClose, onCreate }) {
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 16 }}>
           <label style={{ gridColumn: "span 2" }}>
-            <span style={fieldLabel}>{t('dompet.namaAkun')}</span>
+            <span style={fieldLabel}>{t('dompet.namadompet')}</span>
             <input value={name} onChange={e => setName(e.target.value)} placeholder="contoh: BCA Tabungan" style={modalInput} />
           </label>
           <label>
@@ -382,7 +382,7 @@ export function AddAccountModal({ open, onClose, onCreate }) {
 
         <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
           <button onClick={onClose} style={{ flex: 1, padding: "11px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 12, fontSize: 13.5, color: "var(--ink-2)" }}>{t('umum.batal')}</button>
-          <button onClick={submit} disabled={!valid} style={{ flex: 2, padding: "11px", background: valid ? "var(--ink)" : "var(--line)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, cursor: valid ? "pointer" : "default" }}>{t('dompet.buatAkun')}</button>
+          <button onClick={submit} disabled={!valid} style={{ flex: 2, padding: "11px", background: valid ? "var(--ink)" : "var(--line)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, cursor: valid ? "pointer" : "default" }}>{t('dompet.buatdompet')}</button>
         </div>
       </div>
     </div>

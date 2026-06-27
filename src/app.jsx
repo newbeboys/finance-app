@@ -16,6 +16,7 @@ import { BudgetsPage } from './budgets-page';
 import { supabase } from './supabase';
 import { LoginPage } from './pages/Login';
 import { RegisterPage } from './pages/Register';
+import { ForgotPasswordPage } from './pages/ForgotPassword';
 import OnboardingScreen from './components/OnboardingScreen';
 import SplashScreen from './components/SplashScreen';
 import { GoalCompleteOverlay } from './components/GoalCompleteOverlay';
@@ -93,6 +94,9 @@ export default function App() {
       setSession(currentSession);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      // PASSWORD_RECOVERY event means verifyOtp succeeded for reset — tetap di alur lupa password,
+      // jangan update session supaya ForgotPasswordPage bisa lanjut ke step 3 (updateUser).
+      if (_event === 'PASSWORD_RECOVERY') return;
       setSession(s ?? null);
       if (!s) setShowOnboarding(false); // logout → bersihkan flag onboarding
     });
@@ -148,9 +152,13 @@ export default function App() {
   if (session === undefined) {
     content = <div style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', background: 'var(--cream)', color: 'var(--muted)', fontSize: 14 }}>{t('umum.memuat')}</div>;
   } else if (!session) {
-    content = authView === 'login'
-      ? <LoginPage onSwitch={() => setAuthView('register')} onAuthSuccess={() => setShowOnboarding(true)} />
-      : <RegisterPage onSwitch={() => setAuthView('login')} onAuthSuccess={() => setShowOnboarding(true)} />;
+    if (authView === 'forgot') {
+      content = <ForgotPasswordPage onBack={() => setAuthView('login')} />;
+    } else if (authView === 'register') {
+      content = <RegisterPage onSwitch={() => setAuthView('login')} onAuthSuccess={() => setShowOnboarding(true)} />;
+    } else {
+      content = <LoginPage onSwitch={() => setAuthView('register')} onAuthSuccess={() => setShowOnboarding(true)} onForgot={() => setAuthView('forgot')} />;
+    }
   } else {
     content = (
       <>
@@ -308,7 +316,7 @@ function AuthenticatedApp({ session }) {
   }, [fontResetToast]);
 
   // Multi-wallet state — sinkron dengan Supabase
-  const { accounts, createAccount, setPrimary, deleteAccount: _deleteAccount } = useWallets(session.user.id, limits);
+  const { accounts, createAccount, setPrimary, deleteAccount: _deleteAccount, adjustBalance } = useWallets(session.user.id, limits);
 
   // Tombol "Tambah Wallet" tetap tampil + gemlock saat Basic sudah mencapai limit
   const walletAddLocked = accounts.length >= (limits?.maxWallets ?? Infinity);
@@ -333,6 +341,36 @@ function AuthenticatedApp({ session }) {
 
   // Transactions — sinkron dengan Supabase per user yang login
   const { transactions, loading: txLoading, createTransaction, deleteTransaction, updateTransaction } = useTransactions(session.user.id, limits);
+
+  // Wrapper: setelah create/update/delete transaksi, sesuaikan saldo dompet terkait.
+  // adjustBalance membaca saldo saat ini dari state (sudah sync via realtime Supabase).
+  const handleCreateTransaction = React.useCallback(async (tx) => {
+    const res = await createTransaction(tx);
+    if (!res.error && !res.limitReached && tx.wallet_id) {
+      await adjustBalance(tx.wallet_id, tx.amount);
+    }
+    return res;
+  }, [createTransaction, adjustBalance]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleUpdateTransaction = React.useCallback(async (id, updates, oldTx) => {
+    const res = await updateTransaction(id, updates);
+    if (!res.error) {
+      // Balik efek transaksi lama ke dompet lama
+      if (oldTx?.wallet_id) await adjustBalance(oldTx.wallet_id, -oldTx.amount);
+      // Terapkan efek transaksi baru ke dompet baru (bisa sama atau berbeda)
+      if (updates.wallet_id) await adjustBalance(updates.wallet_id, updates.amount);
+    }
+    return res;
+  }, [updateTransaction, adjustBalance]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleDeleteTransaction = React.useCallback(async (id) => {
+    const tx = transactions.find(t => t.id === id);
+    const res = await deleteTransaction(id);
+    if (!res.error && tx?.wallet_id) {
+      await adjustBalance(tx.wallet_id, -tx.amount); // balik efek ke saldo
+    }
+    return res;
+  }, [deleteTransaction, adjustBalance, transactions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Transaksi berulang — saat app dibuka, eksekusi jadwal yang sudah jatuh tempo.
   // Ref guard memastikan hanya jalan sekali per sesi app.
@@ -469,16 +507,16 @@ function AuthenticatedApp({ session }) {
           <WalletsPage accounts={accounts} onAdd={handleAddAcct} onSetPrimary={setPrimary} onDelete={deleteAccount} transactions={transactions} addLocked={walletAddLocked} />
         )}
 
-        {active === "reports" && <ReportsPage transactions={transactions} customCategories={customCategories} canExport={limits.reportsExportEnabled} />}
+        {active === "reports" && <ReportsPage transactions={transactions} customCategories={customCategories} canExport={limits.reportsExportEnabled} accounts={accounts} />}
 
-        {active === "analytics" && <AnalyticsPage transactions={transactions} customCategories={customCategories} />}
+        {active === "analytics" && <AnalyticsPage transactions={transactions} customCategories={customCategories} accounts={accounts} limits={limits} />}
 
         {active === "savings" && (
           <SavingsPage goals={goals} onAdd={handleAddGoal} onDeposit={setDepositGoal} onDelete={deleteGoal} />
         )}
 
         {active === "transactions" && (
-          <TransactionsPage accounts={accounts} onAdd={() => setModal(true)} onScan={handleScan} scanLocked={!limits.receiptScanEnabled} transactions={transactions} loading={txLoading} onDelete={deleteTransaction} onUpdate={updateTransaction} customCategories={customCategories} onCreateCustom={addCustomCategory} onDeleteCustom={handleDeleteCustomCategory} isPro={subscription.isPro} isBasicAtMax={isBasicAtMax} userId={session.user.id} />
+          <TransactionsPage accounts={accounts} onAdd={() => setModal(true)} onScan={handleScan} scanLocked={!limits.receiptScanEnabled} transactions={transactions} loading={txLoading} onDelete={handleDeleteTransaction} onUpdate={handleUpdateTransaction} customCategories={customCategories} onCreateCustom={addCustomCategory} onDeleteCustom={handleDeleteCustomCategory} isPro={subscription.isPro} isBasicAtMax={isBasicAtMax} userId={session.user.id} />
         )}
 
         {active === "settings" && <SettingsPage t={t} setTweak={setTweak} user={session.user} notifSubs={notifSubs} onToggleNotifSub={toggleNotifSub} subscription={subscription} />}
@@ -486,7 +524,7 @@ function AuthenticatedApp({ session }) {
         {active !== "dashboard" && active !== "budgets" && active !== "wallets" && active !== "reports" && active !== "analytics" && active !== "savings" && active !== "transactions" && active !== "settings" && <Placeholder section={active} />}
       </main>
 
-      <AddTransactionModal open={modal} onClose={closeAddModal} onSave={createTransaction} customCategories={customCategories} onCreateCustom={addCustomCategory} onDeleteCustom={handleDeleteCustomCategory} prefill={scanPrefill} notice={scanNotice} previewImage={scanPreview} isPro={subscription.isPro} isBasicAtMax={isBasicAtMax} userId={session.user.id} />
+      <AddTransactionModal open={modal} onClose={closeAddModal} onSave={handleCreateTransaction} accounts={accounts} customCategories={customCategories} onCreateCustom={addCustomCategory} onDeleteCustom={handleDeleteCustomCategory} prefill={scanPrefill} notice={scanNotice} previewImage={scanPreview} isPro={subscription.isPro} isBasicAtMax={isBasicAtMax} userId={session.user.id} />
       <ScanStrukSheet open={scanOpen} onClose={() => setScanOpen(false)} onResult={handleScanResult} />
       <AddAccountModal open={addAcct} onClose={() => setAddAcct(false)} onCreate={createAccount} />
       <AddGoalModal open={addGoal} onClose={() => setAddGoal(false)} onCreate={createGoal} />

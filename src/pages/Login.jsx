@@ -4,7 +4,7 @@ import { supabase } from '../supabase';
 import { IconEye, IconEyeOff } from '../icons';
 import { validateUserStillExists, logoutDeletedUser, getAndClearExpiredMessage } from '../utils/sessionValidator';
 
-export function LoginPage({ onSwitch, onAuthSuccess }) {
+export function LoginPage({ onSwitch, onAuthSuccess, onForgot }) {
   const { t } = useTranslation();
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
@@ -75,6 +75,16 @@ export function LoginPage({ onSwitch, onAuthSuccess }) {
                 {showPassword ? <IconEyeOff size={16} stroke={1.6} /> : <IconEye size={16} stroke={1.6} />}
               </button>
             </div>
+          </div>
+
+          <div style={{ textAlign: 'right', marginTop: -6 }}>
+            <button
+              type="button"
+              onClick={onForgot}
+              style={{ background: 'none', border: 0, color: 'var(--muted)', cursor: 'pointer', fontSize: 12.5, padding: '2px 0', textDecoration: 'underline', textDecorationColor: 'var(--line)', fontFamily: 'inherit' }}
+            >
+              {t('auth.lupaPassword')}
+            </button>
           </div>
 
           {sessionMsg && (

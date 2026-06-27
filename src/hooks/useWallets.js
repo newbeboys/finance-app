@@ -137,5 +137,25 @@ export function useWallets(userId, limits) {
     return { error };
   }
 
-  return { accounts, loading, createAccount, setPrimary, deleteAccount };
+  // Atomic-safe balance adjustment: baca saldo saat ini dari state (sudah di-sync via
+  // realtime), hitung nilai baru di client, lalu tulis sekaligus. Aman untuk single-user.
+  async function adjustBalance(walletId, delta) {
+    if (!walletId || !delta) return { error: null };
+    const wallet = accounts.find(a => a.id === walletId);
+    if (!wallet) return { error: null };
+    const newBalance = wallet.balance + delta;
+    const { error } = await supabase
+      .from('wallets')
+      .update({ balance: newBalance })
+      .eq('id', walletId)
+      .eq('user_id', userId);
+    if (!error) {
+      setAccounts(prev => prev.map(a =>
+        a.id === walletId ? { ...a, balance: newBalance } : a
+      ));
+    }
+    return { error };
+  }
+
+  return { accounts, loading, createAccount, setPrimary, deleteAccount, adjustBalance };
 }

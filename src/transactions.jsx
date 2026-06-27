@@ -1,8 +1,9 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { TRANSACTIONS, CATEGORIES, INCOME_CATEGORIES, fmt } from './data';
+import { TRANSACTIONS, CATEGORIES, INCOME_CATEGORIES, fmt, fmtShort } from './data';
 
 import { IconFilter, IconPlus, IconArrowRight, IconClose, IconCalendar, IconChev, CatIcon } from './icons';
+import { WalletGlyph } from './wallets';
 import { ghostBtn } from './widgets';
 import { ScanStrukButton } from './components/ScanStruk';
 import { useIsMobile } from './use-mobile';
@@ -270,7 +271,7 @@ export function DatePickerPopup({ valueISO, onConfirm, onClose }) {
   );
 }
 
-export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial = null, customCategories = [], onCreateCustom, onDeleteCustom, prefill = null, notice = null, previewImage = null, isPro = false, isBasicAtMax = false, userId }) {
+export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial = null, accounts = [], customCategories = [], onCreateCustom, onDeleteCustom, prefill = null, notice = null, previewImage = null, isPro = false, isBasicAtMax = false, userId }) {
   const { t: tr, i18n } = useTranslation();
   const locale = i18n.language === 'en' ? 'en-US' : 'id-ID';
   useScrollLock(open);   // kunci scroll latar saat modal terbuka
@@ -286,6 +287,9 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
   const [saveError, setSaveError] = React.useState('');       // pesan error simpan ke Supabase
   const [dateRaw, setDateRaw] = React.useState(todayISO());   // tanggal transaksi (ISO)
   const [showPicker, setShowPicker] = React.useState(false);
+  const [walletId, setWalletId] = React.useState(null);       // UUID wallet yang dipilih
+  const [method, setMethod] = React.useState("Tunai");        // "Tunai" | "Transfer"
+  const [walletOpen, setWalletOpen] = React.useState(false);  // state dropdown dompet
 
   // Pre-fill saat mode edit atau reset saat modal buka baru
   React.useEffect(() => {
@@ -294,6 +298,8 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
     setSaving(false);
     setSaveError('');
     setShowPicker(false);
+    setWalletOpen(false);
+    const primaryWallet = accounts.find(a => a.primary) || accounts[0];
     if (initial) {
       const t = initial.amount < 0 ? "expense" : "income";
       setType(t);
@@ -310,6 +316,8 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
       setNote(initial.note || '');
       setRecurring(false);
       setDateRaw(initial.dateRaw || todayISO());
+      setWalletId(initial.wallet_id || primaryWallet?.id || null);
+      setMethod(initial.method === 'Transfer' ? 'Transfer' : 'Tunai');
     } else if (prefill) {
       // Prefill dari Scan Struk — tetap mode tambah (bukan edit) & sepenuhnya bisa diedit user.
       setType(prefill.type || "expense");
@@ -319,12 +327,16 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
       setNote(prefill.note || "");
       setRecurring(false);
       setDateRaw(prefill.dateRaw || todayISO());   // tanggal tak terdeteksi → hari ini
+      setWalletId(primaryWallet?.id || null);
+      setMethod("Tunai");
     } else {
       setType("expense"); setAmount(""); setCat("food");
       setMerchant(""); setNote(""); setRecurring(false);
       setDateRaw(todayISO());   // default = hari ini
+      setWalletId(primaryWallet?.id || null);
+      setMethod("Tunai");
     }
-  }, [open, initial, prefill]);
+  }, [open, initial, prefill]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!open) return null;
 
@@ -339,7 +351,8 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
     else setCat(CATEGORIES[0].id);
   };
 
-  const valid = (+amount > 0) && (!isCustom || (pendingCustom?.name || '').trim().length > 0);
+  const hasWallet = accounts.length === 0 || !!walletId;
+  const valid = (+amount > 0) && (!isCustom || (pendingCustom?.name || '').trim().length > 0) && hasWallet;
 
   const submit = async () => {
     if (!valid || saving) return;
@@ -365,17 +378,18 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
     const date = `${d.getDate()} ${MONTH_SHORT[d.getMonth()]} ${d.getFullYear()}`;
     const time = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
     const tx = {
-      id:       initial?.id || "tx-" + Date.now(),
+      id:        initial?.id || "tx-" + Date.now(),
       date,                       // string tampil (dibangun ulang dari dateRaw saat reload)
       dateRaw,                    // ISO tanggal pilihan user → disimpan ke Supabase
-      time:     initial?.time || time,
-      merchant: merchant.trim() || "—",
-      note:     note.trim(),
-      category: categoryId,
-      method:   initial?.method || "Tunai",
-      amount:   type === "expense" ? -(+amount || 0) : (+amount || 0),
+      time:      initial?.time || time,
+      merchant:  merchant.trim() || "—",
+      note:      note.trim(),
+      category:  categoryId,
+      method,
+      wallet_id: walletId || null,
+      amount:    type === "expense" ? -(+amount || 0) : (+amount || 0),
     };
-    const res = isEdit ? await onUpdate?.(initial.id, tx) : await onSave?.(tx);
+    const res = isEdit ? await onUpdate?.(initial.id, tx, initial) : await onSave?.(tx);
     // Limit transaksi bulanan tercapai → PaywallModal sudah tampil; batal diam-diam.
     if (res?.limitReached) { setSaving(false); return; }
     if (res?.error) {
@@ -474,6 +488,81 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
               userId={userId}
             />
           </Field>
+          {/* ── Pilih Dompet ── */}
+          {accounts.length > 0 && (
+            <div>
+              <span style={fieldLabelStyle}>{tr('transaksi.dompet')}</span>
+              <div style={{ position: "relative" }}>
+                <button
+                  type="button"
+                  onClick={() => setWalletOpen(v => !v)}
+                  style={{ ...inputStyle, display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "10px 12px" }}
+                >
+                  {(() => {
+                    const sel = accounts.find(a => a.id === walletId);
+                    return sel ? (
+                      <>
+                        <WalletGlyph type={sel.type} size={15} />
+                        <span style={{ flex: 1, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 14 }}>
+                          {sel.name}
+                        </span>
+                        <span style={{ color: "var(--muted)", fontSize: 12, flexShrink: 0, whiteSpace: "nowrap" }}>
+                          {fmtShort(sel.balance)}
+                        </span>
+                      </>
+                    ) : (
+                      <span style={{ color: "var(--muted)", fontSize: 14 }}>Pilih dompet</span>
+                    );
+                  })()}
+                  <IconChev size={13} style={{ flexShrink: 0, color: "var(--muted)" }} />
+                </button>
+
+                {walletOpen && (
+                  <>
+                    <div onClick={() => setWalletOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 80 }} />
+                    <div className="card" style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 81, padding: 6, maxHeight: 200, overflowY: "auto", boxShadow: "0 8px 24px -8px rgba(42,44,32,.25)" }}>
+                      {accounts.map(a => (
+                        <button
+                          key={a.id}
+                          type="button"
+                          onClick={() => { setWalletId(a.id); setWalletOpen(false); }}
+                          style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "9px 10px", borderRadius: 8, border: 0, background: walletId === a.id ? "var(--ivory)" : "transparent", cursor: "pointer", textAlign: "left" }}
+                        >
+                          <span style={{ width: 28, height: 28, borderRadius: 7, background: `color-mix(in oklch, ${a.color} 18%, var(--ivory))`, color: a.color, display: "grid", placeItems: "center", flexShrink: 0 }}>
+                            <WalletGlyph type={a.type} size={13} />
+                          </span>
+                          <span style={{ flex: 1, fontSize: 13, fontWeight: walletId === a.id ? 500 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--ink)" }}>
+                            {a.name}
+                          </span>
+                          <span style={{ fontSize: 11.5, color: "var(--muted)", flexShrink: 0, whiteSpace: "nowrap" }}>
+                            {fmtShort(a.balance)}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── Pilih Metode ── */}
+          <div>
+            <span style={fieldLabelStyle}>{tr('transaksi.metode')}</span>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, padding: 3, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10 }}>
+              {["Tunai", "Transfer"].map(opt => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => setMethod(opt)}
+                  style={{ padding: "9px 10px", fontSize: 13.5, background: method === opt ? "var(--ivory)" : "transparent", border: method === opt ? "1px solid var(--line-soft)" : "1px solid transparent", borderRadius: 8, color: method === opt ? "var(--ink)" : "var(--muted)", fontWeight: method === opt ? 500 : 400, cursor: "pointer", fontFamily: "inherit" }}
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <Field label={tr('transaksi.catatanOpsional')}>
             <input value={note} onChange={e => setNote(e.target.value)} placeholder={tr('transaksi.catatanPlaceholder')} style={inputStyle} />
           </Field>
@@ -502,6 +591,7 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
 }
 
 const inputStyle = { width: "100%", padding: "11px 12px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10, color: "var(--ink)", fontSize: 14, fontFamily: "inherit", outline: "none" };
+const fieldLabelStyle = { display: "block", fontSize: 11, color: "var(--muted)", letterSpacing: ".05em", textTransform: "uppercase", marginBottom: 6 };
 
 function Field({ label, children }) {
   return (

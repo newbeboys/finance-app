@@ -88,9 +88,16 @@ function yearsIndex(months) {
   });
 }
 
+// Sanitize wallet name for use in filenames: spaces → underscore, strip invalid chars.
+function sanitizeFilename(name) {
+  return String(name).replace(/\s+/g, '_').replace(/[/\\:*?"<>|]/g, '');
+}
+
 // Full payload consumed by BOTH the PDF (buildReportDoc) and Excel (downloadExcel).
-function buildPayload(transactions, kind, key, customCategories = []) {
+// `walletLabel` — null means "Semua Dompet", a string means a specific wallet name.
+function buildPayload(transactions, kind, key, customCategories = [], walletLabel = null) {
   const catList = [...ALL_CATEGORIES, ...customCategories];
+  const walletSuffix = walletLabel ? `_${sanitizeFilename(walletLabel)}` : '';
   if (kind === "month") {
     const periodTx = sortDesc(transactions.filter(t => (t.dateRaw || '').slice(0, 7) === key));
     const { income, expense, net, cats, incomeCats } = aggregate(periodTx, catList);
@@ -98,10 +105,11 @@ function buildPayload(transactions, kind, key, customCategories = []) {
     return {
       kind, title: "Laporan Bulanan",
       periodLabel: `${ID_MONTHS_FULL[month]} ${year}`,
-      filename: `Laporan-${ID_MONTHS_FULL[month]}-${year}`,
-      excelFilename: `FinanceApp_Laporan_${ID_MONTHS_FULL[month]}_${year}.xlsx`,
+      filename: `Laporan-${ID_MONTHS_FULL[month]}-${year}${walletSuffix}`,
+      excelFilename: `FinanceApp_Laporan_${ID_MONTHS_FULL[month]}_${year}${walletSuffix}.xlsx`,
       income, expense, net, cats, incomeCats, months: null,
       transactions: withLabels(periodTx, catList),
+      walletLabel,
     };
   }
   // year
@@ -112,10 +120,11 @@ function buildPayload(transactions, kind, key, customCategories = []) {
   return {
     kind, title: "Laporan Tahunan",
     periodLabel: `Tahun ${y}`,
-    filename: `Laporan-Tahunan-${y}`,
-    excelFilename: `FinanceApp_Laporan_${y}.xlsx`,
+    filename: `Laporan-Tahunan-${y}${walletSuffix}`,
+    excelFilename: `FinanceApp_Laporan_${y}${walletSuffix}.xlsx`,
     income, expense, net, cats, incomeCats, months,
     transactions: withLabels(periodTx, catList),
+    walletLabel,
   };
 }
 
@@ -167,7 +176,7 @@ function reportCatBarSVG(cats, expense) {
 }
 
 // ── Build the standalone report document (returns an HTML string) ──
-function buildReportDoc({ title, periodLabel, income, expense, net, cats, months, incomeCats = [], transactions = [] }) {
+function buildReportDoc({ title, periodLabel, income, expense, net, cats, months, incomeCats = [], transactions = [], walletLabel = null }) {
   const savingsRate = income ? Math.round((net / income) * 100) : 0;
   const rupiah = (n) => "Rp " + new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(Math.round(n));
   const catRows = cats.map(c => {
@@ -210,7 +219,8 @@ function buildReportDoc({ title, periodLabel, income, expense, net, cats, months
   .meta{text-align:right;font-size:11.5px;color:var(--muted);line-height:1.6;}
   .eyebrow{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);}
   .title{font-size:34px;letter-spacing:-.015em;margin:4px 0 2px;}
-  .period{font-size:14px;color:var(--muted);margin-bottom:28px;}
+  .period{font-size:14px;color:var(--muted);margin-bottom:6px;}
+  .wallet-line{font-size:12px;color:var(--muted);margin-bottom:22px;}
   .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px;}
   .kpi{border:1px solid var(--line);border-radius:14px;padding:16px;}
   .kpi .l{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);}
@@ -269,6 +279,7 @@ function buildReportDoc({ title, periodLabel, income, expense, net, cats, months
   <div class="eyebrow">${title}</div>
   <div class="serif title">Laporan Keuangan</div>
   <div class="period">${periodLabel}</div>
+  <div class="wallet-line">Dompet: ${esc(walletLabel || 'Semua Dompet')}</div>
 
   <div class="kpis">
     <div class="kpi"><div class="l">Pemasukan</div><div class="v pos">${rupiah(income)}</div></div>
@@ -277,7 +288,13 @@ function buildReportDoc({ title, periodLabel, income, expense, net, cats, months
   </div>
   <div class="net-strip"><span>Tingkat menabung (savings rate)</span><strong>${savingsRate}%</strong></div>
 
-  ${months ? `<section class="block"><h2 class="sec">Diagram batang — pemasukan vs pengeluaran</h2><div class="chart-legend"><span><span class="sq" style="background:var(--sage)"></span>Pemasukan</span><span><span class="sq" style="background:var(--terra)"></span>Pengeluaran</span></div>${reportBarSVG(months)}</section>` : `<section class="block"><h2 class="sec">Diagram batang — pengeluaran per kategori</h2>${reportCatBarSVG(cats, expense)}</section>`}
+  ${walletLabel !== null && income === 0 && expense === 0 && transactions.length === 0 ? `
+  <div style="background:rgba(178,106,74,.08);border:1px solid rgba(178,106,74,.2);border-radius:10px;padding:14px 18px;margin-bottom:24px;font-size:13px;color:var(--muted)">
+    Tidak ada transaksi pada periode ini untuk dompet yang dipilih.
+  </div>
+  ` : ''}
+
+  ${(months && months.length > 0) ? `<section class="block"><h2 class="sec">Diagram batang — pemasukan vs pengeluaran</h2><div class="chart-legend"><span><span class="sq" style="background:var(--sage)"></span>Pemasukan</span><span><span class="sq" style="background:var(--terra)"></span>Pengeluaran</span></div>${reportBarSVG(months)}</section>` : `<section class="block"><h2 class="sec">Diagram batang — pengeluaran per kategori</h2>${reportCatBarSVG(cats, expense)}</section>`}
 
   ${incomeCats.length ? `
   <section class="block">
@@ -652,7 +669,7 @@ function printReport(p) {
 
 // ── Excel preview — HTML table representation of the report data ───
 function ExcelPreviewRenderer({ payload }) {
-  const { income, expense, net, cats, incomeCats, transactions, months, periodLabel } = payload;
+  const { income, expense, net, cats, incomeCats, transactions, months, periodLabel, walletLabel = null } = payload;
   const savingsRate = income ? Math.round((net / income) * 100) : 0;
   const rupiah = (n) => 'Rp ' + new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(Math.round(n || 0));
   const fmtDay = (iso) => { const parts = (iso || '').split('-'); return parts[2] && parts[1] ? `${parts[2]}/${parts[1]}/${parts[0]}` : '—'; };
@@ -675,7 +692,14 @@ function ExcelPreviewRenderer({ payload }) {
         <div style={{ fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase', color: '#6E6B58', marginBottom: 4 }}>FinanceApp — Pratinjau Excel</div>
         <div style={{ fontSize: 20, fontWeight: 600, color: '#2A2C20', letterSpacing: '-.01em' }}>Laporan Keuangan</div>
         <div style={{ fontSize: 13, color: '#6E6B58', marginTop: 2 }}>{periodLabel}</div>
+        <div style={{ fontSize: 12, color: '#6E6B58', marginTop: 2 }}>Dompet: {walletLabel || 'Semua Dompet'}</div>
       </div>
+
+      {walletLabel !== null && income === 0 && expense === 0 && transactions.length === 0 && (
+        <div style={{ padding: '12px 16px', background: 'rgba(178,106,74,.08)', border: '1px solid rgba(178,106,74,.2)', borderRadius: 10, fontSize: 13, color: '#6E6B58', marginBottom: 20 }}>
+          Tidak ada transaksi pada periode ini untuk dompet yang dipilih.
+        </div>
+      )}
 
       <div style={{ marginBottom: 28 }}>
         {sectionHead('Ringkasan')}
@@ -792,13 +816,47 @@ function ExcelPreviewRenderer({ payload }) {
 }
 
 // ── Preview modal ──────────────────────────────────────────────────
-function ReportPreview({ payload, onClose, canExport }) {
+// Receives raw data (transactions, accounts) and builds the payload internally
+// so that the wallet filter, preview, and download all share ONE data source.
+function ReportPreview({ previewMeta, transactions, customCategories, accounts, onClose, canExport }) {
   const { t: tr } = useTranslation();
   const { openPaywall } = usePaywall();
-  useScrollLock(!!payload);
-  const iframeRef = React.useRef(null);
+  const [selectedWalletId, setSelectedWalletId] = React.useState("all");
   const [selectedFormat, setSelectedFormat] = React.useState('pdf');
   const [downloading, setDownloading] = React.useState(false);
+  const iframeRef = React.useRef(null);
+
+  // Reset wallet filter to "all" each time a new report preview is opened
+  React.useEffect(() => {
+    if (previewMeta) setSelectedWalletId("all");
+  }, [previewMeta]);
+
+  // Edge case: selected wallet deleted → fall back to "all"
+  React.useEffect(() => {
+    if (selectedWalletId === "all") return;
+    if (!accounts.some(a => a.id === selectedWalletId)) setSelectedWalletId("all");
+  }, [accounts, selectedWalletId]);
+
+  // ── Single filtered-transaction source shared by preview AND download ──
+  const filteredTransactions = React.useMemo(
+    () => selectedWalletId === "all"
+      ? transactions
+      : transactions.filter(t => t.wallet_id === selectedWalletId),
+    [transactions, selectedWalletId]
+  );
+
+  const walletLabel = selectedWalletId === "all"
+    ? null
+    : (accounts.find(a => a.id === selectedWalletId)?.name ?? null);
+
+  const payload = React.useMemo(
+    () => previewMeta
+      ? buildPayload(filteredTransactions, previewMeta.kind, previewMeta.key, customCategories, walletLabel)
+      : null,
+    [filteredTransactions, previewMeta, customCategories, walletLabel]
+  );
+
+  useScrollLock(!!previewMeta);
 
   React.useEffect(() => {
     if (payload && iframeRef.current && selectedFormat === 'pdf') {
@@ -806,7 +864,7 @@ function ReportPreview({ payload, onClose, canExport }) {
     }
   }, [payload, selectedFormat]);
 
-  if (!payload) return null;
+  if (!previewMeta || !payload) return null;
   const p = payload;
 
   const handleDownload = async () => {
@@ -831,6 +889,32 @@ function ReportPreview({ payload, onClose, canExport }) {
             <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{p.title}</div>
             <div className="serif" style={{ fontSize: 20, letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.periodLabel}</div>
           </div>
+
+          {/* Wallet filter — hanya tampil jika user punya lebih dari 1 dompet */}
+          {accounts.length > 1 && (
+            <select
+              value={selectedWalletId}
+              onChange={e => setSelectedWalletId(e.target.value)}
+              style={{
+                padding: "7px 10px",
+                background: "var(--paper)",
+                border: "1px solid var(--line-soft)",
+                borderRadius: 10,
+                color: "var(--ink)",
+                fontSize: 12.5,
+                fontFamily: "inherit",
+                cursor: "pointer",
+                outline: "none",
+                maxWidth: "min(180px, calc(50vw - 24px))",
+                flexShrink: 0,
+              }}
+            >
+              <option value="all">Semua Dompet</option>
+              {accounts.map(a => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+          )}
 
           {/* Format selector — PDF / Excel toggle */}
           <div style={{ display: "flex", padding: 3, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10, flexShrink: 0 }}>
@@ -964,11 +1048,11 @@ function Spinner() {
 }
 
 // ── Reports page ───────────────────────────────────────────────────
-export function ReportsPage({ transactions = [], customCategories = [], canExport = true }) {
+export function ReportsPage({ transactions = [], customCategories = [], canExport = true, accounts = [] }) {
   const { t: tr } = useTranslation();
   const { openPaywall } = usePaywall();
   const [scope, setScope] = React.useState("month"); // month | year
-  const [preview, setPreview] = React.useState(null);
+  const [preview, setPreview] = React.useState(null); // { kind, key } — raw meta only
   const [downloadTarget, setDownloadTarget] = React.useState(null);
 
   const months = React.useMemo(() => monthsIndex(transactions), [transactions]);
@@ -982,7 +1066,7 @@ export function ReportsPage({ transactions = [], customCategories = [], canExpor
     setDownloadTarget(payload);
   };
 
-  const openPreview = (kind, key) => setPreview(buildPayload(transactions, kind, key, customCategories));
+  const openPreview = (kind, key) => setPreview({ kind, key });
   const openDownload = (kind, key) => requestDownload(buildPayload(transactions, kind, key, customCategories));
 
   return (
@@ -1043,7 +1127,14 @@ export function ReportsPage({ transactions = [], customCategories = [], canExpor
         </div>
       )}
 
-      <ReportPreview payload={preview} onClose={() => setPreview(null)} canExport={canExport} />
+      <ReportPreview
+        previewMeta={preview}
+        transactions={transactions}
+        customCategories={customCategories}
+        accounts={accounts}
+        onClose={() => setPreview(null)}
+        canExport={canExport}
+      />
       <FormatPicker payload={downloadTarget} onClose={() => setDownloadTarget(null)} />
     </div>
   );

@@ -8,15 +8,16 @@ const MONTHS = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov
 function toAppTx(row) {
   const d = new Date(row.date + 'T00:00:00');
   return {
-    id:       row.id,
-    date:     `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`,
-    dateRaw:  row.date,   // ISO: "2026-06-04" — dipakai untuk grouping cashflow
-    time:     row.time     || '00:00',
-    merchant: row.merchant || '—',
-    note:     row.note     || '',
-    category: row.category,
-    method:   row.method   || 'Tunai',
-    amount:   Number(row.amount),
+    id:        row.id,
+    date:      `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`,
+    dateRaw:   row.date,   // ISO: "2026-06-04" — dipakai untuk grouping cashflow
+    time:      row.time     || '00:00',
+    merchant:  row.merchant || '—',
+    note:      row.note     || '',
+    category:  row.category,
+    method:    row.method   || 'Tunai',
+    amount:    Number(row.amount),
+    wallet_id: row.wallet_id || null,
   };
 }
 
@@ -86,15 +87,16 @@ export function useTransactions(userId, limits) {
     const { data, error: err } = await supabase
       .from('transactions')
       .insert({
-        user_id:  userId,
-        type:     tx.amount < 0 ? 'expense' : 'income',
-        amount:   tx.amount,
-        category: tx.category,
-        merchant: tx.merchant || '',
-        note:     tx.note     || '',
-        date:     isoDate,
-        time:     tx.time     || '00:00',
-        method:   tx.method   || 'Tunai',
+        user_id:   userId,
+        type:      tx.amount < 0 ? 'expense' : 'income',
+        amount:    tx.amount,
+        category:  tx.category,
+        merchant:  tx.merchant || '',
+        note:      tx.note     || '',
+        date:      isoDate,
+        time:      tx.time     || '00:00',
+        method:    tx.method   || 'Tunai',
+        wallet_id: tx.wallet_id || null,
       })
       .select()
       .single();
@@ -122,12 +124,13 @@ export function useTransactions(userId, limits) {
     const { data, error: err } = await supabase
       .from('transactions')
       .update({
-        type:     updates.amount < 0 ? 'expense' : 'income',
-        amount:   updates.amount,
-        category: updates.category,
-        merchant: updates.merchant || '',
-        note:     updates.note     || '',
-        method:   updates.method   || 'Tunai',
+        type:      updates.amount < 0 ? 'expense' : 'income',
+        amount:    updates.amount,
+        category:  updates.category,
+        merchant:  updates.merchant || '',
+        note:      updates.note     || '',
+        method:    updates.method   || 'Tunai',
+        wallet_id: updates.wallet_id || null,
         ...(updates.dateRaw ? { date: updates.dateRaw } : {}),
         ...(updates.time    ? { time: updates.time    } : {}),
       })

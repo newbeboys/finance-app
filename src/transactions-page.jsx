@@ -254,6 +254,7 @@ export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, 
         initial={editingTx}
         onClose={() => setEditingTx(null)}
         onUpdate={onUpdate}
+        accounts={accounts}
         customCategories={customCategories}
         onCreateCustom={onCreateCustom}
         onDeleteCustom={onDeleteCustom}

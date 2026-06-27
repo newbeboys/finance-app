@@ -629,14 +629,16 @@ function lastWeekRange(now = new Date()) {
 
 const WEEKLY_DISMISS_PREFIX = 'weeklyKpiDismissed_';
 
-export function WeeklySummaryCard({ transactions = [] }) {
+export function WeeklySummaryCard({ transactions = [], walletId }) {
   const { t: tr, i18n } = useTranslation();
   const locale = localeOf(i18n);
 
   // Hitung live tiap mount Beranda dari Date saat ini — tidak depend ke
   // notifikasi weeklyNotif lama. Otomatis ganti tiap Senin baru.
   const range = React.useMemo(() => lastWeekRange(), []);
-  const dismissKey = WEEKLY_DISMISS_PREFIX + range.thisMon;
+  // walletId disertakan dalam key saat kartu dipakai di Analitik (per-dompet dismiss state);
+  // saat dipakai di Beranda (walletId = undefined), format key lama tetap dipakai.
+  const dismissKey = WEEKLY_DISMISS_PREFIX + range.thisMon + (walletId !== undefined ? `_${walletId}` : '');
 
   // Disembunyikan HANYA jika key untuk Senin minggu berjalan SAAT INI ada.
   const [dismissed, setDismissed] = React.useState(() => {

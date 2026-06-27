@@ -207,6 +207,11 @@ function buildSummarySheet(wb, p, refs) {
   ws.getCell('A3').value = 'Less spending · More living';
   ws.getCell('A3').font = { italic: true, size: 10, color: { argb: argb('--muted') } };
 
+  ws.mergeCells('A4:F4');
+  const t4 = ws.getCell('A4');
+  t4.value = `Dompet: ${p.walletLabel || 'Semua Dompet'}`;
+  t4.font = { italic: true, size: 10, color: { argb: argb('--muted') } };
+
   // KPI table (rows 5–8) with live formulas referencing the Detail sheet
   const dn = refs.detailLast; // last detail data row
   const hasData = dn >= 2;

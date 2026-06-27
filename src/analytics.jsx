@@ -4,6 +4,7 @@ import { CATEGORIES, INCOME_CATEGORIES, fmtShort, formatNominal, nominalFontSize
 import { IconArrowDown } from './icons';
 import { SpendingDonut } from './charts';
 import { useScrollLock } from './hooks/useScrollLock';
+import { InsightsCard, WeeklySummaryCard } from './widgets';
 
 const MONTHS_ID = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
 const MONTHS_EN = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -160,7 +161,7 @@ function BarChart({ data }) {
 
 // ── Analytics Page ────────────────────────────────────────────────────
 
-export function AnalyticsPage({ transactions = [], customCategories = [] }) {
+export function AnalyticsPage({ transactions = [], customCategories = [], accounts = [], limits = null }) {
   const { t, i18n } = useTranslation();
   const monthsArr = i18n.language === 'en' ? MONTHS_EN : MONTHS_ID;
   const [scope, setScope] = React.useState("year");
@@ -169,12 +170,41 @@ export function AnalyticsPage({ transactions = [], customCategories = [] }) {
   useScrollLock(sheetOpen);
   const [hoverCat, setHoverCat] = React.useState(null);
   const [hoverIncomeCat, setHoverIncomeCat] = React.useState(null);
+  // Filter dompet — default "all"; reset ke "all" setiap kali halaman dibuka (state lokal)
+  const [selectedWalletId, setSelectedWalletId] = React.useState("all");
+
+  // Edge case: dompet yang dipilih dihapus → fallback ke "all" tanpa error
+  React.useEffect(() => {
+    if (selectedWalletId === "all") return;
+    if (!accounts.some(a => a.id === selectedWalletId)) setSelectedWalletId("all");
+  }, [accounts, selectedWalletId]);
 
   const now = new Date();
   const activePicked = pickedMonth || { year: now.getFullYear(), month: now.getMonth() };
 
-  const bars = React.useMemo(() => computeBarData(transactions, scope, scope === "month" ? activePicked : null, monthsArr), [transactions, scope, activePicked, monthsArr]);
-  const cats = React.useMemo(() => computeCatData(transactions, scope, scope === "month" ? activePicked : null), [transactions, scope, activePicked]);
+  // ── useMemo: subset transaksi berdasarkan filter dompet aktif ──────────
+  // Semua kalkulasi grafik dan Money IQ dijalankan pada subset ini.
+  const filteredByWallet = React.useMemo(
+    () => selectedWalletId === "all"
+      ? transactions
+      : transactions.filter(t => t.wallet_id === selectedWalletId),
+    [transactions, selectedWalletId]
+  );
+
+  // ── useMemo: transaksi dalam scope tanggal aktif (AND logic dengan filter dompet) ──
+  // Dipakai untuk threshold Money IQ (<5 → tampilkan pesan sparse).
+  const txInScope = React.useMemo(() => {
+    if (scope === "month") {
+      const pfx = `${activePicked.year}-${String(activePicked.month + 1).padStart(2, '0')}`;
+      return filteredByWallet.filter(t => t.dateRaw && t.dateRaw.startsWith(pfx));
+    }
+    const oldest = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+    const cutoff = `${oldest.getFullYear()}-${String(oldest.getMonth() + 1).padStart(2, '0')}`;
+    return filteredByWallet.filter(t => t.dateRaw && t.dateRaw.slice(0, 7) >= cutoff);
+  }, [filteredByWallet, scope, activePicked]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const bars = React.useMemo(() => computeBarData(filteredByWallet, scope, scope === "month" ? activePicked : null, monthsArr), [filteredByWallet, scope, activePicked, monthsArr]);
+  const cats = React.useMemo(() => computeCatData(filteredByWallet, scope, scope === "month" ? activePicked : null), [filteredByWallet, scope, activePicked]);
 
   const totalIncome  = bars.reduce((s, d) => s + (d.income  || 0), 0);
   const totalExpense = bars.reduce((s, d) => s + (d.expense || 0), 0);
@@ -187,7 +217,7 @@ export function AnalyticsPage({ transactions = [], customCategories = [] }) {
 
   const catTotal = cats.reduce((s, c) => s + (c.amount || 0), 0);
 
-  const incomeCats = React.useMemo(() => computeIncomeData(transactions, scope, scope === "month" ? activePicked : null, customCategories), [transactions, scope, activePicked, customCategories]);
+  const incomeCats = React.useMemo(() => computeIncomeData(filteredByWallet, scope, scope === "month" ? activePicked : null, customCategories), [filteredByWallet, scope, activePicked, customCategories]);
   const incomeCatTotal = incomeCats.reduce((s, c) => s + (c.amount || 0), 0);
 
   const stats = [
@@ -197,7 +227,8 @@ export function AnalyticsPage({ transactions = [], customCategories = [] }) {
     { l: avgLabel,                       v: avgExpense   || 0, c: "var(--muted)" },
   ];
 
-  // Available months for picker
+  // Available months for picker — selalu dari semua transaksi, bukan filteredByWallet,
+  // supaya pilihan bulan tidak berubah saat user ganti filter dompet.
   const availableMonths = React.useMemo(() => {
     const set = new Set();
     transactions.forEach(t => { if (t.dateRaw) set.add(t.dateRaw.slice(0, 7)); });
@@ -211,7 +242,7 @@ export function AnalyticsPage({ transactions = [], customCategories = [] }) {
       const [yr, mo] = s.split('-');
       return { year: +yr, month: +mo - 1 };
     });
-  }, [transactions]);
+  }, [transactions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const byYear = {};
   availableMonths.forEach(m => { (byYear[m.year] ||= []).push(m); });
@@ -219,7 +250,11 @@ export function AnalyticsPage({ transactions = [], customCategories = [] }) {
   const pickedLabel = `${monthsArr[activePicked.month]} ${activePicked.year}`;
   const rangeLabel  = scope === "year" ? t('analitik.sataTahunTerakhir') : pickedLabel;
 
-  const hasData = totalIncome > 0 || totalExpense > 0;
+  const hasData           = totalIncome > 0 || totalExpense > 0;
+  // Threshold: kurang dari 5 transaksi dalam scope aktif → Money IQ sparse
+  const isDataSparse      = txInScope.length < 5;
+  // Empty state khusus dompet: wallet dipilih tapi 0 transaksi di scope ini
+  const showWalletEmpty   = selectedWalletId !== "all" && txInScope.length === 0;
 
   return (
     <>
@@ -243,6 +278,32 @@ export function AnalyticsPage({ transactions = [], customCategories = [] }) {
                 {scope === "month" ? pickedLabel : t('analitik.saBulan')} ▾
               </button>
             </div>
+
+            {/* Wallet filter — HANYA tampil jika user punya lebih dari 1 dompet */}
+            {accounts.length > 1 && (
+              <select
+                value={selectedWalletId}
+                onChange={e => setSelectedWalletId(e.target.value)}
+                style={{
+                  padding: "9px 12px",
+                  background: "var(--paper)",
+                  border: "1px solid var(--line-soft)",
+                  borderRadius: 10,
+                  color: "var(--ink)",
+                  fontSize: 12.5,
+                  fontFamily: "inherit",
+                  cursor: "pointer",
+                  outline: "none",
+                  maxWidth: "min(200px, calc(50vw - 24px))",
+                }}
+              >
+                <option value="all">{t('analitik.semuaDompet')}</option>
+                {accounts.map(a => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+            )}
+
             <button onClick={() => { if (window.buildPayload && window.downloadPdf) window.downloadPdf(window.buildPayload(transactions, "year", String(now.getFullYear()))); }} style={{ padding: "10px 14px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 10, fontSize: 12.5, display: "inline-flex", gap: 7, alignItems: "center" }}>
               <IconArrowDown size={14} /> {t('analitik.unduhLaporan')}
             </button>
@@ -259,170 +320,213 @@ export function AnalyticsPage({ transactions = [], customCategories = [] }) {
           ))}
         </div>
 
-        {/* Bar chart */}
-        <div className="card rise" style={{ padding: 22, marginBottom: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-            <div>
-              <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{t('analitik.diagramBatang')}</div>
-              <div className="serif" style={{ fontSize: 24, letterSpacing: "-0.01em", marginTop: 2 }}>{t('analitik.pemasukVsKeluar')}</div>
-            </div>
-            <div style={{ display: "flex", gap: 16, fontSize: 12, color: "var(--muted)" }}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: "var(--sage)" }} /> {t('analitik.masuk')}</span>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: "var(--terra)" }} /> {t('analitik.keluar')}</span>
-            </div>
+        {/* Grafik + Money IQ: tampilkan empty state khusus jika dompet dipilih tapi kosong di periode ini */}
+        {showWalletEmpty ? (
+          <div className="card rise" style={{ padding: 48, marginBottom: 16, display: "flex", flexDirection: "column", alignItems: "center", gap: 12, textAlign: "center" }}>
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--line)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+            </svg>
+            <div style={{ fontSize: 14.5, fontWeight: 500, color: "var(--ink-2)" }}>{t('analitik.belumAdaTransaksiDompet')}</div>
           </div>
-          {!hasData ? (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, height: 160, color: "var(--muted)" }}>
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--line)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="4" height="18" rx="1"/><rect x="10" y="8" width="4" height="13" rx="1"/><rect x="17" y="13" width="4" height="8" rx="1"/></svg>
-              <div style={{ fontSize: 13 }}>{t('analitik.belumAdaData')}</div>
-            </div>
-          ) : (
-            <BarChart data={bars} />
-          )}
-        </div>
-
-        {/* ── Diagram lingkaran + Tabel: Pemasukan & Pengeluaran ── */}
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(300px, 0.9fr) 1.4fr", gap: 16 }} className="analytics-chart-grid">
-
-          {/* Donut pemasukan — mobile: order 1 */}
-          {incomeCats.length > 0 && (
-            <div className="card rise analytics-income-donut" style={{ padding: 22 }}>
-              <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{t('analitik.diagramLingkaran')}</div>
-              <div className="serif" style={{ fontSize: 24, letterSpacing: "-0.01em", marginTop: 2, marginBottom: 6 }}>{t('analitik.komposisiPemasukan')}</div>
-              <SpendingDonut data={incomeCats} active={hoverIncomeCat} onHover={setHoverIncomeCat} fmtFn={fmtShort} />
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", marginTop: 10, justifyContent: "center" }}>
-                {incomeCats.slice(0, 6).map((c, i) => (
-                  <span key={c.id} onMouseEnter={() => setHoverIncomeCat(i)} onMouseLeave={() => setHoverIncomeCat(null)}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "var(--ink-2)", cursor: "default" }}>
-                    <span style={{ width: 9, height: 9, borderRadius: 3, background: c.color }} /> {c.label}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Tabel pemasukan — mobile: order 3 */}
-          {incomeCats.length > 0 && (
-            <div className="card rise analytics-income-table" style={{ padding: "22px 22px 8px" }}>
-              <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{t('analitik.tabelStatistik')}</div>
-              <div className="serif" style={{ fontSize: 24, letterSpacing: "-0.01em", marginTop: 2, marginBottom: 12 }}>{t('analitik.pemasukPerKategori')}</div>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                <thead>
-                  <tr style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>
-                    <th style={{ textAlign: "left", padding: "0 0 10px", borderBottom: "1px solid var(--line-soft)", fontWeight: 500 }}>{t('analitik.kategori')}</th>
-                    <th style={{ textAlign: "right", padding: "0 0 10px", borderBottom: "1px solid var(--line-soft)", fontWeight: 500 }}>{t('analitik.jumlah')}</th>
-                    <th style={{ textAlign: "right", padding: "0 0 10px 16px", borderBottom: "1px solid var(--line-soft)", fontWeight: 500, width: 90 }}>{t('analitik.porsi')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {incomeCats.map((c, i) => {
-                    const pct = incomeCatTotal > 0 ? Math.round((c.amount / incomeCatTotal) * 100) : 0;
-                    return (
-                      <tr key={c.id} onMouseEnter={() => setHoverIncomeCat(i)} onMouseLeave={() => setHoverIncomeCat(null)}
-                        style={{ background: hoverIncomeCat === i ? "var(--paper)" : "transparent" }}>
-                        <td style={{ padding: "10px 0", borderBottom: i < incomeCats.length - 1 ? "1px solid var(--line-soft)" : 0 }}>
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 9 }}>
-                            <span style={{ width: 9, height: 9, borderRadius: 3, background: c.color }} /> {c.label}
-                          </span>
-                        </td>
-                        <td className="tnum" style={{ textAlign: "right", padding: "10px 0", borderBottom: i < incomeCats.length - 1 ? "1px solid var(--line-soft)" : 0, fontWeight: 500 }}>{fmtShort(c.amount)}</td>
-                        <td style={{ textAlign: "right", padding: "10px 0 10px 16px", borderBottom: i < incomeCats.length - 1 ? "1px solid var(--line-soft)" : 0 }}>
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 8, justifyContent: "flex-end" }}>
-                            <span style={{ width: 36, height: 5, background: "var(--line-soft)", borderRadius: 99, overflow: "hidden", display: "inline-block" }}>
-                              <span style={{ display: "block", height: "100%", width: `${pct}%`, background: c.color }} />
-                            </span>
-                            <span className="tnum" style={{ color: "var(--muted)", minWidth: 28, textAlign: "right" }}>{pct}%</span>
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <td style={{ padding: "12px 0", borderTop: "2px solid var(--ink)", fontWeight: 600 }}>{t('analitik.total')}</td>
-                    <td className="tnum" style={{ textAlign: "right", padding: "12px 0", borderTop: "2px solid var(--ink)", fontWeight: 600 }}>{fmtShort(incomeCatTotal)}</td>
-                    <td style={{ textAlign: "right", padding: "12px 0 12px 16px", borderTop: "2px solid var(--ink)", fontWeight: 600 }}>100%</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          )}
-
-          {/* Donut pengeluaran — mobile: order 2 */}
-          <div className="card rise analytics-expense-donut" style={{ padding: 22 }}>
-            <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{t('analitik.diagramLingkaran')}</div>
-            <div className="serif" style={{ fontSize: 24, letterSpacing: "-0.01em", marginTop: 2, marginBottom: 6 }}>{t('analitik.komposisiPengeluaran')}</div>
-            {cats.length === 0 ? (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 180, color: "var(--muted)" }}>
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--line)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
-                <div style={{ fontSize: 13 }}>{t('analitik.belumAdaPengeluaran')}</div>
-              </div>
-            ) : (
-              <>
-                <SpendingDonut data={cats} active={hoverCat} onHover={setHoverCat} />
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", marginTop: 10, justifyContent: "center" }}>
-                  {cats.slice(0, 6).map((c, i) => (
-                    <span key={c.id} onMouseEnter={() => setHoverCat(i)} onMouseLeave={() => setHoverCat(null)}
-                      style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "var(--ink-2)", cursor: "default" }}>
-                      <span style={{ width: 9, height: 9, borderRadius: 3, background: c.color }} /> {c.label}
-                    </span>
-                  ))}
+        ) : (
+          <>
+            {/* Bar chart */}
+            <div className="card rise" style={{ padding: 22, marginBottom: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                <div>
+                  <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{t('analitik.diagramBatang')}</div>
+                  <div className="serif" style={{ fontSize: 24, letterSpacing: "-0.01em", marginTop: 2 }}>{t('analitik.pemasukVsKeluar')}</div>
                 </div>
-              </>
-            )}
-          </div>
+                <div style={{ display: "flex", gap: 16, fontSize: 12, color: "var(--muted)" }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: "var(--sage)" }} /> {t('analitik.masuk')}</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: "var(--terra)" }} /> {t('analitik.keluar')}</span>
+                </div>
+              </div>
+              {!hasData ? (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, height: 160, color: "var(--muted)" }}>
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--line)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="4" height="18" rx="1"/><rect x="10" y="8" width="4" height="13" rx="1"/><rect x="17" y="13" width="4" height="8" rx="1"/></svg>
+                  <div style={{ fontSize: 13 }}>{t('analitik.belumAdaData')}</div>
+                </div>
+              ) : (
+                <BarChart data={bars} />
+              )}
+            </div>
 
-          {/* Tabel pengeluaran — mobile: order 4 */}
-          <div className="card rise analytics-expense-table" style={{ padding: "22px 22px 8px" }}>
-            <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{t('analitik.tabelStatistik')}</div>
-            <div className="serif" style={{ fontSize: 24, letterSpacing: "-0.01em", marginTop: 2, marginBottom: 12 }}>{t('analitik.rincianPerKategori')}</div>
-            {cats.length === 0 ? (
-              <div style={{ padding: "32px 0", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>{t('analitik.belumAdaKategori')}</div>
-            ) : (
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                <thead>
-                  <tr style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>
-                    <th style={{ textAlign: "left", padding: "0 0 10px", borderBottom: "1px solid var(--line-soft)", fontWeight: 500 }}>{t('analitik.kategori')}</th>
-                    <th style={{ textAlign: "right", padding: "0 0 10px", borderBottom: "1px solid var(--line-soft)", fontWeight: 500 }}>{t('analitik.jumlah')}</th>
-                    <th style={{ textAlign: "right", padding: "0 0 10px 16px", borderBottom: "1px solid var(--line-soft)", fontWeight: 500, width: 90 }}>{t('analitik.porsi')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {cats.map((c, i) => {
-                    const pct = catTotal > 0 ? Math.round((c.amount / catTotal) * 100) : 0;
-                    return (
-                      <tr key={c.id} onMouseEnter={() => setHoverCat(i)} onMouseLeave={() => setHoverCat(null)}
-                        style={{ background: hoverCat === i ? "var(--paper)" : "transparent" }}>
-                        <td style={{ padding: "10px 0", borderBottom: i < cats.length - 1 ? "1px solid var(--line-soft)" : 0 }}>
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 9 }}>
-                            <span style={{ width: 9, height: 9, borderRadius: 3, background: c.color }} /> {c.label}
-                          </span>
-                        </td>
-                        <td className="tnum" style={{ textAlign: "right", padding: "10px 0", borderBottom: i < cats.length - 1 ? "1px solid var(--line-soft)" : 0, fontWeight: 500 }}>{fmtShort(c.amount)}</td>
-                        <td style={{ textAlign: "right", padding: "10px 0 10px 16px", borderBottom: i < cats.length - 1 ? "1px solid var(--line-soft)" : 0 }}>
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 8, justifyContent: "flex-end" }}>
-                            <span style={{ width: 36, height: 5, background: "var(--line-soft)", borderRadius: 99, overflow: "hidden", display: "inline-block" }}>
-                              <span style={{ display: "block", height: "100%", width: `${pct}%`, background: c.color }} />
-                            </span>
-                            <span className="tnum" style={{ color: "var(--muted)", minWidth: 28, textAlign: "right" }}>{pct}%</span>
-                          </span>
-                        </td>
+            {/* ── Diagram lingkaran + Tabel: Pemasukan & Pengeluaran ── */}
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(300px, 0.9fr) 1.4fr", gap: 16 }} className="analytics-chart-grid">
+
+              {/* Donut pemasukan — mobile: order 1 */}
+              {incomeCats.length > 0 && (
+                <div className="card rise analytics-income-donut" style={{ padding: 22 }}>
+                  <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{t('analitik.diagramLingkaran')}</div>
+                  <div className="serif" style={{ fontSize: 24, letterSpacing: "-0.01em", marginTop: 2, marginBottom: 6 }}>{t('analitik.komposisiPemasukan')}</div>
+                  <SpendingDonut data={incomeCats} active={hoverIncomeCat} onHover={setHoverIncomeCat} fmtFn={fmtShort} />
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", marginTop: 10, justifyContent: "center" }}>
+                    {incomeCats.slice(0, 6).map((c, i) => (
+                      <span key={c.id} onMouseEnter={() => setHoverIncomeCat(i)} onMouseLeave={() => setHoverIncomeCat(null)}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "var(--ink-2)", cursor: "default" }}>
+                        <span style={{ width: 9, height: 9, borderRadius: 3, background: c.color }} /> {c.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Tabel pemasukan — mobile: order 3 */}
+              {incomeCats.length > 0 && (
+                <div className="card rise analytics-income-table" style={{ padding: "22px 22px 8px" }}>
+                  <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{t('analitik.tabelStatistik')}</div>
+                  <div className="serif" style={{ fontSize: 24, letterSpacing: "-0.01em", marginTop: 2, marginBottom: 12 }}>{t('analitik.pemasukPerKategori')}</div>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>
+                        <th style={{ textAlign: "left", padding: "0 0 10px", borderBottom: "1px solid var(--line-soft)", fontWeight: 500 }}>{t('analitik.kategori')}</th>
+                        <th style={{ textAlign: "right", padding: "0 0 10px", borderBottom: "1px solid var(--line-soft)", fontWeight: 500 }}>{t('analitik.jumlah')}</th>
+                        <th style={{ textAlign: "right", padding: "0 0 10px 16px", borderBottom: "1px solid var(--line-soft)", fontWeight: 500, width: 90 }}>{t('analitik.porsi')}</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <td style={{ padding: "12px 0", borderTop: "2px solid var(--ink)", fontWeight: 600 }}>{t('analitik.total')}</td>
-                    <td className="tnum" style={{ textAlign: "right", padding: "12px 0", borderTop: "2px solid var(--ink)", fontWeight: 600 }}>{fmtShort(catTotal)}</td>
-                    <td style={{ textAlign: "right", padding: "12px 0 12px 16px", borderTop: "2px solid var(--ink)", fontWeight: 600 }}>100%</td>
-                  </tr>
-                </tfoot>
-              </table>
-            )}
-          </div>
+                    </thead>
+                    <tbody>
+                      {incomeCats.map((c, i) => {
+                        const pct = incomeCatTotal > 0 ? Math.round((c.amount / incomeCatTotal) * 100) : 0;
+                        return (
+                          <tr key={c.id} onMouseEnter={() => setHoverIncomeCat(i)} onMouseLeave={() => setHoverIncomeCat(null)}
+                            style={{ background: hoverIncomeCat === i ? "var(--paper)" : "transparent" }}>
+                            <td style={{ padding: "10px 0", borderBottom: i < incomeCats.length - 1 ? "1px solid var(--line-soft)" : 0 }}>
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 9 }}>
+                                <span style={{ width: 9, height: 9, borderRadius: 3, background: c.color }} /> {c.label}
+                              </span>
+                            </td>
+                            <td className="tnum" style={{ textAlign: "right", padding: "10px 0", borderBottom: i < incomeCats.length - 1 ? "1px solid var(--line-soft)" : 0, fontWeight: 500 }}>{fmtShort(c.amount)}</td>
+                            <td style={{ textAlign: "right", padding: "10px 0 10px 16px", borderBottom: i < incomeCats.length - 1 ? "1px solid var(--line-soft)" : 0 }}>
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 8, justifyContent: "flex-end" }}>
+                                <span style={{ width: 36, height: 5, background: "var(--line-soft)", borderRadius: 99, overflow: "hidden", display: "inline-block" }}>
+                                  <span style={{ display: "block", height: "100%", width: `${pct}%`, background: c.color }} />
+                                </span>
+                                <span className="tnum" style={{ color: "var(--muted)", minWidth: 28, textAlign: "right" }}>{pct}%</span>
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr>
+                        <td style={{ padding: "12px 0", borderTop: "2px solid var(--ink)", fontWeight: 600 }}>{t('analitik.total')}</td>
+                        <td className="tnum" style={{ textAlign: "right", padding: "12px 0", borderTop: "2px solid var(--ink)", fontWeight: 600 }}>{fmtShort(incomeCatTotal)}</td>
+                        <td style={{ textAlign: "right", padding: "12px 0 12px 16px", borderTop: "2px solid var(--ink)", fontWeight: 600 }}>100%</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
 
+              {/* Donut pengeluaran — mobile: order 2 */}
+              <div className="card rise analytics-expense-donut" style={{ padding: 22 }}>
+                <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{t('analitik.diagramLingkaran')}</div>
+                <div className="serif" style={{ fontSize: 24, letterSpacing: "-0.01em", marginTop: 2, marginBottom: 6 }}>{t('analitik.komposisiPengeluaran')}</div>
+                {cats.length === 0 ? (
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 180, color: "var(--muted)" }}>
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--line)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+                    <div style={{ fontSize: 13 }}>{t('analitik.belumAdaPengeluaran')}</div>
+                  </div>
+                ) : (
+                  <>
+                    <SpendingDonut data={cats} active={hoverCat} onHover={setHoverCat} />
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", marginTop: 10, justifyContent: "center" }}>
+                      {cats.slice(0, 6).map((c, i) => (
+                        <span key={c.id} onMouseEnter={() => setHoverCat(i)} onMouseLeave={() => setHoverCat(null)}
+                          style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "var(--ink-2)", cursor: "default" }}>
+                          <span style={{ width: 9, height: 9, borderRadius: 3, background: c.color }} /> {c.label}
+                        </span>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Tabel pengeluaran — mobile: order 4 */}
+              <div className="card rise analytics-expense-table" style={{ padding: "22px 22px 8px" }}>
+                <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{t('analitik.tabelStatistik')}</div>
+                <div className="serif" style={{ fontSize: 24, letterSpacing: "-0.01em", marginTop: 2, marginBottom: 12 }}>{t('analitik.rincianPerKategori')}</div>
+                {cats.length === 0 ? (
+                  <div style={{ padding: "32px 0", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>{t('analitik.belumAdaKategori')}</div>
+                ) : (
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>
+                        <th style={{ textAlign: "left", padding: "0 0 10px", borderBottom: "1px solid var(--line-soft)", fontWeight: 500 }}>{t('analitik.kategori')}</th>
+                        <th style={{ textAlign: "right", padding: "0 0 10px", borderBottom: "1px solid var(--line-soft)", fontWeight: 500 }}>{t('analitik.jumlah')}</th>
+                        <th style={{ textAlign: "right", padding: "0 0 10px 16px", borderBottom: "1px solid var(--line-soft)", fontWeight: 500, width: 90 }}>{t('analitik.porsi')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {cats.map((c, i) => {
+                        const pct = catTotal > 0 ? Math.round((c.amount / catTotal) * 100) : 0;
+                        return (
+                          <tr key={c.id} onMouseEnter={() => setHoverCat(i)} onMouseLeave={() => setHoverCat(null)}
+                            style={{ background: hoverCat === i ? "var(--paper)" : "transparent" }}>
+                            <td style={{ padding: "10px 0", borderBottom: i < cats.length - 1 ? "1px solid var(--line-soft)" : 0 }}>
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 9 }}>
+                                <span style={{ width: 9, height: 9, borderRadius: 3, background: c.color }} /> {c.label}
+                              </span>
+                            </td>
+                            <td className="tnum" style={{ textAlign: "right", padding: "10px 0", borderBottom: i < cats.length - 1 ? "1px solid var(--line-soft)" : 0, fontWeight: 500 }}>{fmtShort(c.amount)}</td>
+                            <td style={{ textAlign: "right", padding: "10px 0 10px 16px", borderBottom: i < cats.length - 1 ? "1px solid var(--line-soft)" : 0 }}>
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 8, justifyContent: "flex-end" }}>
+                                <span style={{ width: 36, height: 5, background: "var(--line-soft)", borderRadius: 99, overflow: "hidden", display: "inline-block" }}>
+                                  <span style={{ display: "block", height: "100%", width: `${pct}%`, background: c.color }} />
+                                </span>
+                                <span className="tnum" style={{ color: "var(--muted)", minWidth: 28, textAlign: "right" }}>{pct}%</span>
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr>
+                        <td style={{ padding: "12px 0", borderTop: "2px solid var(--ink)", fontWeight: 600 }}>{t('analitik.total')}</td>
+                        <td className="tnum" style={{ textAlign: "right", padding: "12px 0", borderTop: "2px solid var(--ink)", fontWeight: 600 }}>{fmtShort(catTotal)}</td>
+                        <td style={{ textAlign: "right", padding: "12px 0 12px 16px", borderTop: "2px solid var(--ink)", fontWeight: 600 }}>100%</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                )}
+              </div>
+
+            </div>
+
+            {/* ── Money IQ (InsightsCard) ─────────────────────────────────────
+                Threshold: jika transaksi dalam scope aktif < 5, tampilkan
+                pesan sparse sebagai ganti insight (hindari insight misleading). */}
+            <div style={{ marginTop: 16 }}>
+              {isDataSparse ? (
+                <div className="card rise" style={{ padding: 22, display: "flex", alignItems: "flex-start", gap: 14 }}>
+                  <span style={{ fontSize: 22, flexShrink: 0 }}>⚠️</span>
+                  <div>
+                    <div className="serif" style={{ fontSize: 20, letterSpacing: "-0.01em", marginBottom: 8 }}>Money IQ</div>
+                    <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.6 }}>
+                      {t('analitik.dataTerlaluSedikit')}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <InsightsCard transactions={txInScope} customCategories={customCategories} limits={limits} />
+              )}
+            </div>
+          </>
+        )}
+
+        {/* ── WeeklySummaryCard ───────────────────────────────────────────────
+            Selalu tampil (dihitung berdasarkan filteredByWallet, bukan txInScope).
+            key={selectedWalletId} → paksa remount saat wallet berubah supaya
+            useState initializer membaca dismissKey yang benar dari localStorage. */}
+        <div style={{ marginTop: 16 }}>
+          <WeeklySummaryCard
+            key={selectedWalletId}
+            walletId={selectedWalletId}
+            transactions={filteredByWallet}
+          />
         </div>
       </div>
 
