@@ -1,7 +1,7 @@
 {
   "appId": "com.Financeapp.app",
   "appName": "FinanceApp",
-  "version": "2.5.4",
+  "version": "2.5.5",
   "webDir": "dist",
   "plugins": {
     "StatusBar": {

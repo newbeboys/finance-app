@@ -1,6 +1,6 @@
 {
   "name": "finance-app",
-  "version": "2.5.4",
+  "version": "2.5.5",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -16,6 +16,7 @@
     "@capacitor/filesystem": "^8.1.2",
     "@capacitor/share": "^8.0.1",
     "@capacitor/status-bar": "^8.0.2",
+    "@revenuecat/purchases-capacitor": "^13.2.0",
     "@supabase/supabase-js": "^2.107.0",
     "exceljs": "^4.4.0",
     "html2canvas": "^1.4.1",
