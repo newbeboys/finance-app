@@ -89,6 +89,10 @@ export function useSubscription(userId) {
   // dibungkus import.meta.env.DEV (lihat SettingsPage) → otomatis hilang
   // dari build APK production.
   const setPlanForTesting = React.useCallback(async (newPlan) => {
+    if (!import.meta.env.DEV) {
+      console.warn('[useSubscription] setPlanForTesting hanya tersedia di mode DEV');
+      return;
+    }
     if (!userId) return { error: 'no user' };
     const now = new Date().toISOString();
     const payload = newPlan === 'pro'

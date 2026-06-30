@@ -29,7 +29,7 @@ const PRICING_PLANS = [
   },
 ];
 
-export function UpgradeModal({ isOpen, onClose, reason, currentLimit, maxLimit, onSelectPlan }) {
+export function UpgradeModal({ isOpen, onClose, reason, currentLimit, maxLimit, onSelectPlan, loading = false }) {
   const [selectedPlan, setSelectedPlan] = useState('annual');
   useScrollLock(!!isOpen);
 
@@ -103,10 +103,10 @@ export function UpgradeModal({ isOpen, onClose, reason, currentLimit, maxLimit, 
         </div>
 
         <div className="um-actions">
-          <button className="um-btn-primary" onClick={handleUpgrade}>
-            Upgrade Sekarang
+          <button className="um-btn-primary" onClick={handleUpgrade} disabled={loading} style={{ opacity: loading ? 0.7 : 1 }}>
+            {loading ? 'Memproses...' : 'Upgrade Sekarang'}
           </button>
-          <button className="um-btn-secondary" onClick={onClose}>
+          <button className="um-btn-secondary" onClick={onClose} disabled={loading}>
             Nanti Saja
           </button>
         </div>

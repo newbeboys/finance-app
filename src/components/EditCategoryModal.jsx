@@ -93,10 +93,15 @@ export function EditCategoryModal({ open, category, userId, onClose }) {
       return;
     }
 
-    await supabase
-      .from('user_subscriptions')
-      .update({ last_custom_category_edit_at: new Date().toISOString() })
-      .eq('user_id', userId);
+    const { error: cooldownError } = await supabase.rpc('update_category_edit_cooldown', {
+      p_user_id: userId
+    });
+
+    if (cooldownError) {
+      console.error('Gagal update cooldown:', cooldownError);
+      // Tetap lanjutkan flow sukses edit kategori, tapi log error untuk debugging
+      // (cooldown tracking gagal tidak boleh blokir user dari fitur edit yang sudah terjadi)
+    }
 
     const nextDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     setToast(`Kategori berhasil diubah. Edit berikutnya bisa dilakukan setelah ${fmtDate(nextDate)}.`);

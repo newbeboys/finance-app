@@ -202,10 +202,19 @@ function ProLock() {
   );
 }
 
-export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub, subscription }) {
+// Mapping dari UI plan ID ke RevenueCat package identifier.
+// Nama RC package sengaja tidak mencerminkan periode — jangan ubah mapping ini.
+const RC_PACKAGE_MAP = {
+  monthly:  '$rc_weekly',   // Rp 30.000/bulan
+  '6months': '$rc_monthly', // Rp 140.000/6 bulan
+  annual:   '$rc_annual',   // Rp 270.000/tahun
+};
+
+export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub, subscription, revenueCat }) {
   const { t: tr } = useTranslation();
   const { openPaywall } = usePaywall();
   const sub = subscription || {};
+  const rc = revenueCat || {};
   const isPro = !!sub.isPro;
   const limits = sub.limits;
   const notifOn = t.notifications !== false;
@@ -214,6 +223,8 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub, s
   const [loggingOut, setLoggingOut] = React.useState(false);
   const [showLangModal, setShowLangModal] = React.useState(false);
   const [langToast, setLangToast] = React.useState(false);
+  const [purchaseToast, setPurchaseToast] = React.useState(null); // null | { ok: boolean, msg: string }
+  const [purchaseBusy, setPurchaseBusy] = React.useState(false);
 
   const showLangToast = () => {
     setLangToast(true);
@@ -266,18 +277,56 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub, s
     setPlanBusy(false);
   };
 
-  const handleSelectPlan = (planId) => {
-    setShowUpgradeModal(false);
-    if (import.meta.env.DEV && sub.setPlanForTesting) {
-      sub.setPlanForTesting('pro');
+  const showPurchaseToast = (ok, msg) => {
+    setPurchaseToast({ ok, msg });
+    setTimeout(() => setPurchaseToast(null), 3500);
+  };
+
+  const handleSelectPlan = async (planId) => {
+    if (purchaseBusy) return;
+    const pkgIdentifier = RC_PACKAGE_MAP[planId];
+    if (!pkgIdentifier) return;
+
+    setPurchaseBusy(true);
+    try {
+      const offerings = await rc.getOfferings?.();
+      if (!offerings) {
+        showPurchaseToast(false, 'Gagal memuat paket — coba lagi.');
+        return;
+      }
+      const offering = offerings.all?.['default'] || offerings.current;
+      if (!offering) {
+        showPurchaseToast(false, 'Penawaran tidak tersedia saat ini.');
+        return;
+      }
+      const pkg = offering.availablePackages?.find(p => p.identifier === pkgIdentifier);
+      if (!pkg) {
+        showPurchaseToast(false, 'Paket tidak ditemukan. Coba restart app.');
+        return;
+      }
+
+      const customerInfo = await rc.purchasePackage?.(pkg);
+      if (customerInfo === null) {
+        // User membatalkan — ini normal, tidak perlu pesan error
+        return;
+      }
+
+      setShowUpgradeModal(false);
+      await sub.refresh?.();
+      showPurchaseToast(true, 'Selamat! Kamu kini pengguna Pro 🎉');
+    } catch (err) {
+      console.error('[handleSelectPlan] purchase error:', err);
+      showPurchaseToast(false, err?.message || 'Pembelian gagal. Coba lagi nanti.');
+    } finally {
+      setPurchaseBusy(false);
     }
-    // TODO: trigger Google Play Billing flow with planId
-    console.log('[UpgradeModal] Plan selected:', planId);
   };
 
   const handleRestorePurchase = async () => {
-    // TODO: implement Google Play Billing restore
-    await new Promise(r => setTimeout(r, 1200));
+    const customerInfo = await rc.restorePurchases?.();
+    const hasPro = customerInfo?.entitlements?.active?.['pro'] !== undefined;
+    if (hasPro) await sub.refresh?.();
+    return { hasPro };
   };
 
   // Pilih metode keamanan via radio
@@ -640,12 +689,26 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub, s
         </div>
       )}
 
+      {purchaseToast && (
+        <div style={{
+          position: "fixed", bottom: 80, left: "50%", transform: "translateX(-50%)",
+          background: purchaseToast.ok ? "var(--sage)" : "var(--terra)",
+          color: "#fff", borderRadius: 10,
+          padding: "10px 20px", fontSize: 13.5, fontWeight: 500,
+          zIndex: 4000, whiteSpace: "nowrap", pointerEvents: "none",
+          boxShadow: "0 4px 20px rgba(0,0,0,.3)",
+        }}>
+          {purchaseToast.msg}
+        </div>
+      )}
+
       <RecurringTransactionPage open={showRecurring} onClose={() => setShowRecurring(false)} />
 
       <UpgradeModal
         isOpen={showUpgradeModal}
-        onClose={() => setShowUpgradeModal(false)}
+        onClose={() => { if (!purchaseBusy) setShowUpgradeModal(false); }}
         onSelectPlan={handleSelectPlan}
+        loading={purchaseBusy}
       />
     </div>
   );

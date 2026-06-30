@@ -36,6 +36,7 @@ import { useNotifications } from './hooks/useNotifications';
 import { useBudgets } from './hooks/useBudgets';
 import { useCustomCategories } from './hooks/useCustomCategories';
 import { useSubscription } from './hooks/useSubscription';
+import { useRevenueCat } from './hooks/useRevenueCat';
 import { usePaywall } from './components/PaywallModal';
 import { isFontThemeAllowed } from './lib/planLimits';
 
@@ -292,6 +293,18 @@ function AuthenticatedApp({ session }) {
   const { limits } = subscription;
   const { openPaywall } = usePaywall();
 
+  // RevenueCat SDK — diinisialisasi di Android, no-op di web
+  const revenueCat = useRevenueCat(session.user.id);
+
+  // Cross-check: kalau Supabase bilang Basic tapi RevenueCat bilang Pro
+  // (bisa terjadi bila webhook belum tiba) → trust RC, refresh dari Supabase.
+  React.useEffect(() => {
+    if (!subscription.loading && !subscription.isPro && revenueCat.isProActive) {
+      console.warn('[app] Konflik plan: Supabase=basic RC=pro — refresh Supabase...');
+      subscription.refresh();
+    }
+  }, [subscription.loading, subscription.isPro, revenueCat.isProActive]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Auto-reset tema font saat downgrade Pro → Basic. Kalau tema aktif tidak
   // diizinkan di Basic, kembalikan ke 'modern-tech' + tampilkan toast.
   const [fontResetToast, setFontResetToast] = React.useState(false);
@@ -519,7 +532,7 @@ function AuthenticatedApp({ session }) {
           <TransactionsPage accounts={accounts} onAdd={() => setModal(true)} onScan={handleScan} scanLocked={!limits.receiptScanEnabled} transactions={transactions} loading={txLoading} onDelete={handleDeleteTransaction} onUpdate={handleUpdateTransaction} customCategories={customCategories} onCreateCustom={addCustomCategory} onDeleteCustom={handleDeleteCustomCategory} isPro={subscription.isPro} isBasicAtMax={isBasicAtMax} userId={session.user.id} />
         )}
 
-        {active === "settings" && <SettingsPage t={t} setTweak={setTweak} user={session.user} notifSubs={notifSubs} onToggleNotifSub={toggleNotifSub} subscription={subscription} />}
+        {active === "settings" && <SettingsPage t={t} setTweak={setTweak} user={session.user} notifSubs={notifSubs} onToggleNotifSub={toggleNotifSub} subscription={subscription} revenueCat={revenueCat} />}
 
         {active !== "dashboard" && active !== "budgets" && active !== "wallets" && active !== "reports" && active !== "analytics" && active !== "savings" && active !== "transactions" && active !== "settings" && <Placeholder section={active} />}
       </main>
