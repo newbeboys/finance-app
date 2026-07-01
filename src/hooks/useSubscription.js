@@ -95,14 +95,14 @@ export function useSubscription(userId) {
     }
     if (!userId) return { error: 'no user' };
     const now = new Date().toISOString();
-    const payload = newPlan === 'pro'
-      ? { plan: 'pro', billing_cycle: null, started_at: now, expires_at: null, updated_at: now }
-      : { plan: 'basic', billing_cycle: null, started_at: null, expires_at: null, updated_at: now };
 
-    const { error } = await supabase
-      .from('user_subscriptions')
-      .update(payload)
-      .eq('user_id', userId);
+    const { error } = await supabase.rpc('set_plan_for_testing', {
+      p_user_id: userId,
+      p_plan: newPlan,
+      p_billing_cycle: null,
+      p_started_at: newPlan === 'pro' ? now : null,
+      p_expires_at: null,
+    });
 
     if (error) {
       console.error('[useSubscription] setPlanForTesting FAILED:', error.code, error.message);

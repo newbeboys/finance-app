@@ -112,13 +112,10 @@ const switcherRow = (active) => ({
 });
 
 function txForAccount(account, transactions) {
-  return transactions.filter(t => {
-    if (account.last4 !== "—") return t.method.includes(account.last4);
-    if (account.type === "cash") return t.method === "Tunai";
-    if (account.type === "ewallet") return t.method.toLowerCase().includes(account.name.toLowerCase());
-    if (account.type === "investment") return t.merchant.toLowerCase().includes(account.institution.toLowerCase());
-    return false;
-  });
+  return transactions.filter(t =>
+    t.wallet_id === account.id ||
+    (t.wallet_id == null && account.primary === true)
+  );
 }
 
 export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transactions = [], addLocked = false }) {
