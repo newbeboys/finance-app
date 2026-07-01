@@ -1,11 +1,20 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { fmtShort, formatNominal, nominalFontSize } from './data';
-import { IconPlus, IconClose } from './icons';
+import { IconPlus, IconClose, IconCalendar } from './icons';
 import { Ring } from './charts';
 import { useIsMobile } from './use-mobile';
 import { useScrollLock } from './hooks/useScrollLock';
 import { usePaywall } from './components/PaywallModal';
+import { DatePickerPopup } from './transactions';
+
+const DEADLINE_MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+// ISO lokal (2026-01-31) → label ringkas ("Jan 2026"), tanpa lewat Date UTC parsing
+const isoToDeadlineLabel = (iso) => {
+  if (!iso) return "";
+  const d = new Date(iso + "T00:00:00");
+  return `${DEADLINE_MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+};
 
 const GOAL_ICONS = {
   emergency: <><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z" /><path d="m9 12 2 2 4-4" /></>,
@@ -39,10 +48,22 @@ function GoalGlyph({ icon, size = 18 }) {
 
 const GOAL_COLORS = ["#5C6B4C", "#B68A3E", "#C9886D", "#2A6FDB", "#1FA8A0", "#9A6BD9", "#B26A4A", "#7A8A6E"];
 
+// Goals dengan deadlineDate terdekat di atas; tanpa deadline (null) selalu di bawah.
+// Dibandingkan sebagai string ISO (YYYY-MM-DD) langsung, bukan lewat Date, supaya aman dari pergeseran timezone.
+function sortGoalsByDeadline(goalsArray) {
+  return [...goalsArray].sort((a, b) => {
+    if (!a.deadlineDate && !b.deadlineDate) return 0;
+    if (!a.deadlineDate) return 1;
+    if (!b.deadlineDate) return -1;
+    return a.deadlineDate < b.deadlineDate ? -1 : a.deadlineDate > b.deadlineDate ? 1 : 0;
+  });
+}
+
 export function SavingsPage({ goals, onAdd, onDeposit, onDelete }) {
   const { t: tr } = useTranslation();
   const isMobile = useIsMobile();
   const { openPaywall } = usePaywall();
+  const sortedGoals = sortGoalsByDeadline(goals);
   const totalSaved = goals.reduce((s, g) => s + g.current, 0);
   const totalTarget = goals.reduce((s, g) => s + g.target, 0);
   const completed = goals.filter(g => g.current >= g.target).length;
@@ -82,7 +103,7 @@ export function SavingsPage({ goals, onAdd, onDeposit, onDelete }) {
       </div>
 
       <div className="goals-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
-        {goals.map((g, i) => {
+        {sortedGoals.map((g, i) => {
           const pct = Math.min(g.current / g.target, 1);
           const done = g.current >= g.target;
           const remaining = Math.max(g.target - g.current, 0);
@@ -157,11 +178,13 @@ export function AddGoalModal({ open, onClose, onCreate }) {
   const [icon, setIcon] = React.useState("star");
   const [target, setTarget] = React.useState("");
   const [current, setCurrent] = React.useState("");
-  const [deadline, setDeadline] = React.useState("");
+  const [deadlineLabel, setDeadlineLabel] = React.useState("");     // "Jan 2026" atau "" (tanpa tenggat)
+  const [deadlineISO, setDeadlineISO] = React.useState(null);       // ISO lokal: 2026-01-31 atau null
+  const [showDeadlinePicker, setShowDeadlinePicker] = React.useState(false);
   const [color, setColor] = React.useState(GOAL_COLORS[0]);
 
   React.useEffect(() => {
-    if (open) { setLabel(""); setIcon("star"); setTarget(""); setCurrent(""); setDeadline(""); setColor(GOAL_COLORS[0]); }
+    if (open) { setLabel(""); setIcon("star"); setTarget(""); setCurrent(""); setDeadlineLabel(""); setDeadlineISO(null); setShowDeadlinePicker(false); setColor(GOAL_COLORS[0]); }
   }, [open]);
 
   if (!open) return null;
@@ -170,7 +193,7 @@ export function AddGoalModal({ open, onClose, onCreate }) {
   const valid = label.trim() && num(target) > 0;
   const submit = () => {
     if (!valid) return;
-    onCreate({ id: "g" + Date.now(), label: label.trim(), icon, color, target: num(target), current: num(current), deadline: deadline.trim() || tr('tabungan.tanpaTenggat') });
+    onCreate({ id: "g" + Date.now(), label: label.trim(), icon, color, target: num(target), current: num(current), deadline: deadlineLabel || tr('tabungan.tanpaTenggat'), deadlineISO });
     onClose();
   };
 
@@ -223,10 +246,42 @@ export function AddGoalModal({ open, onClose, onCreate }) {
                 <input value={current ? num(current).toLocaleString("id-ID") : ""} onChange={e => setCurrent(e.target.value)} placeholder="0" style={goalMoneyInput} />
               </div>
             </label>
-            <label style={{ gridColumn: "span 2" }}>
+            <div style={{ gridColumn: "span 2" }}>
               <span style={goalFieldLabel}>{tr('tabungan.tenggatOpsional')}</span>
-              <input value={deadline} onChange={e => setDeadline(e.target.value)} placeholder={tr('tabungan.tenggatPlaceholder')} style={goalInput} />
-            </label>
+              <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ position: "relative", flex: 1 }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowDeadlinePicker(v => !v)}
+                    style={{ ...goalInput, textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", color: deadlineLabel ? "var(--ink)" : "var(--muted)" }}
+                  >
+                    <span>{deadlineLabel || tr('tabungan.tenggatPlaceholder')}</span>
+                    <IconCalendar size={15} />
+                  </button>
+                  {showDeadlinePicker && (
+                    <DatePickerPopup
+                      valueISO={deadlineISO}
+                      onConfirm={(iso) => {
+                        setDeadlineISO(iso);
+                        setDeadlineLabel(isoToDeadlineLabel(iso));
+                        setShowDeadlinePicker(false);
+                      }}
+                      onClose={() => setShowDeadlinePicker(false)}
+                    />
+                  )}
+                </div>
+                {deadlineISO && (
+                  <button
+                    type="button"
+                    onClick={() => { setDeadlineISO(null); setDeadlineLabel(""); }}
+                    title={tr('tabungan.tanpaTenggat')}
+                    style={{ flex: "0 0 auto", padding: "0 14px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10, color: "var(--ink-2)", display: "grid", placeItems: "center", cursor: "pointer" }}
+                  >
+                    <IconClose size={13} />
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
 
           <div style={{ marginTop: 16 }}>

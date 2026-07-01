@@ -28,14 +28,15 @@ function isoToDeadline(iso) {
 
 function toAppGoal(row) {
   return {
-    id:        row.id,
-    label:     row.name,
-    icon:      row.icon    || 'star',
-    color:     row.color   || '#5C6B4C',
-    target:    Number(row.target)  || 0,
-    current:   Number(row.current) || 0,
-    deadline:  row.deadline_label || isoToDeadline(row.deadline),
-    is_locked: row.is_locked || false,
+    id:           row.id,
+    label:        row.name,
+    icon:         row.icon    || 'star',
+    color:        row.color   || '#5C6B4C',
+    target:       Number(row.target)  || 0,
+    current:      Number(row.current) || 0,
+    deadline:     row.deadline_label || isoToDeadline(row.deadline),
+    deadlineDate: row.deadline_date || null,
+    is_locked:    row.is_locked || false,
   };
 }
 
@@ -113,17 +114,17 @@ export function useSavings(userId, limits) {
       return { error };
     }
 
-    const newGoal = { ...toAppGoal(data), deadline: g.deadline || 'Tanpa tenggat' };
+    const newGoal = { ...toAppGoal(data), deadline: g.deadline || 'Tanpa tenggat', deadlineDate: g.deadlineISO || null };
     setGoals(prev => [...prev, newGoal]);
 
-    // ── Coba update deadline_label jika kolom ada (setelah migrations.sql) ──
+    // ── Coba update deadline_label & deadline_date jika kolomnya ada (setelah migrations.sql) ──
     supabase
       .from('savings')
-      .update({ deadline_label: g.deadline || 'Tanpa tenggat' })
+      .update({ deadline_label: g.deadline || 'Tanpa tenggat', deadline_date: g.deadlineISO || null })
       .eq('id', data.id)
       .then(({ error: ue }) => {
         if (ue && !ue.message?.includes('column')) {
-          console.warn('[useSavings] deadline_label update skipped:', ue.message);
+          console.warn('[useSavings] deadline_label/deadline_date update skipped:', ue.message);
         }
       });
 

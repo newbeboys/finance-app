@@ -1,6 +1,6 @@
 # FinanceApp — Dokumentasi Teknis & Konsep
 
-> **Dibuat:** 2026-06-28 | **Terakhir diperbarui:** 2026-07-01 | **Versi App:** 2.5.6  
+> **Dibuat:** 2026-06-28 | **Terakhir diperbarui:** 2026-07-01 (sesi 3 — deadline_date migration ✅, deadline date picker form ✅, goal sorting ✅) | **Versi App:** 2.5.6  
 > **Tujuan:** Referensi AI assistant lintas platform. Semua informasi diambil langsung dari kode — bukan asumsi atau template.
 
 ---
@@ -123,6 +123,7 @@ root/
 │   │   ├── OnboardingScreen.jsx   ← Onboarding setelah register/login pertama
 │   │   ├── ScanStruk.jsx          ← Kamera + OCR struk belanja
 │   │   ├── BottomNav.jsx          ← Navigasi bawah (mobile)
+│   │   ├── MonthYearPicker.jsx    ← Picker bulan/tahun modern (modal centered, grid 3×4, year nav)
 │   │   ├── RecurringTransactionForm.jsx ← Form tambah/edit transaksi berulang
 │   │   ├── DeleteCategoryModal.jsx
 │   │   ├── EditCategoryModal.jsx
@@ -144,7 +145,7 @@ root/
 │   ├── budgets-page.jsx           ← Halaman anggaran
 │   ├── savings-page.jsx           ← Halaman tabungan/goals
 │   ├── settings-page.jsx          ← Halaman pengaturan
-│   ├── wallets.jsx                ← WalletsPage + AddAccountModal
+│   ├── wallets.jsx                ← WalletsPage + AccountSwitcher + AccountTxSheet + WalletDeleteConfirmation + AddAccountModal
 │   ├── widgets.jsx                ← KpiCards, CashflowCard, InsightsCard, WeeklySummaryCard, dll
 │   ├── charts.jsx                 ← SpendingDonut component
 │   ├── category-field.jsx         ← CategoryField (pilih kategori di form transaksi)
@@ -171,6 +172,23 @@ root/
 ├── vite.config.js                 ← Konfigurasi build (minimal)
 └── package.json                   ← Dependencies + scripts
 ```
+
+#### MonthYearPicker — Reusable Component Filter Bulan/Tahun Modern
+
+- **File:** `src/components/MonthYearPicker.jsx`
+- **Deskripsi:** Modal centered dengan grid 3×4 bulan, year navigation (`‹ tahun ›`), dan tombol confirm "Pilih [Bulan] [Tahun]". Styling konsisten dengan design system FinanceApp (border-radius, padding, CSS variables).
+- **Props:**
+  - `isOpen` — apakah modal terbuka
+  - `onClose()` — callback saat modal ditutup (klik backdrop atau Escape)
+  - `onConfirm(month, year)` — callback saat user tekan tombol confirm; `month` = 0-indexed (Jan=0)
+  - `locale` — locale string untuk format nama bulan, default `'id-ID'`
+  - `initialMonth` / `initialYear` — opsional; bulan/tahun yang di-highlight saat pertama buka
+  - `availableMonthsByYear` — opsional; `{ [year]: [0,1,...] }` untuk disable bulan yang tidak punya data
+- **Internal scroll lock:** `useScrollLock(isOpen)` sudah ada di dalam component — pemanggil **tidak perlu** tambah `useScrollLock` sendiri
+- **Used in:** `CashflowCard` (beranda), `SpendingCard` (beranda), `TransactionsPage`, `AnalyticsPage`
+- **Status:** ✅ Selesai & tested di semua halaman
+
+---
 
 ### Data Flow
 
@@ -272,11 +290,12 @@ user_id         uuid        NOT NULL, FK → auth.users
 name            text        Nama goal (tampil di UI)
 target          numeric     Target nominal tabungan
 current         numeric     Saldo terkumpul saat ini (diupdate via depositToGoal)
-deadline        date        Tanggal target (nullable)
+deadline        date        Tanggal target (nullable, kolom lama — dipertahankan untuk kompatibilitas)
 deadline_label  text        Label tampilan "Jan 2026" atau "Tanpa tenggat"
 color           text        Warna tampilan (8 pilihan preset)
 icon            text        Ikon (star, emergency, travel, home, vehicle, education, gadget, gift, health, ring)
 is_locked       boolean     true saat Basic user melebihi limit
+deadline_date   date        Tanggal deadline dalam format ISO (YYYY-MM-DD); nullable — ditambah migration `20260701000000`, dipakai untuk sorting goals by deadline terdekat. Bekerja bersamaan dengan `deadline_label` (teks) untuk keperluan display & sorting; NULL untuk goal lama sampai diedit ulang
 created_at      timestamptz
 ```
 
@@ -399,6 +418,17 @@ Langsung → Splash 3 detik → Konten
 
 **Batas transaksi bulanan (Basic):** 75 transaksi per bulan kalender berdasarkan tanggal transaksi (bukan `created_at`).
 
+#### Halaman Transaksi Lengkap (TransactionsPage)
+
+- **Lokasi kode:** `src/transactions-page.jsx`
+- **Akses:** Menu "Transaksi" di BottomNav → halaman full dengan seluruh history transaksi
+- **Filter Bulan:** Tombol "Pilih Bulan" di area filter (sejajar dengan search, type filter, kategori filter, metode filter) → buka `MonthYearPicker`; default: bulan sekarang
+- **KPI Dinamis:** 3 kartu stat (Pemasukan | Pengeluaran | Selisih) yang otomatis update saat bulan berubah
+- **List Transaksi:** Hanya menampilkan transaksi bulan yang dipilih; dikelompokkan per tanggal lokal (YYYY-MM-DD)
+- **Empty State:** Jika bulan dipilih tapi kosong → "Belum ada transaksi di bulan ini"
+- **Filter lain tetap aktif:** Search, type filter, kategori, metode — semua AND logic bersama filter bulan
+- **Benefit performa:** Halaman tidak scroll panjang (max ~5–30 tx/bulan vs seluruh data historis sebelumnya)
+
 ---
 
 ### 4.3 Dompet (Wallets)
@@ -413,14 +443,30 @@ Langsung → Splash 3 detik → Konten
 - `adjustBalance` membaca saldo saat ini dari state React (yang sudah sinkron via realtime), menghitung `newBalance = current + delta`, lalu tulis ke Supabase
 - **Kelemahan yang diketahui:** Jika transaksi lama (sebelum fitur `wallet_id` ditambah) tidak punya `wallet_id`, saldo tidak terpengaruh oleh transaksi tersebut
 
-**Fungsi `txForAccount` (diperbarui — uncommitted per 1 Juli 2026):**
-Sebelumnya menggunakan heuristik `last4`/`method`/nama untuk mencocokkan transaksi ke dompet. Kini menggunakan `wallet_id` secara langsung:
+**Fungsi `txForAccount`:**
 ```javascript
-// Logika baru (lebih akurat):
 t.wallet_id === account.id ||
 (t.wallet_id == null && account.primary === true)
 // Transaksi tanpa wallet_id (transaksi lama) dianggap milik dompet utama
 ```
+
+#### Halaman Dompet — Fitur Hapus dengan Warning Cascade Delete
+
+- **Tombol Hapus:** Button "🗑️ Hapus Dompet" (warna terra/merah) di area heading halaman, bukan di setiap card
+- **Status Button:** Disabled (opacity 0.5, `cursor: not-allowed`) jika hanya ada 1 dompet — tidak boleh hapus dompet terakhir
+- **Dropdown:** Klik tombol → dropdown modal muncul dengan list semua dompet (icon, nama, saldo); klik backdrop → tutup
+- **Modal Konfirmasi (`WalletDeleteConfirmation`):** Saat user pilih dompet dari dropdown → bottom sheet terbuka dengan peringatan: `⚠️ [X transaksi] terhubung ke dompet ini akan hilang selamanya`
+- **Cascade Delete:** Tombol "Hapus Selamanya" → `onDelete(id)` dipanggil → database cascade delete transaksi via FK `wallet_id ON DELETE CASCADE`
+- **Safety:** Guard satu-satunya = `accounts.length > 1`; semua dompet (termasuk primary) bisa dihapus selama bukan satu-satunya
+- **State yang digunakan:** `deletingWallet` (object dompet yang sedang dikonfirmasi) + `deleteDropdownOpen` (boolean visibility dropdown)
+
+#### Fix: Kategori Custom di Detail Dompet (AccountTxSheet)
+
+- **Sebelumnya:** Daftar transaksi di bottom sheet detail dompet selalu lookup dari `ALL_CATEGORIES` saja → UUID kategori kustom tidak dikenali, tampil sebagai ID mentah
+- **Sekarang:** Prop `customCategories` diteruskan `app.jsx` → `WalletsPage` → `AccountTxSheet`
+- **Resolve:** Kategori di-resolve via `resolveCategory(t.category, customCategories)` dari `category-field.jsx`
+- **Label:** Ditampilkan via `categoryLabel(cat, tr)` — `tr` adalah alias rename dari `const { t: tr } = useTranslation()` agar tidak di-shadow oleh variable `t` (transaction object) di dalam `transactions.map()`
+- **Result:** Kategori custom sekarang tampil nama & warna yang benar, bukan UUID
 
 **Batas:** Basic = 1 dompet, Pro = tidak terbatas
 
@@ -483,10 +529,36 @@ Goals bersifat **MANUAL** — tidak ada koneksi otomatis ke transaksi:
 **Fitur:**
 - 10 pilihan ikon (star, emergency, travel, home, vehicle, education, gadget, gift, health, ring)
 - 8 pilihan warna preset
-- Deadline: teks bebas ("Jan 2026" atau "Tanpa tenggat")
+- Deadline: dipilih via date picker (`DatePickerPopup`, reuse dari `transactions.jsx`) — bukan lagi input teks bebas. Hasil pilihan disimpan sebagai label ringkas ("Jan 2026") di `deadline_label` ATAU ISO date di `deadline_date`. Tombol "Bersihkan" mengembalikan ke "Tanpa tenggat"
+- Sorting otomatis: goal dengan `deadlineDate` terdekat tampil paling atas, goal tanpa deadline (NULL) selalu di bawah. Sorting berjalan di client (`sortGoalsByDeadline` di `savings-page.jsx`), dihitung ulang tiap render, bukan query Supabase
 - Animasi perayaan (`GoalCompleteOverlay`) ketika goal mencapai 100% untuk pertama kali (hanya jika Sound/Animasi diaktifkan)
 
 **Batas:** Basic = 2 goals, Pro = tidak terbatas
+
+**Catatan:** Belum ada form Edit Goal (hanya Add/Delete/Deposit) — jadi goal lama yang dibuat sebelum migration `20260701000000` akan punya `deadline_date = NULL` selamanya sampai fitur edit goal dibuat.
+
+---
+
+### 4.6a Beranda (Dashboard) — CashflowCard & SpendingCard
+
+**Lokasi kode:** `src/widgets.jsx` (card components) + `src/app.jsx` (render di tab Beranda)
+
+#### CashflowCard — Arus Kas Pemasukan vs Pengeluaran
+
+- **Filter scope:** Toggle "1M / 6M / 1Y" → tampilkan 1 bulan terakhir / 6 bulan terakhir / 1 tahun terakhir
+- **Filter bulan spesifik:** Tombol "Pilih Bulan" → `MonthYearPicker` modal terbuka; setelah pilih, scope otomatis berubah ke "1 Bulan" dengan bulan terpilih
+- **Sebelumnya:** Bottom sheet custom dengan grid bulan & grouping by-year (scroll manual)
+- **Sekarang:** `MonthYearPicker` — konsisten dengan design halaman lain
+- **Grafik:** Bar chart pemasukan vs pengeluaran; daily mode (mode 1M, tiap hari) atau monthly mode (mode 6M/1Y, tiap bulan)
+
+#### SpendingCard — Rincian Pengeluaran Per Kategori
+
+- **Filter bulan:** Tombol "Pilih Bulan" → `MonthYearPicker` modal; default: bulan sekarang
+- **Sebelumnya:** Bottom sheet custom dengan list 24 bulan terakhir (scroll, grouped by-year)
+- **Sekarang:** `MonthYearPicker` — sama design dengan CashflowCard
+- **Donut Chart:** Komposisi pengeluaran per kategori untuk bulan terpilih
+- **Tabel:** Top-N kategori dengan nominal + persen + progress bar mini
+- **Data:** Di-filter berdasarkan `dateRaw` yang starts with prefix `YYYY-MM` bulan terpilih
 
 ---
 
@@ -495,7 +567,7 @@ Goals bersifat **MANUAL** — tidak ada koneksi otomatis ke transaksi:
 **Lokasi kode:** `src/analytics.jsx`
 
 **Komponen yang ada:**
-1. **Filter tanggal** — toggle "1 Tahun" (12 bulan terakhir) atau "1 Bulan" (pilih bulan spesifik via bottom sheet)
+1. **Filter tanggal** — toggle "1 Tahun" (12 bulan terakhir) atau "1 Bulan" (pilih bulan spesifik via `MonthYearPicker` — modal centered dengan grid 3×4 bulan dan navigasi tahun ‹/›)
 2. **Filter dompet** — dropdown "Semua Dompet" + dompet individual; **HANYA tampil jika user punya > 1 dompet**
 3. **Stat strip** — 4 kartu: total pemasukan, total pengeluaran, selisih bersih, rata-rata/bulan atau /hari
 4. **Bar chart** — pemasukan vs pengeluaran per hari (mode bulan) atau per bulan (mode tahun)
@@ -518,6 +590,15 @@ Goals bersifat **MANUAL** — tidak ada koneksi otomatis ke transaksi:
 
 **Edge case dompet dihapus:**
 - `useEffect` memantau `accounts` — jika dompet yang dipilih tidak ada lagi di daftar, filter otomatis fallback ke "Semua Dompet"
+
+#### Filter Bulan di Analitik
+
+- **Sebelumnya:** Bottom sheet custom (grid 4 kolom, by-year grouping, scroll manual) — berbeda design dengan halaman lain
+- **Sekarang:** `MonthYearPicker` modal modern — konsisten dengan CashflowCard, SpendingCard, TransactionsPage
+- **UI Button:** "1 Bulan ▾" di area filter scope (sejajar "1 Tahun" dan wallet filter dropdown)
+- **Behavior:** Klik → `MonthYearPicker` terbuka (`setSheetOpen(true)`); pilih → `setPickedMonth({ year, month })` + modal tutup; grafik/tabel update otomatis
+- **`useScrollLock`:** Dihapus dari `AnalyticsPage` — sudah dihandle di dalam `MonthYearPicker`
+- **`locale` variable:** `i18n.language === 'en' ? 'en-US' : 'id-ID'` — diteruskan ke MonthYearPicker untuk format nama bulan
 
 ---
 
@@ -782,13 +863,6 @@ Kolom sensitif seperti `plan`, `expires_at`, `revenuecat_app_user_id` **hanya bi
 
 ## 7. Hal yang Diketahui Belum Sempurna / TODO
 
-### 7.1 Kolom `wallet_id` Tidak Ada di Semua Transaksi Lama
-Kolom `wallet_id` ditambahkan via `migrations.sql` setelah banyak transaksi sudah dibuat. Transaksi lama (sebelum migrasi) memiliki `wallet_id = null`. Ini berarti:
-- Transaksi lama tidak akan muncul dalam filter dompet di halaman Analitik
-- Saldo dompet tidak memperhitungkan transaksi lama tersebut
-
-**Status:** Diketahui, belum ada mekanisme backfill.
-
 ### 7.2 Kolom `spent` dan `enabled` di Tabel `budgets` Tidak Dipakai
 Kolom ini ada di database tapi tidak digunakan oleh kode aplikasi. Potensi kebingungan bagi developer baru.
 
@@ -801,8 +875,14 @@ Jika user mengatur transaksi berulang di HP, data tersebut tidak tersedia di dev
 ### 7.5 Auto-lock Timeout Tidak Terbaca Nilainya
 Durasi timeout auto-lock di `useAutoLock.js` tidak terbaca saat audit — perlu verifikasi manual berapa menit timeout default-nya.
 
-### 7.6 Fungsi `txForAccount` di `wallets.jsx` Belum Di-commit
-Perubahan logika filter transaksi per dompet (dari heuristik → `wallet_id` langsung) sudah ada di working tree tapi **belum di-commit** per 1 Juli 2026. Perlu di-stage dan commit.
+### 7.6 ~~Fungsi `txForAccount` di `wallets.jsx` Belum Di-commit~~
+✅ Sudah di-commit pada 1 Juli 2026 (commit `daf4baf`).
+
+### 7.10 Perubahan Sesi 2 (1 Juli 2026) Belum Di-commit
+File yang diubah tapi belum di-commit ke git: `src/wallets.jsx`, `src/analytics.jsx`, `src/transactions-page.jsx`, `src/widgets.jsx`, `src/components/MonthYearPicker.jsx`, `src/app.jsx`. Perlu satu commit bersama sebelum build berikutnya.
+
+### 7.11 ~~Perubahan Sesi 3 (1 Juli 2026) Belum Di-commit~~
+✅ Migration `20260701000000_add_deadline_date_to_savings.sql` sudah di-commit, di-push (commit `c43c177`), dan dikonfirmasi sudah dieksekusi di Supabase SQL Editor. `src/savings-page.jsx` dan `src/hooks/useSavings.js` di-commit & di-push menyusul setelah pembaruan dokumentasi ini.
 
 ### 7.7 Playwright Ada tapi Tidak Jelas Dipakai
 `playwright` ada di `devDependencies` tapi tidak ada konfigurasi test atau file test yang ditemukan. Kemungkinan dipakai untuk testing manual atau belum diimplementasikan sepenuhnya.
@@ -810,8 +890,8 @@ Perubahan logika filter transaksi per dompet (dari heuristik → `wallet_id` lan
 ### 7.8 Label "Dompet" di Filter Analitik Memakai i18n tapi Key Baru
 Key `analitik.semuaDompet`, `analitik.belumAdaTransaksiDompet`, dan `analitik.dataTerlaluSedikit` baru ditambahkan. Perlu dipastikan tidak ada halaman lain yang butuh key serupa.
 
-### 7.9 Deadline Goal Tersimpan Sebagai Teks Bebas
-Field `deadline_label` di tabel `savings` menyimpan teks seperti "Jan 2026" atau "Tanpa tenggat" — bukan kolom `date`. Ini mempersulit sorting dan filtering berdasarkan deadline secara otomatis.
+### 7.9 ~~Deadline Goal Tersimpan Sebagai Teks Bebas~~
+✅ **SELESAI SEBAGIAN (1 Juli 2026)** — Kolom `deadline_date` (DATE, nullable) ditambah via migration `20260701000000_add_deadline_date_to_savings.sql`, sudah dieksekusi di Supabase (dikonfirmasi developer). Form Add Goal sekarang pakai date picker (bukan teks bebas), dan `SavingsPage` sort otomatis berdasarkan `deadlineDate` terdekat. **Sisa pekerjaan:** goal yang dibuat sebelum migration ini tetap `deadline_date = NULL` (turun ke bawah list) sampai ada fitur Edit Goal untuk mengisi ulang — fitur edit belum ada di codebase.
 
 ---
 
@@ -931,41 +1011,59 @@ Field `deadline_label` di tabel `savings` menyimpan teks seperti "Jan 2026" atau
 - ✅ **`EditCategoryModal.jsx` dimigrasi ke RPC** — kini menggunakan `supabase.rpc('update_category_edit_cooldown', ...)` bukan direct UPDATE
 - ✅ **`setPlanForTesting` dimigrasi ke RPC** — kini menggunakan `supabase.rpc('set_plan_for_testing', ...)` via migration `20260630000002`; guard DEV tetap dipertahankan sebagai lapis pertama
 
-**Pembaruan 1 Juli 2026:**
+**Pembaruan 1 Juli 2026 (sesi 1 — commit `daf4baf`):**
 - ✅ **Bug `txForAccount` di `wallets.jsx` diperbaiki** — fungsi ini sebelumnya menggunakan pencocokan teks heuristik (membandingkan `t.method`, `t.merchant`, `t.last4` dengan `account.name`/`account.institution`) untuk memfilter transaksi per-wallet. Logic ini adalah warisan dari sebelum kolom `wallet_id` ditambahkan. Akibatnya: saldo wallet terhitung benar (karena menggunakan `wallet_id`), tapi daftar transaksi di halaman detail Dompet selalu kosong. Diperbaiki: filter sekarang pakai `t.wallet_id === account.id` langsung — konsisten dengan cara saldo dihitung.
 - ✅ **`setPlanForTesting` kembali berfungsi di mode developer** — setelah policy UPDATE generik dihapus (migration `20260630000001`), toggle Basic/Pro di Settings tidak bisa berfungsi lagi karena masih pakai `.update()` langsung. Diperbaiki via RPC `set_plan_for_testing` (migration `20260630000002`) — double-guard tetap aktif: `import.meta.env.DEV` di level kode + `auth.uid()` check di level RPC.
 - ✅ **Privacy Policy direvisi** — tiga perubahan: (1) tambah RevenueCat sebagai third-party service yang memproses data subscription, (2) koreksi klaim lokasi server dari 'Indonesia region' menjadi 'South Asia (Mumbai, India)' sesuai Supabase project region `ap-south-1` yang terverifikasi, (3) update tanggal ke 30 Juni 2026.
 - ✅ **Terms of Service direvisi** — empat perubahan: (1) tambah RevenueCat di bagian data collection & sharing, (2) perbaiki klaim billing cycle dari 'billed monthly' menjadi sesuai periode yang dipilih user (monthly/6-month/annual), (3) perbaiki klaim hapus akun dari 'through App settings' (fitur belum ada) menjadi 'via email request ke support@finance-app.pro', (4) update tanggal ke 30 Juni 2026.
+- ✅ **Developer-mode toggle terkonfirmasi sudah dilindungi DEV guard** — audit kode `settings-page.jsx` membuktikan blok JSX "Mode developer" sudah dibungkus `{import.meta.env.DEV && (...)}` sejak sebelumnya; tidak ada perubahan diperlukan.
+- ✅ **Semua perubahan di-commit dan di-push ke GitHub** — commit `daf4baf` mencakup: `src/wallets.jsx`, `src/hooks/useSubscription.js`, `supabase/migrations/20260630000002_add_set_plan_testing_rpc.sql`, `FINANCEAPP_DOKUMENTASI_TEKNIS.md`. Branch `main` sudah sinkron dengan `origin/main`.
+
+**Pembaruan 1 Juli 2026 (sesi 2 — uncommitted):**
+- ✅ **`MonthYearPicker` — reusable component baru** — modal centered dengan grid 3×4 bulan, year navigation (‹/›), tombol confirm. Props: `isOpen`, `onClose`, `onConfirm(month, year)`, `locale`, `initialMonth/Year`, `availableMonthsByYear`. Internal `useScrollLock` — pemanggil tidak perlu tambah sendiri. Digunakan di 4 tempat: CashflowCard, SpendingCard, TransactionsPage, AnalyticsPage.
+- ✅ **CashflowCard & SpendingCard (beranda) — upgrade filter bulan** — bottom sheet custom lama diganti `MonthYearPicker`. Design & UX sekarang konsisten di semua halaman.
+- ✅ **TransactionsPage — filter bulan + KPI dinamis** — halaman Transaksi sekarang punya filter bulan via `MonthYearPicker`, 3 kartu KPI (Pemasukan/Pengeluaran/Selisih) yang update otomatis saat bulan berubah, dan list yang hanya menampilkan transaksi bulan terpilih (default: bulan sekarang). Performa lebih baik — tidak render seluruh histori.
+- ✅ **Fix kategori custom di `AccountTxSheet` (`wallets.jsx`)** — kategori di detail dompet sekarang di-resolve via `resolveCategory()` + `categoryLabel()` dari `category-field.jsx`. Prop `customCategories` diteruskan dari `app.jsx` → `WalletsPage` → `AccountTxSheet`. Fix juga variable shadowing: `const { t: tr } = useTranslation()` agar tidak di-shadow oleh `t` (transaction object) di dalam `transactions.map()`.
+- ✅ **Modal konfirmasi hapus dompet (`WalletDeleteConfirmation`)** — component baru (bottom sheet) dengan peringatan cascade delete; menampilkan nama dompet + jumlah transaksi yang akan hilang. Dipicu dari state `deletingWallet` di `WalletsPage`.
+- ✅ **UX hapus dompet diubah ke tombol + dropdown di heading** — tombol "🗑️ Hapus Dompet" (terra/merah) di heading halaman; klik → dropdown list semua dompet; pilih → `WalletDeleteConfirmation` terbuka. Button X per-card dihapus. Guard: `accounts.length > 1` (semua dompet bisa dihapus, termasuk primary).
+- ✅ **Filter bulan Analitik diganti `MonthYearPicker`** — bottom sheet custom dihapus dari `analytics.jsx`, diganti `MonthYearPicker`. `useScrollLock(sheetOpen)` dihapus dari `AnalyticsPage`. `locale` variable ditambah.
+
+**Pembaruan 1 Juli 2026 (sesi 3 — deadline date picker & sorting goal):**
+- ✅ **Migration `deadline_date` di tabel `savings`** — `supabase/migrations/20260701000000_add_deadline_date_to_savings.sql` menambah kolom `deadline_date DATE NULL`. Di-commit & di-push (commit `c43c177`), dan **sudah dieksekusi di Supabase SQL Editor** (dikonfirmasi oleh developer) — kolom live di database.
+- ✅ **`AddGoalModal` — deadline diganti date picker** — input teks bebas untuk deadline diganti `DatePickerPopup` (reuse dari `transactions.jsx`) + tombol "Bersihkan". Pilihan tanggal dikonversi ke label ringkas ("Jan 2026") via helper `isoToDeadlineLabel` (parsing tanggal lokal, bukan `toISOString`, supaya tidak ada pergeseran WIB).
+- ✅ **`useSavings.js` — `createGoal` & `toAppGoal` bawa `deadline_date`** — `createGoal` sekarang menulis kolom `deadline_date` (selain `deadline_label` yang sudah ada); `toAppGoal` mengekspos `deadlineDate` dari row Supabase.
+- ✅ **`SavingsPage` — sorting goal berdasarkan deadline terdekat** — helper `sortGoalsByDeadline` di `savings-page.jsx`: goal dengan `deadlineDate` terdekat di atas, goal tanpa deadline (NULL) di bawah, dibandingkan sebagai string ISO (bukan `Date` subtraction) untuk hindari isu timezone.
+- ✅ **Verifikasi:** `vite build` lulus tanpa error. Pengujian interaktif manual di browser (klik date picker, konfirmasi sorting real-time) belum eksplisit dikonfirmasi dalam sesi ini — disarankan smoke test cepat sebelum dianggap production-ready.
+- ⏳ **Belum ada form Edit Goal** — jadi goal yang sudah ada sebelum migration ini tetap `deadline_date = NULL` sampai fitur edit goal dibuat; scope sesi ini hanya Add Goal.
+- ✅ **Commit & push:** `src/savings-page.jsx` dan `src/hooks/useSavings.js` di-commit & di-push menyusul setelah pembaruan dokumentasi ini.
 
 ### Yang SEDANG/BELUM Selesai ⏳
 
 **Launch Blocker — WAJIB selesai sebelum Production:**
 
-1. **Developer-mode toggle "Set ke Basic/Pro (testing)" di Settings masih ada** — harus dihapus total sebelum build production. (Risiko sedikit berkurang karena `setPlanForTesting` kini double-guarded via DEV env + RPC, tapi UI toggle sebaiknya tidak ada di production APK sama sekali)
+1. **In-app account deletion belum ada client-side trigger** — Data Safety form sudah mendeklarasikan "in-app delete" tapi belum ada Supabase Edge Function untuk eksekusinya (regular user tidak bisa hapus langsung dari `auth.users`). Cascade delete sudah benar di level database. Ini WAJIB ada sejak Google mewajibkan in-app account deletion Des 2023.
 
-2. **In-app account deletion belum ada client-side trigger** — Data Safety form sudah mendeklarasikan "in-app delete" tapi belum ada Supabase Edge Function untuk eksekusinya (regular user tidak bisa hapus langsung dari `auth.users`). Cascade delete sudah benar di level database. Ini WAJIB ada sejak Google mewajibkan in-app account deletion Des 2023.
+2. ~~**Perubahan `wallets.jsx` (`txForAccount`) belum di-commit**~~ — ✅ **SELESAI (1 Juli 2026)** — Di-commit bersama `useSubscription.js`, migration `20260630000002`, dan `FINANCEAPP_DOKUMENTASI_TEKNIS.md` dalam commit `daf4baf`, sudah di-push ke `origin/main`.
 
-3. **Perubahan `wallets.jsx` (`txForAccount`) belum di-commit** — working tree memiliki perubahan penting (filter transaksi per dompet pakai `wallet_id` langsung, bukan heuristik), tapi belum di-stage/commit.
-
-4. ~~**Migration SQL `20260630000002` belum dijalankan di Supabase**~~ — ✅ **SELESAI (1 Juli 2026)** — Migration sudah dieksekusi via Supabase SQL Editor. RPC `set_plan_for_testing` sudah aktif di database dan terbukti berfungsi: toggle Basic/Pro di mode developer bisa dipakai kembali setelah policy UPDATE generik dihapus.
+3. ~~**Migration SQL `20260630000002` belum dijalankan di Supabase**~~ — ✅ **SELESAI (1 Juli 2026)** — Migration sudah dieksekusi via Supabase SQL Editor. RPC `set_plan_for_testing` sudah aktif di database dan terbukti berfungsi: toggle Basic/Pro di mode developer bisa dipakai kembali setelah policy UPDATE generik dihapus.
 
 **Closed Testing & Production Access:**
 
-5. **Closed Testing 14 hari dengan minimal 12 tester aktif BELUM DIMULAI** — ini WAJIB karena akun developer dibuat setelah Nov 2023. Jam mulai countdown 14 hari baru berjalan setelah Closed Testing track aktif dengan jumlah tester terpenuhi secara berkelanjutan.
+4. **Closed Testing 14 hari dengan minimal 12 tester aktif BELUM DIMULAI** — ini WAJIB karena akun developer dibuat setelah Nov 2023. Jam mulai countdown 14 hari baru berjalan setelah Closed Testing track aktif dengan jumlah tester terpenuhi secara berkelanjutan.
 
-6. **Menu "Monetisasi dengan Google Play" di Play Console belum dikonfirmasi terbuka** — perlu dicek ulang apakah sudah unlock setelah ada AAB di Internal Testing.
+5. **Menu "Monetisasi dengan Google Play" di Play Console belum dikonfirmasi terbuka** — perlu dicek ulang apakah sudah unlock setelah ada AAB di Internal Testing.
 
-7. **Production Access belum bisa diajukan** — bergantung pada selesainya Closed Testing 14 hari di atas.
+6. **Production Access belum bisa diajukan** — bergantung pada selesainya Closed Testing 14 hari di atas.
 
 **Pre-Production Checklist (warning, bukan error — aman untuk testing track):**
 
-8. **`minifyEnabled` masih `false`** — sebelum production pertimbangkan diaktifkan + setup ProGuard rules dengan testing menyeluruh, lalu upload mapping/deobfuscation file ke Play Console.
+7. **`minifyEnabled` masih `false`** — sebelum production pertimbangkan diaktifkan + setup ProGuard rules dengan testing menyeluruh, lalu upload mapping/deobfuscation file ke Play Console.
 
-9. **Native debug symbols belum diupload** — diperlukan sebelum Production track untuk debugging native crash report.
+8. **Native debug symbols belum diupload** — diperlukan sebelum Production track untuk debugging native crash report.
 
 **Setup Monetisasi (bergantung pada Production Access):**
 
-10. ~~**Subscription products belum dibuat di Play Console**~~ — ✅ **SELESAI (29–30 Juni 2026)** — Produk `pro_subscription` sudah dibuat di Play Console dengan 3 base plan aktif:
+9. ~~**Subscription products belum dibuat di Play Console**~~ — ✅ **SELESAI (29–30 Juni 2026)** — Produk `pro_subscription` sudah dibuat di Play Console dengan 3 base plan aktif:
     - `monthly` — Rp 30.000/bulan (perpanjangan otomatis)
     - `semi-annual` — Rp 140.000/6 bulan (perpanjangan otomatis)
     - `annual` — Rp 270.000/tahun (perpanjangan otomatis)
@@ -978,7 +1076,7 @@ Field `deadline_label` di tabel `savings` menyimpan teks seperti "Jan 2026" atau
 
     *Catatan: ada base plan `semiannual` (tanpa tanda hubung) yang dibuat tidak sengaja saat setup, sudah dinonaktifkan permanen — tidak mempengaruhi fungsi billing.*
 
-11. **Sample data untuk akun reviewer `reviewfinance32@gmail.com` belum diisi** — perlu diisi 10-15 transaksi, 4+ kategori custom, 2+ dompet, 3 savings goals, beberapa budget, 1 recurring transaction, supaya app tidak tampak kosong saat di-review tim Google.
+10. **Sample data untuk akun reviewer `reviewfinance32@gmail.com` belum diisi** — perlu diisi 10-15 transaksi, 4+ kategori custom, 2+ dompet, 3 savings goals, beberapa budget, 1 recurring transaction, supaya app tidak tampak kosong saat di-review tim Google.
 
 ---
 
