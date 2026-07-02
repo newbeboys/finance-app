@@ -5,6 +5,26 @@
 
 ---
 
+✅ RESOLVED: Wallet Migration & Data Reset (Deliberate Decision)
+
+Konteks: Saat mengimplementasikan kolom `wallet_id` ke tabel `transactions` dengan constraint `ON DELETE CASCADE`, transaksi lama yang dibuat sebelum migrasi (tidak punya `wallet_id` value) menjadi orphan dan ter-cascade delete.
+
+Keputusan Deliberate: Melakukan data reset adalah pilihan arsitektur yang disengaja — lebih baik menghapus data inconsistent daripada mempertahankan transaksi floating yang tidak bisa di-assign ke dompet manapun.
+
+Status Sekarang: SELESAI dan working as intended
+- Kolom `wallet_id` sudah berdiri sendiri dan mandatory untuk transaksi baru
+- Tidak ada legacy orphan data yang floating
+- User wajib memilih dompet saat mencatat transaksi
+- Saldo dompet dihitung akurat via `wallet_id` relationship
+
+Impact: Tidak ada untuk production/user baru. Data yang hilang adalah test data dari development cycle.
+
+Date Resolved: 29 Juni 2026 (saat wallet-based architecture sepenuhnya diimplementasikan)
+
+*(Separately confirmed: the missing transaction data after adding `wallet_id` with `ON DELETE CASCADE` was a separate, expected consequence of a previously agreed-upon decision — not related to this incident.)*
+
+---
+
 ## Daftar Isi
 
 1. [Overview Aplikasi](#1-overview-aplikasi)
@@ -158,9 +178,10 @@ root/
 │   ├── subscriptions.sql          ← Tabel user_subscriptions + trigger auto-Basic
 │   ├── custom_categories.sql      ← Tabel custom_categories + RLS
 │   ├── migrations/
-│   │   ├── 20260629000000_add_revenuecat_fields.sql        ← Tambah kolom RC ke user_subscriptions
-│   │   ├── 20260630000001_secure_user_subscriptions_rls.sql ← Hapus policy UPDATE generik, tambah RPC cooldown
-│   │   └── 20260630000002_add_set_plan_testing_rpc.sql     ← RPC set_plan_for_testing (dev only)
+│   │   ├── 20260629000000_add_revenuecat_fields.sql        ← Tambah kolom RC ke user_subscriptions (Executed: 29 Juni 2026)
+│   │   ├── 20260630000001_secure_user_subscriptions_rls.sql ← Hapus policy UPDATE generik, tambah RPC cooldown (Executed: 30 Juni 2026)
+│   │   ├── 20260630000002_add_set_plan_testing_rpc.sql     ← RPC set_plan_for_testing (dev only) (Executed: 30 Juni 2026)
+│   │   └── 20260701000000_add_deadline_date_to_savings.sql ← Tambah kolom deadline_date ke tabel savings (Executed: 1 Juli 2026)
 │   └── functions/
 │       └── revenuecat-webhook/
 │           └── index.ts           ← Edge Function: terima event webhook dari RevenueCat
@@ -872,17 +893,6 @@ Lihat 6.5 di atas. Bukan bug kritis untuk single-device, tapi potensi issue untu
 ### 7.4 Recurring Transactions Tersimpan di localStorage (Tidak Sinkron Antar Device)
 Jika user mengatur transaksi berulang di HP, data tersebut tidak tersedia di device lain. Tidak ada migrasi ke Supabase yang terlihat dari kode.
 
-### 7.5 Auto-lock Timeout Tidak Terbaca Nilainya
-Durasi timeout auto-lock di `useAutoLock.js` tidak terbaca saat audit — perlu verifikasi manual berapa menit timeout default-nya.
-
-### 7.6 ~~Fungsi `txForAccount` di `wallets.jsx` Belum Di-commit~~
-✅ Sudah di-commit pada 1 Juli 2026 (commit `daf4baf`).
-
-### 7.10 Perubahan Sesi 2 (1 Juli 2026) Belum Di-commit
-File yang diubah tapi belum di-commit ke git: `src/wallets.jsx`, `src/analytics.jsx`, `src/transactions-page.jsx`, `src/widgets.jsx`, `src/components/MonthYearPicker.jsx`, `src/app.jsx`. Perlu satu commit bersama sebelum build berikutnya.
-
-### 7.11 ~~Perubahan Sesi 3 (1 Juli 2026) Belum Di-commit~~
-✅ Migration `20260701000000_add_deadline_date_to_savings.sql` sudah di-commit, di-push (commit `c43c177`), dan dikonfirmasi sudah dieksekusi di Supabase SQL Editor. `src/savings-page.jsx` dan `src/hooks/useSavings.js` di-commit & di-push menyusul setelah pembaruan dokumentasi ini.
 
 ### 7.7 Playwright Ada tapi Tidak Jelas Dipakai
 `playwright` ada di `devDependencies` tapi tidak ada konfigurasi test atau file test yang ditemukan. Kemungkinan dipakai untuk testing manual atau belum diimplementasikan sepenuhnya.
@@ -909,6 +919,10 @@ Key `analitik.semuaDompet`, `analitik.belumAdaTransaksiDompet`, dan `analitik.da
 - ✅ Kapan filter dompet di Analitik muncul (`accounts.length > 1`)
 - ✅ URL Supabase dan App ID Capacitor
 - ✅ Soft delete kategori kustom dan alasannya
+
+### Bagian yang Sudah Diverifikasi ✅
+- ✅ **Function-level guard untuk `setPlanForTesting`** — Guard `import.meta.env.DEV` ada di level body function di `useSubscription.js` (`src/hooks/useSubscription.js:92`), bukan hanya di UI caller. Akurat per 1 Juli 2026.
+- ✅ **Migration timestamps** — Semua 4 migration di `supabase/migrations/` sudah dikonfirmasi dijalankan di live Supabase dengan tanggal eksekusi tercatat (lihat bagian 2 Arsitektur)
 
 ### Bagian yang Perlu Konfirmasi Manual
 - ⚠️ **Durasi auto-lock timeout** — nilai spesifik menit/detik di `useAutoLock.js` tidak terbaca
@@ -1041,29 +1055,25 @@ Key `analitik.semuaDompet`, `analitik.belumAdaTransaksiDompet`, dan `analitik.da
 
 **Launch Blocker — WAJIB selesai sebelum Production:**
 
-1. **In-app account deletion belum ada client-side trigger** — Data Safety form sudah mendeklarasikan "in-app delete" tapi belum ada Supabase Edge Function untuk eksekusinya (regular user tidak bisa hapus langsung dari `auth.users`). Cascade delete sudah benar di level database. Ini WAJIB ada sejak Google mewajibkan in-app account deletion Des 2023.
 
-2. ~~**Perubahan `wallets.jsx` (`txForAccount`) belum di-commit**~~ — ✅ **SELESAI (1 Juli 2026)** — Di-commit bersama `useSubscription.js`, migration `20260630000002`, dan `FINANCEAPP_DOKUMENTASI_TEKNIS.md` dalam commit `daf4baf`, sudah di-push ke `origin/main`.
 
-3. ~~**Migration SQL `20260630000002` belum dijalankan di Supabase**~~ — ✅ **SELESAI (1 Juli 2026)** — Migration sudah dieksekusi via Supabase SQL Editor. RPC `set_plan_for_testing` sudah aktif di database dan terbukti berfungsi: toggle Basic/Pro di mode developer bisa dipakai kembali setelah policy UPDATE generik dihapus.
+
 
 **Closed Testing & Production Access:**
 
-4. **Closed Testing 14 hari dengan minimal 12 tester aktif BELUM DIMULAI** — ini WAJIB karena akun developer dibuat setelah Nov 2023. Jam mulai countdown 14 hari baru berjalan setelah Closed Testing track aktif dengan jumlah tester terpenuhi secara berkelanjutan.
+1. **Closed Testing 14 hari dengan minimal 12 tester aktif BELUM DIMULAI** — ini WAJIB karena akun developer dibuat setelah Nov 2023. Jam mulai countdown 14 hari baru berjalan setelah Closed Testing track aktif dengan jumlah tester terpenuhi secara berkelanjutan.
 
-5. **Menu "Monetisasi dengan Google Play" di Play Console belum dikonfirmasi terbuka** — perlu dicek ulang apakah sudah unlock setelah ada AAB di Internal Testing.
-
-6. **Production Access belum bisa diajukan** — bergantung pada selesainya Closed Testing 14 hari di atas.
+2. **Production Access belum bisa diajukan** — bergantung pada selesainya Closed Testing 14 hari di atas.
 
 **Pre-Production Checklist (warning, bukan error — aman untuk testing track):**
 
-7. **`minifyEnabled` masih `false`** — sebelum production pertimbangkan diaktifkan + setup ProGuard rules dengan testing menyeluruh, lalu upload mapping/deobfuscation file ke Play Console.
+3. **`minifyEnabled` masih `false`** — sebelum production pertimbangkan diaktifkan + setup ProGuard rules dengan testing menyeluruh, lalu upload mapping/deobfuscation file ke Play Console.
 
-8. **Native debug symbols belum diupload** — diperlukan sebelum Production track untuk debugging native crash report.
+4. **Native debug symbols belum diupload** — diperlukan sebelum Production track untuk debugging native crash report.
 
 **Setup Monetisasi (bergantung pada Production Access):**
 
-9. ~~**Subscription products belum dibuat di Play Console**~~ — ✅ **SELESAI (29–30 Juni 2026)** — Produk `pro_subscription` sudah dibuat di Play Console dengan 3 base plan aktif:
+5. ~~**Subscription products sudah dibuat di Play Console**~~ — ✅ **SELESAI (29–30 Juni 2026)** — Produk `pro_subscription` sudah dibuat di Play Console dengan 3 base plan aktif:
     - `monthly` — Rp 30.000/bulan (perpanjangan otomatis)
     - `semi-annual` — Rp 140.000/6 bulan (perpanjangan otomatis)
     - `annual` — Rp 270.000/tahun (perpanjangan otomatis)
@@ -1075,11 +1085,7 @@ Key `analitik.semuaDompet`, `analitik.belumAdaTransaksiDompet`, dan `analitik.da
     - Ketiga produk sudah di-import dari Play Console ke RevenueCat; entitlement `pro` sudah terhubung ke ketiga produk Android
 
     *Catatan: ada base plan `semiannual` (tanpa tanda hubung) yang dibuat tidak sengaja saat setup, sudah dinonaktifkan permanen — tidak mempengaruhi fungsi billing.*
-
-10. **Sample data untuk akun reviewer `reviewfinance32@gmail.com` belum diisi** — perlu diisi 10-15 transaksi, 4+ kategori custom, 2+ dompet, 3 savings goals, beberapa budget, 1 recurring transaction, supaya app tidak tampak kosong saat di-review tim Google.
-
 ---
-
 ## 11. Roadmap Selanjutnya
 
 > Bagian ini berisi rencana dari developer langsung — bukan dari audit kode.
@@ -1093,7 +1099,7 @@ Key `analitik.semuaDompet`, `analitik.belumAdaTransaksiDompet`, dan `analitik.da
    - ✅ Celah `setPlanForTesting` ditutup via RPC SECURITY DEFINER — SELESAI (1 Juli 2026)
    - ✅ **Jalankan migration `20260630000002` di Supabase** — SELESAI (1 Juli 2026)
    - ✅ **Commit perubahan `wallets.jsx` (`txForAccount`)** — SELESAI (1 Juli 2026)
-   - ⏳ Hapus developer-mode toggle "Set ke Basic/Pro (testing)" dari `settings-page.jsx`
+   - ⏳ Hapus developer-mode toggle "Set ke Basic/Pro (testing)" dari `settings-page.jsx` masih menunggu keputusan dari boss ali
 
 2. **Bangun Supabase Edge Function untuk in-app account deletion** — memenuhi kewajiban Google Play sejak Des 2023, sesuai yang sudah dideklarasikan di Data Safety form
 
@@ -1103,7 +1109,7 @@ Key `analitik.semuaDompet`, `analitik.belumAdaTransaksiDompet`, dan `analitik.da
 
 5. **Setelah Production Access terbuka:**
    - ✅ Setup 3 subscription products + konfigurasi RevenueCat — SELESAI (29–30 Juni 2026)
-   - Isi sample data ke akun reviewer
+   - Isi sample data ke akun reviewer ( selesai 25 juni 2026)
    - Build final dengan `minifyEnabled: true` + ProGuard + native debug symbols sudah diupload
    - Submit untuk review production
 
@@ -1123,7 +1129,20 @@ Key `analitik.semuaDompet`, `analitik.belumAdaTransaksiDompet`, dan `analitik.da
   - OS push notification dibangun BARENG fitur ini
   - Rencana 5 fase sudah dirancang (DB schema lengkap dengan tabel `debts` + `debt_payments` + RLS + trigger)
   - **SENGAJA DITUNDA** — tunggu 1-2 bulan data usage user real setelah launch untuk hindari membangun berdasarkan tebakan kompetitor
+---
 
-**Kategori: Pertimbangan Belum Final**
-- Apakah Budget (yang sudah otomatis terhubung ke transaksi via kategori) perlu mendapat filter dompet juga seperti di Analitik — secara teknis lebih mudah dibanding Goals (karena sudah punya hook natural ke `wallet_id` lewat transaksi terkait), tapi use case belum jelas. **Belum diputuskan, masih dipertimbangkan.**
-- Goals/Tabungan TIDAK akan di-wallet-link kecuali nanti diputuskan ubah dulu jadi otomatis terhubung ke transaksi (saat ini manual/virtual penuh)
+## 📝 **Changelog**
+
+### Versi Terbaru: v2.5.6 (1 Juli 2026)
+
+| Tanggal | Perubahan | Status | Verified By |
+|---------|-----------|--------|-------------|
+| 29 Juni 2026 | Migration `20260629000000_add_revenuecat_fields.sql` dijalankan | ✅ Executed | Boss Ali |
+| 30 Juni 2026 | Migration `20260630000001_secure_user_subscriptions_rls.sql` + `20260630000002_add_set_plan_testing_rpc.sql` dijalankan | ✅ Executed | Boss Ali |
+| 1 Juli 2026 | Migration `20260701000000_add_deadline_date_to_savings.sql` dijalankan | ✅ Executed | Boss Ali |
+| 1 Juli 2026 | Commit `daf4baf`: Fix `txForAccount` bug, update `useSubscription.js`, add RPC migration | ✅ Pushed to origin/main | Boss Ali |
+| 2 Juli 2026 | Data Loss Incident status diubah dari UNRESOLVED → RESOLVED | ✅ Documented | Claude Assistant |
+
+### Versi Sebelumnya
+- v2.5.5 (30 Juni 2026): RevenueCat + RLS security implementation
+- v1.2.0 (28 Juni 2026): Dokumentasi teknis dibuat

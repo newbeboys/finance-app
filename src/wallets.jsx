@@ -4,6 +4,7 @@ import { ACCOUNT_TYPES, ALL_CATEGORIES, fmtShort, fmt, formatNominal, nominalFon
 import { IconBudget, IconPlus, IconChev, IconClose, CatIcon } from './icons';
 import { useScrollLock } from './hooks/useScrollLock';
 import { LockBadge } from './components/PaywallModal';
+import { resolveCategory, categoryLabel } from './category-field';
 
 const WALLET_GLYPH = {
   bank:       <><rect x="3" y="6" width="18" height="13" rx="2" /><path d="M3 10h18" /><path d="M7 15h4" /></>,
@@ -118,9 +119,11 @@ function txForAccount(account, transactions) {
   );
 }
 
-export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transactions = [], addLocked = false }) {
+export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transactions = [], addLocked = false, customCategories = [] }) {
   const { t } = useTranslation();
   const [txSheet, setTxSheet] = React.useState(null);
+  const [deletingWallet, setDeletingWallet] = React.useState(null);
+  const [deleteDropdownOpen, setDeleteDropdownOpen] = React.useState(false);
   const total = accounts.reduce((s, a) => s + a.balance, 0);
   const byType = ACCOUNT_TYPES.map(t => ({
     ...t, sum: accounts.filter(a => a.type === t.id).reduce((s, a) => s + a.balance, 0),
@@ -130,7 +133,7 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
   return (
     <>
     <div className="page-wrap" style={{ padding: "16px 32px 48px", maxWidth: 1180, margin: "0 auto" }}>
-      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 22 }}>
+      <div style={{ position: "relative", display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 22 }}>
         <div>
           <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>
             {t('dompet.eyebrow', { count: accounts.length })}
@@ -142,10 +145,41 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
             {t('dompet.deskripsi')}
           </div>
         </div>
-        <button onClick={onAdd} style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, opacity: addLocked ? 0.6 : 1, cursor: addLocked ? "not-allowed" : "pointer" }}>
-          <IconPlus size={15} /> {t('dompet.tambahdompet')}
-          {addLocked && <LockBadge />}
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => accounts.length > 1 && setDeleteDropdownOpen(o => !o)}
+            title={t('dompet.hapusDompet', { defaultValue: 'Hapus Dompet' })}
+            style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--terra)", color: "#fff", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, opacity: accounts.length < 2 ? 0.5 : 1, cursor: accounts.length < 2 ? "not-allowed" : "pointer" }}>
+            🗑️ {t('dompet.hapusDompet', { defaultValue: 'Hapus Dompet' })}
+          </button>
+          <button onClick={onAdd} style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, opacity: addLocked ? 0.6 : 1, cursor: addLocked ? "not-allowed" : "pointer" }}>
+            <IconPlus size={15} /> {t('dompet.tambahdompet')}
+            {addLocked && <LockBadge />}
+          </button>
+        </div>
+
+        {deleteDropdownOpen && accounts.length > 1 && (
+          <>
+            <div onClick={() => setDeleteDropdownOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(42,44,32,.45)", zIndex: 150 }} />
+            <div className="card rise" style={{ position: "absolute", top: "100%", right: 0, width: 320, zIndex: 200, padding: 12, marginTop: 8 }}>
+              <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)", paddingBottom: 10, borderBottom: "1px solid var(--line-soft)", marginBottom: 10 }}>
+                Pilih Dompet untuk Dihapus
+              </div>
+              {accounts.map(a => (
+                <button key={a.id}
+                  onClick={() => { setDeletingWallet(a); setDeleteDropdownOpen(false); }}
+                  style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "10px", marginBottom: 6, borderRadius: 10, border: 0, background: "var(--paper)", color: "var(--ink)", fontSize: 13, cursor: "pointer", textAlign: "left" }}>
+                  <span style={{ width: 32, height: 32, borderRadius: 8, background: `color-mix(in oklch, ${a.color} 18%, var(--ivory))`, color: a.color, display: "grid", placeItems: "center", flexShrink: 0 }}>
+                    <WalletGlyph type={a.type} size={14} />
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 500 }}>{a.name}</div>
+                    <div style={{ fontSize: 11, color: "var(--muted)" }}>{fmtShort(a.balance)}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       <div className="card rise" style={{ padding: 24, marginBottom: 20, display: "flex", alignItems: "center", gap: 28, flexWrap: "wrap" }}>
@@ -196,14 +230,6 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
             </div>
             <div className="hairline" style={{ display: "flex" }}>
               <button onClick={() => setTxSheet(a)} style={{ ...cardFootBtn, flex: 1 }}>{t('dompet.transaksi')}</button>
-              {!a.primary && accounts.length > 1 && (
-                <div className="wallet-card-delete-wrap" style={{ display: "flex", flexShrink: 0 }}>
-                  <div style={{ width: 1, background: "var(--line-soft)" }} />
-                  <button onClick={() => onDelete(a.id)} style={{ ...cardFootBtn, color: "var(--terra)", flex: "none", width: 46 }} title="Hapus dompet">
-                    <IconClose size={14} />
-                  </button>
-                </div>
-              )}
             </div>
           </div>
         ))}
@@ -224,15 +250,27 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
       <AccountTxSheet
         account={txSheet}
         transactions={txForAccount(txSheet, transactions)}
+        customCategories={customCategories}
         onClose={() => setTxSheet(null)}
+      />
+    )}
+    {deletingWallet && (
+      <WalletDeleteConfirmation
+        wallet={deletingWallet}
+        transactionCount={txForAccount(deletingWallet, transactions).length}
+        onConfirm={() => {
+          onDelete(deletingWallet.id);
+          setDeletingWallet(null);
+        }}
+        onCancel={() => setDeletingWallet(null)}
       />
     )}
     </>
   );
 }
 
-function AccountTxSheet({ account, transactions, onClose }) {
-  const { t } = useTranslation();
+function AccountTxSheet({ account, transactions, customCategories = [], onClose }) {
+  const { t: tr } = useTranslation();
   useScrollLock(true);
   return (
     <>
@@ -241,8 +279,8 @@ function AccountTxSheet({ account, transactions, onClose }) {
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 18px 14px", borderBottom: "1px solid var(--line-soft)", position: "sticky", top: 0, background: "var(--ivory)", zIndex: 1 }}>
           <div>
-            <div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{t('dompet.riwayat')}</div>
-            <div className="serif" style={{ fontSize: 20, letterSpacing: "-0.01em", marginTop: 2 }}>{t('dompet.transaksidompet', { nama: account.name })}</div>
+            <div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{tr('dompet.riwayat')}</div>
+            <div className="serif" style={{ fontSize: 20, letterSpacing: "-0.01em", marginTop: 2 }}>{tr('dompet.transaksidompet', { nama: account.name })}</div>
           </div>
           <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: 10, border: "1px solid var(--line-soft)", background: "var(--paper)", display: "grid", placeItems: "center", color: "var(--ink-2)", flexShrink: 0 }}>
             <IconClose size={14} />
@@ -253,11 +291,11 @@ function AccountTxSheet({ account, transactions, onClose }) {
         <div style={{ padding: "8px 16px" }}>
           {transactions.length === 0 ? (
             <div style={{ padding: "40px 0", textAlign: "center", color: "var(--muted)", fontSize: 14 }}>
-              {t('dompet.belumAdaTransaksi')}
+              {tr('dompet.belumAdaTransaksi')}
             </div>
           ) : (
             transactions.map((t, i) => {
-              const cat = ALL_CATEGORIES.find(c => c.id === t.category);
+              const cat = resolveCategory(t.category, customCategories);
               const isIncome = t.amount > 0;
               const color = cat?.color || (isIncome ? "var(--sage)" : "var(--muted-2)");
               return (
@@ -267,7 +305,7 @@ function AccountTxSheet({ account, transactions, onClose }) {
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13.5, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.merchant}</div>
-                    <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 1 }}>{cat?.label || t.category} · {t.date} {t.time}</div>
+                    <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 1 }}>{categoryLabel(cat, tr)} · {t.date} {t.time}</div>
                   </div>
                   <div className="tnum" style={{ fontSize: 14, fontWeight: 600, color: isIncome ? "var(--sage)" : "var(--ink)", flexShrink: 0 }}>
                     {isIncome ? "+" : "−"}{fmt(Math.abs(t.amount))}
@@ -276,6 +314,46 @@ function AccountTxSheet({ account, transactions, onClose }) {
               );
             })
           )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function WalletDeleteConfirmation({ wallet, transactionCount, onConfirm, onCancel }) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <div onClick={onCancel}
+        style={{ position: "fixed", inset: 0, background: "rgba(42,44,32,.45)", zIndex: 150, animation: "rise .2s ease-out" }} />
+      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "var(--ivory)", borderRadius: "16px 16px 0 0", padding: "24px 20px 40px", zIndex: 200, boxShadow: "0 -8px 32px -8px rgba(42,44,32,.2)", animation: "rise .25s ease-out" }}>
+        <div style={{ width: 36, height: 4, borderRadius: 99, background: "var(--line)", margin: "-12px auto 20px" }} />
+
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+          <span style={{ width: 40, height: 40, borderRadius: 10, background: "color-mix(in oklch, var(--terra) 12%, transparent)", color: "var(--terra)", display: "grid", placeItems: "center", flexShrink: 0 }}>
+            <IconClose size={18} />
+          </span>
+          <div>
+            <div className="serif" style={{ fontSize: 20, letterSpacing: "-0.01em" }}>Hapus Dompet "{wallet.name}"?</div>
+            <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 2, lineHeight: 1.4 }}>Aksi ini tidak bisa dibatalkan.</div>
+          </div>
+        </div>
+
+        <div style={{ background: "color-mix(in oklch, var(--terra) 8%, transparent)", border: "1px solid color-mix(in oklch, var(--terra) 24%, transparent)", borderRadius: 12, padding: "12px 14px", marginTop: 16, marginBottom: 20 }}>
+          <div style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.5 }}>
+            ⚠️ <strong>{transactionCount} transaksi</strong> terhubung ke dompet ini akan <strong>hilang selamanya</strong>. Pastikan Anda sudah backup data yang penting.
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={onCancel}
+            style={{ flex: 1, padding: "13px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 12, fontSize: 14, color: "var(--ink-2)", fontFamily: "inherit" }}>
+            Batal
+          </button>
+          <button onClick={onConfirm}
+            style={{ flex: 1, padding: "13px", background: "var(--terra)", color: "#fff", border: 0, borderRadius: 12, fontSize: 14, fontWeight: 500, fontFamily: "inherit", cursor: "pointer" }}>
+            Hapus Selamanya
+          </button>
         </div>
       </div>
     </>

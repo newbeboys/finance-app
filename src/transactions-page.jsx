@@ -6,6 +6,7 @@ import { useIsMobile } from './use-mobile';
 import { AddTransactionModal } from './transactions';
 import { LockBadge } from './components/PaywallModal';
 import { resolveCategory, categoryLabel } from './category-field';
+import { MonthYearPicker } from './components/MonthYearPicker';
 
 export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, transactions: txProp, loading = false, onDelete, onUpdate, customCategories = [], onCreateCustom, onDeleteCustom, isPro = false, isBasicAtMax = false, userId }) {
   const { t: tr, i18n } = useTranslation();
@@ -19,10 +20,16 @@ export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, 
   const [cat, setCat] = React.useState("all");
   const [method, setMethod] = React.useState("all");
   const [hover, setHover] = React.useState(null);
+  const now = new Date();
+  const [selectedMonth, setSelectedMonth] = React.useState({ year: now.getFullYear(), month: now.getMonth() });
+  const [pickerOpen, setPickerOpen] = React.useState(false);
+
+  const datePrefix = `${selectedMonth.year}-${String(selectedMonth.month + 1).padStart(2, '0')}`;
+  const txByMonth = transactions.filter(t => t.dateRaw && t.dateRaw.startsWith(datePrefix));
 
   const methods = React.useMemo(() => Array.from(new Set(transactions.map(t => t.method))), [transactions]);
 
-  const filtered = transactions.filter(t => {
+  const filtered = txByMonth.filter(t => {
     if (type === "expense" && t.amount >= 0) return false;
     if (type === "income"  && t.amount <= 0) return false;
     if (cat !== "all" && t.category !== cat) return false;
@@ -63,7 +70,11 @@ export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, 
             </div>
           )}
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button onClick={() => setPickerOpen(true)}
+            style={{ padding: "9px 14px", fontSize: 12.5, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10, display: "inline-flex", alignItems: "center", gap: 6, color: "var(--ink)", fontFamily: "inherit", cursor: "pointer" }}>
+            {new Date(selectedMonth.year, selectedMonth.month, 1).toLocaleDateString(locale, { month: 'short', year: 'numeric' })} ▾
+          </button>
           {onScan && (
             <button onClick={onScan} title={tr('transaksi.scanStruk')} style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 6, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, opacity: scanLocked ? 0.6 : 1, cursor: scanLocked ? "not-allowed" : "pointer" }}>
               📷 {tr('transaksi.scan')}
@@ -261,6 +272,15 @@ export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, 
         isPro={isPro}
         isBasicAtMax={isBasicAtMax}
         userId={userId}
+      />
+
+      <MonthYearPicker
+        isOpen={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onConfirm={(month, year) => setSelectedMonth({ year, month })}
+        locale={locale}
+        initialMonth={selectedMonth.month}
+        initialYear={selectedMonth.year}
       />
     </div>
   );

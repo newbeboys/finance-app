@@ -5,6 +5,7 @@ import { IconArrowDown } from './icons';
 import { SpendingDonut } from './charts';
 import { useScrollLock } from './hooks/useScrollLock';
 import { InsightsCard, WeeklySummaryCard } from './widgets';
+import { MonthYearPicker } from './components/MonthYearPicker';
 
 const MONTHS_ID = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
 const MONTHS_EN = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -164,10 +165,10 @@ function BarChart({ data }) {
 export function AnalyticsPage({ transactions = [], customCategories = [], accounts = [], limits = null }) {
   const { t, i18n } = useTranslation();
   const monthsArr = i18n.language === 'en' ? MONTHS_EN : MONTHS_ID;
+  const locale = i18n.language === 'en' ? 'en-US' : 'id-ID';
   const [scope, setScope] = React.useState("year");
   const [pickedMonth, setPickedMonth] = React.useState(null);
   const [sheetOpen, setSheetOpen] = React.useState(false);
-  useScrollLock(sheetOpen);
   const [hoverCat, setHoverCat] = React.useState(null);
   const [hoverIncomeCat, setHoverIncomeCat] = React.useState(null);
   // Filter dompet — default "all"; reset ke "all" setiap kali halaman dibuka (state lokal)
@@ -530,33 +531,15 @@ export function AnalyticsPage({ transactions = [], customCategories = [], accoun
         </div>
       </div>
 
-      {/* Bottom Sheet — Pilih Bulan */}
-      {sheetOpen && (
-        <>
-          <div onClick={() => setSheetOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(42,44,32,.45)", zIndex: 150, animation: "rise .2s ease-out" }} />
-          <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "var(--ivory)", borderRadius: "16px 16px 0 0", padding: "20px 16px 80px", zIndex: 200, maxHeight: "55vh", overflowY: "auto", boxShadow: "0 -8px 32px -8px rgba(42,44,32,.2)", animation: "rise .25s ease-out" }}>
-            <div style={{ width: 36, height: 4, borderRadius: 99, background: "var(--line)", margin: "-8px auto 16px" }} />
-            <div style={{ fontSize: 11, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 14 }}>{t('analitik.pilihBulan')}</div>
-            {Object.entries(byYear).sort((a, b) => b[0] - a[0]).map(([yr, months]) => (
-              <div key={yr} style={{ marginBottom: 20 }}>
-                <div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 10 }}>{yr}</div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
-                  {months.map(m => {
-                    const active = m.year === activePicked.year && m.month === activePicked.month;
-                    return (
-                      <button key={`${m.year}-${m.month}`}
-                        onClick={() => { setPickedMonth(m); setSheetOpen(false); }}
-                        style={{ padding: "10px 0", borderRadius: 10, border: active ? 0 : "1px solid var(--line-soft)", background: active ? "var(--ink)" : "var(--paper)", color: active ? "var(--cream)" : "var(--ink)", fontSize: 13.5, fontWeight: active ? 600 : 400, fontFamily: "inherit", cursor: "pointer" }}>
-                        {MONTHS_ID[m.month]}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
+      <MonthYearPicker
+        isOpen={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        onConfirm={(month, year) => {
+          setPickedMonth({ year, month });
+          setSheetOpen(false);
+        }}
+        locale={locale}
+      />
     </>
   );
 }

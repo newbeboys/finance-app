@@ -4,9 +4,9 @@ import { CATEGORIES, ALL_CATEGORIES, fmtShort, fmt, formatNominal, nominalFontSi
 import { IconArrowUp, IconArrowDown, IconArrowRight, IconSpark, CatIcon } from './icons';
 import { CashflowChart, SpendingDonut, Spark, Ring } from './charts';
 import { useIsMobile } from './use-mobile';
-import { useScrollLock } from './hooks/useScrollLock';
 import { categoryLabel } from './category-field';
 import { usePaywall } from './components/PaywallModal';
+import { MonthYearPicker } from './components/MonthYearPicker';
 
 // Nama bulan singkat terlokalisasi (mengikuti bahasa aktif)
 const monthShort = (locale, mo) => new Date(2024, mo, 1).toLocaleDateString(locale, { month: 'short' });
@@ -138,7 +138,6 @@ export function CashflowCard({ transactions = [] }) {
   const [range, setRange] = React.useState("6M");
   const [pickedMonth, setPickedMonth] = React.useState(null); // { year, month }
   const [sheetOpen, setSheetOpen] = React.useState(false);
-  useScrollLock(sheetOpen);   // kunci scroll latar saat bottom-sheet "Pilih Bulan" terbuka
 
   const cashflowData = React.useMemo(
     () => computeCashflow(transactions, range, pickedMonth, locale),
@@ -146,20 +145,6 @@ export function CashflowCard({ transactions = [] }) {
   );
 
   const hasData = cashflowData.some(d => d.income > 0 || d.expense > 0);
-
-  // Daftar 24 bulan terakhir untuk Pilih Bulan sheet
-  const pickerMonths = React.useMemo(() => {
-    const now = new Date();
-    const list = [];
-    for (let i = 23; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      list.push({ year: d.getFullYear(), month: d.getMonth() });
-    }
-    // Kelompokkan per tahun, terbaru di atas
-    const byYear = {};
-    list.forEach(m => { (byYear[m.year] ||= []).push(m); });
-    return Object.entries(byYear).sort((a, b) => b[0] - a[0]);
-  }, []);
 
   const pickedLabel = pickedMonth
     ? `${monthShort(locale, pickedMonth.month)} ${pickedMonth.year}`
@@ -213,61 +198,38 @@ export function CashflowCard({ transactions = [] }) {
         )}
       </div>
 
-      {/* Bottom Sheet — Pilih Bulan */}
-      {sheetOpen && (
-        <>
-          <div onClick={() => setSheetOpen(false)}
-            style={{ position: "fixed", inset: 0, background: "rgba(42,44,32,.45)", zIndex: 150, animation: "rise .2s ease-out" }} />
-          <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "var(--ivory)", borderRadius: "16px 16px 0 0", padding: "20px 16px 80px", zIndex: 200, maxHeight: "55vh", overflowY: "auto", boxShadow: "0 -8px 32px -8px rgba(42,44,32,.2)", animation: "rise .25s ease-out" }}>
-            <div style={{ width: 36, height: 4, borderRadius: 99, background: "var(--line)", margin: "-8px auto 16px" }} />
-            <div style={{ fontSize: 11, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 14 }}>{tr('beranda.pilihBulanJudul')}</div>
-
-            {pickerMonths.map(([year, months]) => (
-              <div key={year} style={{ marginBottom: 20 }}>
-                <div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 10 }}>{year}</div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
-                  {months.map(m => {
-                    const active = pickedMonth?.year === m.year && pickedMonth?.month === m.month;
-                    return (
-                      <button key={`${m.year}-${m.month}`}
-                        onClick={() => { setPickedMonth(m); setSheetOpen(false); }}
-                        style={{ padding: "10px 0", borderRadius: 10, border: active ? 0 : "1px solid var(--line-soft)", background: active ? "var(--ink)" : "var(--paper)", color: active ? "var(--cream)" : "var(--ink)", fontSize: 13.5, fontWeight: active ? 600 : 400, fontFamily: "inherit", cursor: "pointer" }}>
-                        {monthShort(locale, m.month)}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
+      <MonthYearPicker
+        isOpen={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        onConfirm={(month, year) => setPickedMonth({ year, month })}
+        locale={locale}
+        initialMonth={pickedMonth?.month}
+        initialYear={pickedMonth?.year}
+      />
     </>
   );
 }
-
-const SP_MONTHS_ID = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
 
 export function SpendingCard({ transactions = [] }) {
   const { t: tr, i18n } = useTranslation();
   const locale = localeOf(i18n);
   const [hover, setHover] = React.useState(null);
   const [sheetOpen, setSheetOpen] = React.useState(false);
-  useScrollLock(sheetOpen);   // kunci scroll latar saat bottom-sheet "Pilih Bulan" terbuka
   const now = new Date();
   const [sel, setSel] = React.useState({ year: now.getFullYear(), month: now.getMonth() });
 
-  // Bulan yang punya data expense
-  const monthsWithData = React.useMemo(() => {
-    const set = new Set();
-    transactions.filter(t => t.amount < 0 && t.dateRaw).forEach(t => set.add(t.dateRaw.slice(0, 7)));
-    return Array.from(set).sort().reverse().map(s => {
-      const [yr, mo] = s.split('-');
-      return { year: +yr, month: +mo - 1 };
-    });
-  }, [transactions]);
-
   const pfx = `${sel.year}-${String(sel.month + 1).padStart(2, '0')}`;
+
+  const availableMonthsByYear = React.useMemo(() => {
+    const map = {};
+    transactions.filter(t => t.amount < 0 && t.dateRaw).forEach(t => {
+      const [yr, mo] = t.dateRaw.slice(0, 7).split('-');
+      const year = +yr, month = +mo - 1;
+      if (!map[year]) map[year] = [];
+      if (!map[year].includes(month)) map[year].push(month);
+    });
+    return map;
+  }, [transactions]);
 
   const monthCats = React.useMemo(() => {
     const map = {};
@@ -295,9 +257,6 @@ export function SpendingCard({ transactions = [] }) {
 
   const total = monthCats.reduce((s, c) => s + c.amount, 0);
   const selLabel = `${monthShort(locale, sel.month)} ${sel.year !== now.getFullYear() ? sel.year : ""}`.trim();
-
-  const byYear = {};
-  monthsWithData.forEach(m => { (byYear[m.year] ||= []).push(m); });
 
   return (
     <>
@@ -330,32 +289,15 @@ export function SpendingCard({ transactions = [] }) {
         </div>
       </div>
 
-      {sheetOpen && (
-        <>
-          <div onClick={() => setSheetOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(42,44,32,.45)", zIndex: 150, animation: "rise .2s ease-out" }} />
-          <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "var(--ivory)", borderRadius: "16px 16px 0 0", padding: "20px 16px 80px", zIndex: 200, maxHeight: "50vh", overflowY: "auto", boxShadow: "0 -8px 32px -8px rgba(42,44,32,.2)", animation: "rise .25s ease-out" }}>
-            <div style={{ width: 36, height: 4, borderRadius: 99, background: "var(--line)", margin: "-8px auto 16px" }} />
-            <div style={{ fontSize: 11, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 14 }}>{tr('beranda.pilihBulanJudul')}</div>
-            {Object.entries(byYear).sort((a, b) => b[0] - a[0]).map(([yr, months]) => (
-              <div key={yr} style={{ marginBottom: 20 }}>
-                <div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 10 }}>{yr}</div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
-                  {months.map(m => {
-                    const active = m.year === sel.year && m.month === sel.month;
-                    return (
-                      <button key={`${m.year}-${m.month}`}
-                        onClick={() => { setSel(m); setSheetOpen(false); }}
-                        style={{ padding: "10px 0", borderRadius: 10, border: active ? 0 : "1px solid var(--line-soft)", background: active ? "var(--ink)" : "var(--paper)", color: active ? "var(--cream)" : "var(--ink)", fontSize: 13.5, fontWeight: active ? 600 : 400, fontFamily: "inherit", cursor: "pointer" }}>
-                        {monthShort(locale, m.month)}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
+      <MonthYearPicker
+        isOpen={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        onConfirm={(month, year) => setSel({ year, month })}
+        locale={locale}
+        initialMonth={sel.month}
+        initialYear={sel.year}
+        availableMonthsByYear={availableMonthsByYear}
+      />
     </>
   );
 }
