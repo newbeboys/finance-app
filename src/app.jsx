@@ -1,5 +1,7 @@
 ﻿import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { Capacitor } from '@capacitor/core';
+import { App as CapacitorApp } from '@capacitor/app';
 import { useTweaks, TweaksPanel, TweakSection, TweakRadio, TweakSelect, TweakToggle } from './tweaks-panel';
 import { BottomNav } from './components/BottomNav';
 import { TopBar } from './topbar';
@@ -102,6 +104,18 @@ export default function App() {
       if (!s) setShowOnboarding(false); // logout → bersihkan flag onboarding
     });
     return () => subscription.unsubscribe();
+  }, []);
+
+  // Listen untuk deep link dari email verification
+  React.useEffect(() => {
+    if (Capacitor.isNativePlatform()) {
+      CapacitorApp.addListener('appUrlOpen', (event) => {
+        console.log('Deep link received:', event.url);
+        if (event.url.includes('financeapp://login')) {
+          setAuthView('login');
+        }
+      });
+    }
   }, []);
 
   // Verifikasi berhasil → lepas gerbang, tampilkan splash 3 detik
