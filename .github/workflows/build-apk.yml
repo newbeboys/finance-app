@@ -23,6 +23,8 @@ jobs:
         run: npm ci
 
       - name: Build web
+        env:
+          VITE_REVENUECAT_API_KEY_ANDROID: ${{ secrets.REVENUECAT_API_KEY_ANDROID }}
         run: npm run build
 
       - name: Setup Java 21
