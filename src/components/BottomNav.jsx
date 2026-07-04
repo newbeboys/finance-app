@@ -14,6 +14,15 @@ const IconMore = ({ size = 22 }) => (
   </svg>
 );
 
+// Hutang/Piutang — dua panah berlawanan arah (uang keluar & masuk)
+const IconDebt = ({ size = 22 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+       strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 8h13l-3-3" />
+    <path d="M20 16H7l3 3" />
+  </svg>
+);
+
 const MAIN_NAV = [
   { id: "dashboard",    tKey: "nav.beranda",   Icon: IconDashboard },
   { id: "transactions", tKey: "nav.transaksi", Icon: IconTx },
@@ -25,6 +34,7 @@ const MORE_NAV = [
   { id: "analytics", tKey: "nav.analitik",   Icon: IconChart },
   { id: "reports",   tKey: "nav.laporan",    Icon: IconReport },
   { id: "wallets",   tKey: "nav.dompet",     Icon: IconWallet },
+  { id: "debts",     tKey: "nav.hutang",     Icon: IconDebt },
   { id: "settings",  tKey: "nav.pengaturan", Icon: IconSettings },
 ];
 
@@ -75,7 +85,7 @@ export function BottomNav({ active, onNav }) {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "1fr 1fr 1fr 1fr",
+              gridTemplateColumns: "1fr 1fr 1fr",
               gap: 8,
             }}
           >

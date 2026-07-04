@@ -76,8 +76,24 @@ export const INCOME_CATEGORIES = [
   { id: "other_in",   label: "Pemasukan Lain",        color: "#6E8A8C"      },
 ];
 
+// Kategori transaksi Hutang & Piutang — id dari DEBT_CATEGORIES (src/hooks/useDebts.js).
+// Transaksi ber-kategori ini dibuat OTOMATIS oleh fitur hutang/piutang, jadi sengaja
+// TIDAK dimasukkan ke CATEGORIES/INCOME_CATEGORIES agar tidak muncul di picker kategori
+// manual. Cukup masuk ALL_CATEGORIES supaya ter-resolve rapi (label/warna/ikon) di
+// halaman Transaksi/Laporan/Analitik. BUKAN kategori kustom (tanpa flag `custom`),
+// jadi tidak terhitung ke limit kategori kustom Basic.
+// Warna dipilih agar berbeda dari kategori lain: piutang = biru-abu (uang keluar
+// dipinjamkan), piutang_bayar = hijau (income masuk), hutang = taupe netral,
+// hutang_bayar = merah bata (expense keluar).
+export const DEBT_TX_CATEGORIES = [
+  { id: "piutang",       label: "Piutang",              amount: 0, color: "#5E7C99", type: "expense" },
+  { id: "piutang_bayar", label: "Pembayaran Piutang",              color: "#5F9C6B", type: "income"  },
+  { id: "hutang",        label: "Hutang",                          color: "#A68A6C", type: "income"  },
+  { id: "hutang_bayar",  label: "Pembayaran Hutang",    amount: 0, color: "#BF5540", type: "expense" },
+];
+
 // Gabungan untuk lookup display (TransactionsCard, TransactionsPage)
-export const ALL_CATEGORIES = [...CATEGORIES, ...INCOME_CATEGORIES];
+export const ALL_CATEGORIES = [...CATEGORIES, ...INCOME_CATEGORIES, ...DEBT_TX_CATEGORIES];
 
 export const TRANSACTIONS = [];
 

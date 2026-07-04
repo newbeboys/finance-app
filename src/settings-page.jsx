@@ -218,7 +218,7 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub, s
   const isPro = !!sub.isPro;
   const limits = sub.limits;
   const notifOn = t.notifications !== false;
-  const subs = notifSubs ?? { budget: true, income: true, weekly: true, bills: false };
+  const subs = notifSubs ?? { budget: true, income: true, weekly: true, bills: false, debts: true };
   const toggleSub = onToggleNotifSub ?? (() => {});
   const [loggingOut, setLoggingOut] = React.useState(false);
   const [showLangModal, setShowLangModal] = React.useState(false);
@@ -613,6 +613,7 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub, s
             { k: "income", titleKey: "pengaturan.transaksiMasuk",     descKey: "pengaturan.transaksiMasukDesc" },
             { k: "weekly", titleKey: "pengaturan.ringkasanMingguan",  descKey: "pengaturan.ringkasanMingguanDesc" },
             { k: "bills",  titleKey: "pengaturan.pengingatTagihan",   descKey: "pengaturan.pengingatTagihanDesc" },
+            { k: "debts",  titleKey: "pengaturan.hutangPiutang",      descKey: "pengaturan.hutangPiutangDesc" },
           ].map(row => (
             <SettingRow key={row.k} title={tr(row.titleKey)} desc={tr(row.descKey)}>
               <div style={{ opacity: notifOn ? 1 : 0.4, pointerEvents: notifOn ? "auto" : "none" }}>

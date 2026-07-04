@@ -15,6 +15,8 @@ export const PLAN_LIMITS = {
     maxSavingsGoals: 2,
     maxBudgets: 7,
     maxTransactionsPerMonth: 75,   // per BULAN KALENDER (berdasar tanggal transaksi, bukan created_at)
+    maxActiveDebts: 5,             // maks catatan hutang/piutang AKTIF sekaligus
+    debtCooldownDays: 50,          // + jendela rolling: maks 5 PEMBUATAN per 50 hari (termasuk yg dihapus/lunas)
     recurringTransactionsEnabled: false,
     reportsExportEnabled: false,
     receiptScanEnabled: false,
@@ -27,6 +29,8 @@ export const PLAN_LIMITS = {
     maxSavingsGoals: Infinity,
     maxBudgets: Infinity,
     maxTransactionsPerMonth: Infinity,
+    maxActiveDebts: Infinity,
+    debtCooldownDays: 0,           // Pro: tanpa cooldown
     recurringTransactionsEnabled: true,
     reportsExportEnabled: true,
     receiptScanEnabled: true,

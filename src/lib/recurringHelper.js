@@ -128,11 +128,24 @@ export function toggleRecurring(id) {
   return list[idx];
 }
 
+// Pilih wallet_id untuk transaksi otomatis. Kolom transactions.wallet_id kini
+// NOT NULL, sedangkan jadwal berulang (terutama data lama) tak menyimpan wallet.
+// Urutan fallback: wallet_id jadwal (bila valid) → wallet primary → wallet
+// pertama. Kembalikan null hanya bila user benar-benar tak punya wallet.
+function resolveWalletId(item, wallets) {
+  if (!Array.isArray(wallets) || wallets.length === 0) return null;
+  if (item.wallet_id && wallets.some((w) => w.id === item.wallet_id)) return item.wallet_id;
+  const primary = wallets.find((w) => w.is_primary || w.primary);
+  if (primary) return primary.id;
+  return wallets[0].id;   // tak ada yang ditandai primary → pakai wallet pertama
+}
+
 // ── Eksekusi otomatis ──────────────────────────────────────────────
 // Untuk setiap jadwal aktif yang sudah jatuh tempo (≤ hari ini), buat
 // transaksi ke Supabase via createTransaction lalu majukan nextDueDate.
 // While-loop mengejar periode yang terlewat bila app lama tak dibuka.
-export async function checkRecurringTransactions(createTransaction) {
+// `wallets` = daftar dompet user (dari useWallets) untuk mengisi wallet_id.
+export async function checkRecurringTransactions(createTransaction, wallets = []) {
   const list = loadRecurring();
   if (!list.length || typeof createTransaction !== 'function') return [];
 
@@ -143,34 +156,50 @@ export async function checkRecurringTransactions(createTransaction) {
 
   for (const item of list) {
     if (!item.aktif) continue;
-    let guard = 0;
-    while (item.nextDueDate && item.nextDueDate <= today && guard < MAX) {
-      const dueISO = item.nextDueDate;
-      const d = fromISO(dueISO);
-      const dateLabel = `${d.getDate()} ${MONTH_SHORT[d.getMonth()]} ${d.getFullYear()}`;
-      const amount = item.tipe === 'pemasukan' ? Math.abs(item.jumlah) : -Math.abs(item.jumlah);
 
-      const tx = {
-        id: 'tx-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
-        date: dateLabel,
-        dateRaw: dueISO,
-        time: '00:00',
-        merchant: item.nama || '—',
-        note: ('[Otomatis] ' + (item.catatan || '')).trim(),
-        category: item.kategori || '',
-        method: 'Tunai',
-        amount,
-      };
+    // Tiap jadwal dibungkus try-catch sendiri: satu jadwal gagal tidak boleh
+    // menghentikan pemrosesan jadwal lain dalam array.
+    try {
+      const walletId = resolveWalletId(item, wallets);
+      if (!walletId) {
+        // User tak punya wallet sama sekali → tak mungkin insert (wallet_id NOT NULL).
+        // Skip jadwal ini untuk sesi ini tanpa menghentikan proses.
+        console.warn('[recurring] dilewati — user belum punya wallet:', item.nama);
+        continue;
+      }
 
-      const res = await createTransaction(tx);
-      // Gagal insert (mis. offline) atau limit transaksi bulanan tercapai →
-      // hentikan item ini TANPA memajukan nextDueDate, coba lagi nanti.
-      if (res && (res.error || res.limitReached)) break;
+      let guard = 0;
+      while (item.nextDueDate && item.nextDueDate <= today && guard < MAX) {
+        const dueISO = item.nextDueDate;
+        const d = fromISO(dueISO);
+        const dateLabel = `${d.getDate()} ${MONTH_SHORT[d.getMonth()]} ${d.getFullYear()}`;
+        const amount = item.tipe === 'pemasukan' ? Math.abs(item.jumlah) : -Math.abs(item.jumlah);
 
-      executed.push({ nama: item.nama, jumlah: item.jumlah, tipe: item.tipe });
-      item.nextDueDate = advanceDueDate(item.nextDueDate, item.frekuensi);
-      changed = true;
-      guard++;
+        const tx = {
+          id: 'tx-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+          date: dateLabel,
+          dateRaw: dueISO,
+          time: '00:00',
+          merchant: item.nama || '—',
+          note: ('[Otomatis] ' + (item.catatan || '')).trim(),
+          category: item.kategori || '',
+          method: 'Tunai',
+          amount,
+          wallet_id: walletId,
+        };
+
+        const res = await createTransaction(tx);
+        // Gagal insert (mis. offline) atau limit transaksi bulanan tercapai →
+        // hentikan item ini TANPA memajukan nextDueDate, coba lagi nanti.
+        if (res && (res.error || res.limitReached)) break;
+
+        executed.push({ nama: item.nama, jumlah: item.jumlah, tipe: item.tipe });
+        item.nextDueDate = advanceDueDate(item.nextDueDate, item.frekuensi);
+        changed = true;
+        guard++;
+      }
+    } catch (err) {
+      console.warn('[recurring] jadwal gagal diproses, dilewati:', item.nama, err?.message || err);
     }
   }
 

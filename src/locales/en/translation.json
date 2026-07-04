@@ -8,6 +8,7 @@
     "analitik": "Analytics",
     "laporan": "Reports",
     "dompet": "Wallets",
+    "hutang": "Debts/Credits",
     "pengaturan": "Settings"
   },
   "umum": {
@@ -187,7 +188,11 @@
     "side": "Side Income",
     "business": "Business",
     "bonus": "Bonus / Holiday Pay",
-    "other_in": "Other Income"
+    "other_in": "Other Income",
+    "piutang": "Receivable",
+    "piutang_bayar": "Receivable Payment",
+    "hutang": "Debt",
+    "hutang_bayar": "Debt Payment"
   },
   "tabungan": {
     "target": "Savings Goal",
@@ -366,6 +371,8 @@
     "ringkasanMingguanDesc": "A spending recap every Monday morning.",
     "pengingatTagihan": "Bill reminder",
     "pengingatTagihanDesc": "Remind recurring bills before they're due.",
+    "hutangPiutang": "Debts & Receivables",
+    "hutangPiutangDesc": "Remind when a record nears or passes its due date.",
     "animasiSuara": "Animation & Sound",
     "animasiSuaraDesc": "Enable sound effects and animations in the app",
     "kecerdasan": "Intelligence",
@@ -557,7 +564,12 @@
     "selisih": "Difference: {{jumlah}}",
     "pengingatTagihan": "Bill Reminder",
     "janganLupaTagihan": "Don't forget to record this month's bills!",
-    "bulanLaluTagihan": "Last month you had bills of {{jumlah}}"
+    "bulanLaluTagihan": "Last month you had bills of {{jumlah}}",
+    "piutangJatuhTempo": "Receivable from {{nama}} is due in {{hari}} days",
+    "hutangJatuhTempo": "Debt to {{nama}} is due in {{hari}} days",
+    "piutangLewatTempo": "Receivable from {{nama}} is past due",
+    "hutangLewatTempo": "Debt to {{nama}} is past due",
+    "jatuhTempoTanggal": "Due {{tanggal}}"
   },
   "analitik": {
     "judulHalaman": "Financial Statistics",

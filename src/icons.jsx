@@ -76,6 +76,11 @@ export function CatIcon({ kind, size = 14 }) {
     salary:       <><circle cx="12" cy="12" r="7" /><path d="M12 8v8M9 10h5a1.5 1.5 0 0 1 0 3H9h6" /></>,
     freelance:    <><path d="M4 20l8-16 8 16" /><path d="M8 14h8" /></>,
     investment:   <><path d="M4 17l5-5 4 3 7-9" /><path d="M14 6h6v6" /></>,
+    // Hutang/Piutang — panah mencerminkan arah uang
+    piutang:       <><line x1="7" y1="17" x2="16" y2="8" /><polyline points="9 8 16 8 16 15" /></>,       // uang keluar dipinjamkan
+    piutang_bayar: <><line x1="16" y1="8" x2="7" y2="17" /><polyline points="7 10 7 17 14 17" /></>,       // cicilan diterima (masuk)
+    hutang:        <><path d="M12 4v11" /><polyline points="8 11 12 15 16 11" /><path d="M5 20h14" /></>,  // pinjaman diterima (masuk)
+    hutang_bayar:  <><path d="M12 20V9" /><polyline points="8 13 12 9 16 13" /><path d="M5 4h14" /></>,     // bayar cicilan (keluar)
     other:        <><circle cx="12" cy="12" r="9" /><path d="M9 10a3 3 0 1 1 4.5 2.5c-1 .5-1.5 1-1.5 2.5M12 18h0" /></>,
   };
   return <svg {...props}>{shapes[kind] || shapes.other}</svg>;

@@ -5,12 +5,13 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { useTweaks, TweaksPanel, TweakSection, TweakRadio, TweakSelect, TweakToggle } from './tweaks-panel';
 import { BottomNav } from './components/BottomNav';
 import { TopBar } from './topbar';
-import { KpiCards, CashflowCard, SpendingCard, InsightsCard, SavingsCard, BudgetsCard, WeeklySummaryCard } from './widgets';
+import { KpiCards, CashflowCard, SpendingCard, InsightsCard, SavingsCard, BudgetsCard, DebtsCard, WeeklySummaryCard } from './widgets';
 import { WalletsPage, AddAccountModal } from './wallets';
 import { ReportsPage } from './reports';
 import { AnalyticsPage } from './analytics';
 import { SavingsPage, AddGoalModal, DepositModal } from './savings-page';
 import { TransactionsPage } from './transactions-page';
+import DebtsPage from './debts-page';
 import { TransactionsCard, AddTransactionModal } from './transactions';
 import { ScanStrukSheet } from './components/ScanStruk';
 import { SettingsPage } from './settings-page';
@@ -36,6 +37,7 @@ import { useSavings } from './hooks/useSavings';
 import { useWallets } from './hooks/useWallets';
 import { useNotifications } from './hooks/useNotifications';
 import { useBudgets } from './hooks/useBudgets';
+import { useDebts } from './hooks/useDebts';
 import { useCustomCategories } from './hooks/useCustomCategories';
 import { useSubscription } from './hooks/useSubscription';
 import { useRevenueCat } from './hooks/useRevenueCat';
@@ -195,7 +197,7 @@ export default function App() {
 
 const TWEAKS_KEY = 'finance_tweaks';
 const NOTIF_PREFS_KEY = 'notif_prefs';
-const NOTIF_PREFS_DEFAULTS = { budget: true, income: true, weekly: true, bills: false };
+const NOTIF_PREFS_DEFAULTS = { budget: true, income: true, weekly: true, bills: false, debts: true };
 
 function loadSavedTweaks() {
   try { return JSON.parse(localStorage.getItem(TWEAKS_KEY) || '{}'); } catch { return {}; }
@@ -369,6 +371,15 @@ function AuthenticatedApp({ session }) {
   // Transactions — sinkron dengan Supabase per user yang login
   const { transactions, loading: txLoading, createTransaction, deleteTransaction, updateTransaction } = useTransactions(session.user.id, limits);
 
+  // Hutang/Piutang — butuh "ledger" dari transactions & wallets untuk orkestrasi
+  // + rollback. PENTING: pass createTransaction/deleteTransaction MENTAH (bukan
+  // wrapper handle* yang sudah adjustBalance) supaya saldo tidak dobel — useDebts
+  // memanggil adjustBalance sendiri.
+  const {
+    debts, loading: debtsLoading,
+    createDebt, addPayment, markPaid, deleteDebt, getPayments,
+  } = useDebts(session.user.id, limits, { transactions, createTransaction, deleteTransaction, adjustBalance });
+
   // Wrapper: setelah create/update/delete transaksi, sesuaikan saldo dompet terkait.
   // adjustBalance membaca saldo saat ini dari state (sudah sync via realtime Supabase).
   const handleCreateTransaction = React.useCallback(async (tx) => {
@@ -405,16 +416,21 @@ function AuthenticatedApp({ session }) {
   const ranRecurringRef = React.useRef(false);
   React.useEffect(() => {
     if (ranRecurringRef.current) return;
+    // Tunggu wallets ter-load dulu: eksekusi butuh wallet_id (kolom NOT NULL) —
+    // jalan terlalu awal (accounts kosong) akan melewati semua jadwal.
+    if (!accounts || accounts.length === 0) return;
     ranRecurringRef.current = true;
     (async () => {
       try {
-        const done = await checkRecurringTransactions(createTransaction);
+        // handleCreateTransaction (bukan createTransaction mentah) supaya saldo
+        // dompet ikut menyesuaikan — konsisten dengan transaksi manual.
+        const done = await checkRecurringTransactions(handleCreateTransaction, accounts);
         if (done.length) {
           setRecurringToasts(done.map((d, i) => ({ ...d, id: `${Date.now()}-${i}` })));
         }
       } catch {}
     })();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [accounts]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Budgets — Supabase
   const { budgets, createBudget, updateBudget, deleteBudget } = useBudgets(session.user.id, limits);
@@ -449,7 +465,7 @@ function AuthenticatedApp({ session }) {
   const handleDeleteCustomCategory = React.useCallback((id) => deleteCustomCategory(id, subscription.isPro), [deleteCustomCategory, subscription.isPro]);
 
   // Notifications
-  const { notifications, unreadCount, markAllRead, markRead, cleanupExpired } = useNotifications(transactions, notifSubs, budgets);
+  const { notifications, unreadCount, markAllRead, markRead, cleanupExpired } = useNotifications(transactions, notifSubs, budgets, debts);
 
   // Savings goals — Supabase
   const { goals, createGoal, deleteGoal, depositToGoal } = useSavings(session.user.id, limits);
@@ -524,6 +540,7 @@ function AuthenticatedApp({ session }) {
             <TransactionsCard onAdd={() => setModal(true)} onScan={handleScan} scanLocked={!limits.receiptScanEnabled} limit={8} onSeeAll={() => setActive("transactions")} transactions={transactions} loading={txLoading} customCategories={customCategories} />
             <SavingsCard goals={goals} onManage={() => setActive("savings")} />
             <BudgetsCard onManage={() => setActive("budgets")} transactions={transactions} budgets={budgets} />
+            <DebtsCard debts={debts} onManage={() => setActive("debts")} />
             <WeeklySummaryCard transactions={transactions} />
           </div>
         )}
@@ -548,7 +565,21 @@ function AuthenticatedApp({ session }) {
 
         {active === "settings" && <SettingsPage t={t} setTweak={setTweak} user={session.user} notifSubs={notifSubs} onToggleNotifSub={toggleNotifSub} subscription={subscription} revenueCat={revenueCat} />}
 
-        {active !== "dashboard" && active !== "budgets" && active !== "wallets" && active !== "reports" && active !== "analytics" && active !== "savings" && active !== "transactions" && active !== "settings" && <Placeholder section={active} />}
+        {active === "debts" && (
+          <DebtsPage
+            debts={debts}
+            loading={debtsLoading}
+            createDebt={createDebt}
+            addPayment={addPayment}
+            markPaid={markPaid}
+            deleteDebt={deleteDebt}
+            getPayments={getPayments}
+            wallets={accounts}
+            isPro={subscription.isPro}
+          />
+        )}
+
+        {active !== "dashboard" && active !== "budgets" && active !== "wallets" && active !== "reports" && active !== "analytics" && active !== "savings" && active !== "transactions" && active !== "settings" && active !== "debts" && <Placeholder section={active} />}
       </main>
 
       <AddTransactionModal open={modal} onClose={closeAddModal} onSave={handleCreateTransaction} accounts={accounts} customCategories={customCategories} onCreateCustom={addCustomCategory} onDeleteCustom={handleDeleteCustomCategory} prefill={scanPrefill} notice={scanNotice} previewImage={scanPreview} isPro={subscription.isPro} isBasicAtMax={isBasicAtMax} userId={session.user.id} />

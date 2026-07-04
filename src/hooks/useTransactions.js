@@ -18,6 +18,7 @@ function toAppTx(row) {
     method:    row.method   || 'Tunai',
     amount:    Number(row.amount),
     wallet_id: row.wallet_id || null,
+    debt_id:   row.debt_id  || null,   // != null → transaksi dari fitur Hutang/Piutang
   };
 }
 
@@ -61,8 +62,10 @@ export function useTransactions(userId, limits) {
     // ── Batas plan: maks N transaksi per BULAN KALENDER ────────────────
     // Bulan ditentukan dari tanggal transaksi yang dipilih user (isoDate),
     // bukan created_at. Count via Supabase (head:true) — tidak fetch row.
+    // Transaksi otomatis dari fitur Hutang/Piutang (punya debt_id) TIDAK
+    // dihitung ke kuota, dan pembuatannya tidak boleh diblokir kuota.
     const maxPerMonth = limits?.maxTransactionsPerMonth ?? Infinity;
-    if (maxPerMonth !== Infinity) {
+    if (maxPerMonth !== Infinity && !tx.debt_id) {
       const [y, m] = isoDate.split('-').map(Number);
       const monthStart = `${y}-${String(m).padStart(2, '0')}-01`;
       const nextY = m === 12 ? y + 1 : y;
@@ -73,6 +76,7 @@ export function useTransactions(userId, limits) {
         .from('transactions')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', userId)
+        .is('debt_id', null)   // kecualikan transaksi hutang/piutang dari kuota
         .gte('date', monthStart)
         .lt('date', monthEndExclusive);
 
@@ -97,6 +101,7 @@ export function useTransactions(userId, limits) {
         time:      tx.time     || '00:00',
         method:    tx.method   || 'Tunai',
         wallet_id: tx.wallet_id || null,
+        debt_id:   tx.debt_id  || null,   // tautan ke catatan hutang/piutang (null utk transaksi biasa)
       })
       .select()
       .single();
@@ -104,7 +109,8 @@ export function useTransactions(userId, limits) {
     if (!err && data) {
       setTransactions(prev => [toAppTx(data), ...prev]);
     }
-    return { error: err };
+    // id dikembalikan agar useDebts bisa menautkannya ke debt_payments.transaction_id
+    return { error: err, id: data?.id ?? null };
   }
 
   async function deleteTransaction(id) {

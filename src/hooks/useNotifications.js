@@ -10,7 +10,7 @@ const INC_IDS_KEY  = 'notif_income_ids';
 const MAX_NOTIFS   = 50;
 const READ_RETENTION_MS = 5 * 24 * 60 * 60 * 1000; // notif sudah dibaca > 5 hari → dihapus
 
-const DEFAULT_PREFS = { budget: true, income: true, weekly: true, bills: false };
+const DEFAULT_PREFS = { budget: true, income: true, weekly: true, bills: false, debts: true };
 
 function load(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key) ?? 'null') ?? fallback; }
@@ -174,9 +174,54 @@ function billsNotif(transactions) {
   return [];
 }
 
+// ── Generate: Pengingat Jatuh Tempo Hutang/Piutang (§5) ────────────
+// Dua pemicu: (1) H-3 → due_date tepat 3 hari dari hari ini, (2) lewat tempo →
+// due_date sudah lewat hari ini. Hanya catatan AKTIF & TIDAK terkunci
+// (is_locked=false) — konsisten dgn banner di debts-page.jsx: catatan terkunci
+// (sisa downgrade) tak bisa diaksi, jadi tak boleh memicu notifikasi.
+// Dedup lewat id stabil (mengandung due_date) → tidak spam berulang tiap refresh.
+function debtsNotifs(debts) {
+  const today = localISO(new Date());
+  const d3 = new Date(); d3.setDate(d3.getDate() + 3);
+  const in3 = localISO(d3);
+
+  const notifs = [];
+  (debts || []).forEach(d => {
+    if (d.status !== 'active' || d.is_locked || !d.due_date) return;
+    const isReceivable = d.type === 'receivable';
+
+    if (d.due_date === in3) {
+      notifs.push({
+        id:       `debt-due3-${d.id}-${d.due_date}`,
+        type:     'debts',
+        icon:     '📅',
+        msgKey:   isReceivable ? 'notifikasi.piutangJatuhTempo' : 'notifikasi.hutangJatuhTempo',
+        msgParams: { nama: d.person_name, hari: 3 },
+        read:     false,
+        ts:       Date.now(),
+      });
+    } else if (d.due_date < today) {
+      // Sudah dibayar pada/setelah due_date → bukan "telat" (samakan dgn banner §7).
+      const paidOnTime = d.lastPaymentDate && d.lastPaymentDate >= d.due_date;
+      if (paidOnTime) return;
+      notifs.push({
+        id:       `debt-overdue-${d.id}-${d.due_date}`,
+        type:     'debts',
+        icon:     '⚠️',
+        msgKey:   isReceivable ? 'notifikasi.piutangLewatTempo' : 'notifikasi.hutangLewatTempo',
+        msgParams: { nama: d.person_name },
+        detailKey: 'notifikasi.jatuhTempoTanggal', detailParams: { tanggal: d.due_date },
+        read:     false,
+        ts:       Date.now(),
+      });
+    }
+  });
+  return notifs;
+}
+
 // ── Hook utama ────────────────────────────────────────────────────
 
-export function useNotifications(transactions, prefs, budgets) {
+export function useNotifications(transactions, prefs, budgets, debts) {
   const [notifs, setNotifs] = React.useState(() => load(NOTIF_KEY, []));
 
   // Merge passed prefs with defaults (falls back to localStorage if not passed)
@@ -186,16 +231,20 @@ export function useNotifications(transactions, prefs, budgets) {
   }), [prefs]);
 
   React.useEffect(() => {
-    if (!transactions || transactions.length === 0) return;
+    const noTx    = !transactions || transactions.length === 0;
+    const noDebts = !debts || debts.length === 0;
+    if (noTx && noDebts) return;
 
+    const txs = transactions || [];
     const existing = load(NOTIF_KEY, []);
     const doneIds  = new Set(existing.map(n => n.id));
 
     const fresh = [
-      ...(resolvedPrefs.budget  ? budgetNotifs(transactions, budgets) : []),
-      ...(resolvedPrefs.income  ? incomeNotifs(transactions)           : []),
-      ...(resolvedPrefs.weekly  ? weeklyNotif(transactions)            : []),
-      ...(resolvedPrefs.bills   ? billsNotif(transactions)             : []),
+      ...(resolvedPrefs.budget  ? budgetNotifs(txs, budgets) : []),
+      ...(resolvedPrefs.income  ? incomeNotifs(txs)           : []),
+      ...(resolvedPrefs.weekly  ? weeklyNotif(txs)            : []),
+      ...(resolvedPrefs.bills   ? billsNotif(txs)             : []),
+      ...(resolvedPrefs.debts   ? debtsNotifs(debts)          : []),
     ].filter(n => !doneIds.has(n.id));
 
     if (fresh.length > 0) {
@@ -207,7 +256,7 @@ export function useNotifications(transactions, prefs, budgets) {
         playSound(notifSound, 0.5);
       }
     }
-  }, [transactions, resolvedPrefs, budgets]);
+  }, [transactions, resolvedPrefs, budgets, debts]);
 
   const markAllRead = React.useCallback(() => {
     const now = Date.now();
@@ -254,6 +303,7 @@ export function useNotifications(transactions, prefs, budgets) {
     if (n.type === 'income')  return resolvedPrefs.income;
     if (n.type === 'weekly')  return resolvedPrefs.weekly;
     if (n.type === 'bills')   return resolvedPrefs.bills;
+    if (n.type === 'debts')   return resolvedPrefs.debts;
     return true;
   });
 

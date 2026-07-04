@@ -552,6 +552,62 @@ export function BudgetsCard({ onManage, transactions = [], budgets: allBudgets =
   );
 }
 
+// ── Hutang & Piutang (Beranda) ─────────────────────────────────────
+// Hanya muncul bila ada catatan AKTIF. Tap card → buka halaman Hutang/Piutang.
+export function DebtsCard({ debts = [], onManage }) {
+  // Hanya catatan aktif yang TIDAK terkunci: total & indikator telat bayar
+  // konsisten dengan header halaman Hutang/Piutang (catatan terkunci = sisa
+  // downgrade Pro→Basic, tidak bisa dikelola, jadi dikeluarkan).
+  const active = debts.filter(d => d.status === 'active' && !d.is_locked);
+  if (active.length === 0) return null;   // jangan tampilkan card kosong
+
+  const totalReceivable = active.filter(d => d.type === 'receivable').reduce((s, d) => s + d.remaining, 0);
+  const totalPayable    = active.filter(d => d.type === 'payable').reduce((s, d) => s + d.remaining, 0);
+
+  // Item terdekat jatuh tempo
+  const nearest = active.filter(d => d.due_date).sort((a, b) => (a.due_date < b.due_date ? -1 : 1))[0] || null;
+  const now = new Date();
+  const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  let dueLabel = null, dueColor = 'var(--muted)';
+  if (nearest) {
+    const days = Math.round((new Date(nearest.due_date + 'T00:00:00') - new Date(todayISO + 'T00:00:00')) / 86400000);
+    if (days < 0)       { dueLabel = `${nearest.person_name} telat ${Math.abs(days)} hari`; dueColor = 'var(--terra)'; }
+    else if (days === 0){ dueLabel = `${nearest.person_name} jatuh tempo hari ini`;         dueColor = 'var(--terra)'; }
+    else                { dueLabel = `${nearest.person_name} jatuh tempo ${days} hari lagi`; dueColor = days <= 3 ? 'var(--gold)' : 'var(--muted)'; }
+  }
+
+  return (
+    <div className="card rise" style={{ padding: 22, cursor: 'pointer' }} onClick={onManage}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 16 }}>
+        <div>
+          <div style={{ fontSize: 11.5, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--muted)' }}>Hutang &amp; Piutang</div>
+          <div className="serif" style={{ fontSize: 22, marginTop: 2, letterSpacing: '-0.01em' }}>Uang di jalan</div>
+        </div>
+        <span style={ghostBtn}>Lihat</span>
+      </div>
+
+      <div style={{ display: 'flex', gap: 24 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 11, letterSpacing: '.05em', textTransform: 'uppercase', color: 'var(--muted)' }}>Piutang</div>
+          <div className="serif tnum" style={{ fontSize: 22, letterSpacing: '-0.02em', marginTop: 3, color: 'var(--sage)' }}>{fmt(totalReceivable)}</div>
+        </div>
+        <div style={{ width: 1, background: 'var(--line-soft)' }} />
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 11, letterSpacing: '.05em', textTransform: 'uppercase', color: 'var(--muted)' }}>Hutang</div>
+          <div className="serif tnum" style={{ fontSize: 22, letterSpacing: '-0.02em', marginTop: 3, color: 'var(--terra)' }}>{fmt(totalPayable)}</div>
+        </div>
+      </div>
+
+      {dueLabel && (
+        <div style={{ marginTop: 14, fontSize: 12.5, color: dueColor, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 6, height: 6, borderRadius: 99, background: dueColor, flexShrink: 0 }} />
+          {dueLabel}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Ringkasan Mingguan ─────────────────────────────────────────────
 // Tanggal LOKAL (bukan toISOString) supaya cocok dgn dateRaw transaksi
 // yang disimpan lokal di useTransactions, dan dgn zona WIB.

@@ -8,6 +8,7 @@
     "analitik": "Analitik",
     "laporan": "Laporan",
     "dompet": "Dompet",
+    "hutang": "Hutang/Piutang",
     "pengaturan": "Pengaturan"
   },
   "umum": {
@@ -187,7 +188,11 @@
     "side": "Pendapatan Sampingan",
     "business": "Bisnis",
     "bonus": "Bonus / THR",
-    "other_in": "Pemasukan Lain"
+    "other_in": "Pemasukan Lain",
+    "piutang": "Piutang",
+    "piutang_bayar": "Pembayaran Piutang",
+    "hutang": "Hutang",
+    "hutang_bayar": "Pembayaran Hutang"
   },
   "tabungan": {
     "target": "Target Tabungan",
@@ -366,6 +371,8 @@
     "ringkasanMingguanDesc": "Rangkuman pengeluaran tiap Senin pagi.",
     "pengingatTagihan": "Pengingat tagihan",
     "pengingatTagihanDesc": "Ingatkan tagihan berulang sebelum jatuh tempo.",
+    "hutangPiutang": "Hutang & Piutang",
+    "hutangPiutangDesc": "Ingatkan saat catatan mendekati / lewat jatuh tempo.",
     "animasiSuara": "Animasi & Suara",
     "animasiSuaraDesc": "Aktifkan efek suara dan animasi pada aplikasi",
     "kecerdasan": "Kecerdasan",
@@ -557,7 +564,12 @@
     "selisih": "Selisih: {{jumlah}}",
     "pengingatTagihan": "Pengingat Tagihan",
     "janganLupaTagihan": "Jangan lupa catat tagihan bulan ini!",
-    "bulanLaluTagihan": "Bulan lalu kamu punya tagihan {{jumlah}}"
+    "bulanLaluTagihan": "Bulan lalu kamu punya tagihan {{jumlah}}",
+    "piutangJatuhTempo": "Piutang ke {{nama}} jatuh tempo {{hari}} hari lagi",
+    "hutangJatuhTempo": "Hutang ke {{nama}} jatuh tempo {{hari}} hari lagi",
+    "piutangLewatTempo": "Piutang ke {{nama}} sudah lewat jatuh tempo",
+    "hutangLewatTempo": "Hutang ke {{nama}} sudah lewat jatuh tempo",
+    "jatuhTempoTanggal": "Jatuh tempo {{tanggal}}"
   },
   "analitik": {
     "judulHalaman": "Statistik keuangan",
