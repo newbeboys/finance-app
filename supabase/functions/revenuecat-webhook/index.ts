@@ -14,6 +14,33 @@ const INACTIVE_EVENT_TYPES = new Set([
   'EXPIRATION',
 ]);
 
+// ── Error logging sisi server ───────────────────────────────────────
+// Tulis satu baris ke error_logs pakai service_role (bypass RLS) — bukan lewat
+// RPC client. Dibungkus try-catch sendiri: kegagalan logging TIDAK boleh
+// mengubah alur/response webhook. app_user_id disimpan di metadata (bukan kolom
+// user_id) agar tidak melanggar FK bila app_user_id ternyata bukan UUID auth.users.
+async function logServerError(
+  source: string,
+  message: string,
+  metadata: Record<string, unknown> | null,
+  severity: 'high' | 'medium' = 'medium',
+) {
+  try {
+    const admin = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    );
+    await admin.from('error_logs').insert({
+      source,
+      message,
+      metadata,
+      severity,
+    });
+  } catch (e) {
+    console.error('[revenuecat-webhook] logServerError gagal (diabaikan):', e);
+  }
+}
+
 serve(async (req) => {
   // Hanya terima POST
   if (req.method !== 'POST') {
@@ -32,11 +59,15 @@ serve(async (req) => {
   try {
     body = await req.json();
   } catch {
+    // Parsing event RC gagal → catat (medium: kemungkinan request rusak/bukan RC).
+    await logServerError('revenuecat-webhook', 'Invalid JSON body', null, 'medium');
     return new Response('Bad Request: invalid JSON', { status: 400 });
   }
 
   const event = body?.event as Record<string, unknown> | undefined;
   if (!event) {
+    await logServerError('revenuecat-webhook', 'Missing event in body',
+      { bodyKeys: Object.keys(body ?? {}) }, 'medium');
     return new Response('Bad Request: missing event', { status: 400 });
   }
 
@@ -106,6 +137,10 @@ serve(async (req) => {
 
   if (error) {
     console.error('[revenuecat-webhook] DB update error:', error.code, error.message);
+    // Gagal update langganan = user bayar tapi status tak terupdate → high.
+    await logServerError('revenuecat-webhook', error.message,
+      { stage: 'update_user_subscriptions', app_user_id: appUserId, event_type: eventType, code: error.code },
+      'high');
     return new Response('Internal Server Error', { status: 500 });
   }
 
@@ -122,6 +157,9 @@ serve(async (req) => {
       .insert({ user_id: appUserId, ...updates });
     if (insertError) {
       console.error('[revenuecat-webhook] insert error:', insertError.code, insertError.message);
+      await logServerError('revenuecat-webhook', insertError.message,
+        { stage: 'insert_user_subscriptions', app_user_id: appUserId, event_type: eventType, code: insertError.code },
+        'high');
       return new Response('Internal Server Error', { status: 500 });
     }
   }

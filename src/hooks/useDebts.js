@@ -1,6 +1,7 @@
 import React from 'react';
 import { supabase } from '../supabase';
 import { usePaywall } from '../components/PaywallModal';
+import { logError } from '../lib/errorLogger';
 
 // ════════════════════════════════════════════════════════════════════
 //  useDebts — logic layer fitur Catatan Hutang & Piutang
@@ -284,8 +285,16 @@ export function useDebts(userId, limits, ledger = {}) {
       return { error: tErr };
     }
 
-    // 4) Sesuaikan saldo dompet (best-effort; kegagalan tidak membatalkan catatan)
-    await adjustBalance?.(input.wallet_id, tx.amount);
+    // 4) Sesuaikan saldo dompet (best-effort; kegagalan tidak membatalkan catatan).
+    //    Catatan sudah tersimpan + transaksi pokok sudah dibuat, tapi saldo dompet
+    //    jadi tidak sinkron → penting dicatat (high) untuk rekonsiliasi manual.
+    const { error: balErr } = (await adjustBalance?.(input.wallet_id, tx.amount)) || {};
+    if (balErr) {
+      logError('debts', balErr.message || String(balErr), {
+        op: 'createDebt', debt_id: debtRow.id, wallet_id: input.wallet_id,
+        delta: tx.amount, type: input.type,
+      }, 'high');
+    }
 
     // 5) State lokal
     setDebts(prev => [toAppDebt(debtRow), ...prev]);
@@ -420,7 +429,15 @@ export function useDebts(userId, limits, ledger = {}) {
     // Menghapus transaksi otomatis meng-cascade debt_payments (FK transaction_id).
     const linked = transactions.filter(t => t.debt_id === debtId);
     for (const t of linked) {
-      await adjustBalance?.(t.wallet_id, -t.amount);   // balik efek ke saldo
+      const { error: balErr } = (await adjustBalance?.(t.wallet_id, -t.amount)) || {};   // balik efek ke saldo
+      if (balErr) {
+        // Reversal saldo gagal → saldo dompet bisa tertinggal salah setelah hapus
+        // catatan. Catat (high) supaya bisa dikoreksi manual.
+        logError('debts', balErr.message || String(balErr), {
+          op: 'deleteDebt', debt_id: debtId, wallet_id: t.wallet_id,
+          delta: -t.amount, transaction_id: t.id,
+        }, 'high');
+      }
       await deleteTransaction?.(t.id);
     }
 

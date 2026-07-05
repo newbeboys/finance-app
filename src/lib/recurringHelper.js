@@ -3,6 +3,8 @@
 // Eksekusi otomatis (membuat transaksi ke Supabase) dilakukan oleh
 // checkRecurringTransactions() yang dipanggil App.jsx saat aplikasi dibuka.
 
+import { logError } from './errorLogger';
+
 const KEY = 'recurringTransactions';
 
 // Index = Date.getDay() → 0=Minggu … 6=Sabtu
@@ -192,7 +194,17 @@ export async function checkRecurringTransactions(createTransaction, wallets = []
         const res = await createTransaction(tx);
         // Gagal insert (mis. offline) atau limit transaksi bulanan tercapai →
         // hentikan item ini TANPA memajukan nextDueDate, coba lagi nanti.
-        if (res && (res.error || res.limitReached)) break;
+        if (res && (res.error || res.limitReached)) {
+          // Hanya res.error yang benar-benar kegagalan (uang/data): limitReached
+          // adalah perilaku normal kuota Basic, jadi TIDAK dicatat sebagai error.
+          if (res.error) {
+            logError('recurringHelper', res.error.message || String(res.error), {
+              nama: item.nama, tipe: item.tipe, jumlah: item.jumlah,
+              dueDate: dueISO, wallet_id: walletId,
+            }, 'high');
+          }
+          break;
+        }
 
         executed.push({ nama: item.nama, jumlah: item.jumlah, tipe: item.tipe });
         item.nextDueDate = advanceDueDate(item.nextDueDate, item.frekuensi);

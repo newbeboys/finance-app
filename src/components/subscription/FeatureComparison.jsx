@@ -13,6 +13,7 @@ const FEATURES = [
   { label: 'Dompet',                 basic: '1 dompet',      pro: 'Tak terbatas' },
   { label: 'Goals tabungan',         basic: 'Maks. 2',       pro: 'Tak terbatas' },
   { label: 'Anggaran',               basic: 'Maks. 7',       pro: 'Tak terbatas' },
+  { label: 'Hutang/Piutang',         basic: 'Maks. 5 aktif', pro: 'Tak terbatas' },
   { label: 'Transaksi berulang',     basic: false,            pro: true },
   { label: 'Laporan PDF / Excel',    basic: 'Preview saja',  pro: true },
   { label: 'Scan nota',              basic: false,            pro: true },

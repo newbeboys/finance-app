@@ -1,6 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../supabase';
+import { logError } from '../lib/errorLogger';
 import { IconEye, IconEyeOff } from '../icons';
 
 export function RegisterPage({ onSwitch, onAuthSuccess }) {
@@ -28,6 +29,8 @@ export function RegisterPage({ onSwitch, onAuthSuccess }) {
     setLoading(false);
     if (err) {
       setError(err.message);
+      // Catat kegagalan signup (user belum terdaftar → user_id NULL, email di metadata).
+      logError('auth-signup', err.message, { email }, 'high');
     } else {
       setSuccess(true);
       onAuthSuccess?.(); // register berhasil → tampilkan onboarding (saat session aktif)

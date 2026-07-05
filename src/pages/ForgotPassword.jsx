@@ -1,6 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../supabase';
+import { logError } from '../lib/errorLogger';
 import { IconEye, IconEyeOff } from '../icons';
 
 export function ForgotPasswordPage({ onBack }) {
@@ -36,7 +37,12 @@ export function ForgotPasswordPage({ onBack }) {
     setLoading(true);
     const { error: err } = await supabase.auth.resetPasswordForEmail(email);
     setLoading(false);
-    if (err) { setError(err.message); return; }
+    if (err) {
+      setError(err.message);
+      // Gagal kirim email reset (user belum login → user_id NULL, email di metadata).
+      logError('auth-reset-password', err.message, { email }, 'high');
+      return;
+    }
     setCooldown(60);
     setStep(2);
   }
@@ -47,7 +53,12 @@ export function ForgotPasswordPage({ onBack }) {
     setLoading(true);
     const { error: err } = await supabase.auth.resetPasswordForEmail(email);
     setLoading(false);
-    if (err) { setError(err.message); return; }
+    if (err) {
+      setError(err.message);
+      // Titik yang sama (resetPasswordForEmail) di jalur kirim-ulang.
+      logError('auth-reset-password', err.message, { email }, 'high');
+      return;
+    }
     setCooldown(60);
   }
 
@@ -57,7 +68,12 @@ export function ForgotPasswordPage({ onBack }) {
     setLoading(true);
     const { error: err } = await supabase.auth.verifyOtp({ email, token: otp, type: 'recovery' });
     setLoading(false);
-    if (err) { setError(err.message); return; }
+    if (err) {
+      setError(err.message);
+      // Medium: sering karena user salah ketik OTP, bukan murni kegagalan kirim email.
+      logError('auth-verify-otp', err.message, { email }, 'medium');
+      return;
+    }
     setStep(3);
   }
 

@@ -1,6 +1,7 @@
 import React from 'react';
 import { supabase } from '../supabase';
 import { usePaywall } from '../components/PaywallModal';
+import { logError } from '../lib/errorLogger';
 
 const FALLBACK_COLORS = ["#2A6FDB","#1FA8A0","#1B8A3F","#9A6BD9","#B26A4A","#B68A3E","#5C6B4C","#C9886D"];
 const pickColor = (name) => FALLBACK_COLORS[(name || '').charCodeAt(0) % FALLBACK_COLORS.length];
@@ -153,6 +154,12 @@ export function useWallets(userId, limits) {
       setAccounts(prev => prev.map(a =>
         a.id === walletId ? { ...a, balance: newBalance } : a
       ));
+    } else {
+      // Gagal update saldo = uang/data permanen terdampak → catat (high).
+      console.error('[useWallets] adjustBalance FAILED:', error.code, error.message);
+      logError('adjustBalance', error.message, {
+        wallet_id: walletId, delta, attempted_balance: newBalance, code: error.code,
+      }, 'high');
     }
     return { error };
   }
