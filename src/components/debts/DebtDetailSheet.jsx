@@ -19,7 +19,7 @@ const input = { width: '100%', padding: '10px 12px', background: 'var(--paper)',
 
 // Bottom sheet detail catatan hutang/piutang: riwayat cicilan, form cicilan,
 // tandai lunas, hapus. `debt` selalu objek fresh dari parent (lookup by id).
-export default function DebtDetailSheet({ debt, onClose, getPayments, addPayment, markPaid, deleteDebt, onToast, openPaymentInitially = false }) {
+export default function DebtDetailSheet({ debt, onClose, getPayments, addPayment, markPaid, deleteDebt, onToast, openPaymentInitially = false, isPro }) {
   useScrollLock(!!debt);
   const [payments, setPayments]   = React.useState([]);
   const [loadingPay, setLoading]  = React.useState(true);
@@ -180,8 +180,13 @@ export default function DebtDetailSheet({ debt, onClose, getPayments, addPayment
           {confirm === 'delete' && (
             <div style={{ marginTop: 14, padding: 14, background: 'color-mix(in oklch, var(--terra) 10%, var(--paper))', border: '1px solid var(--line-soft)', borderRadius: 12 }}>
               <div style={{ fontSize: 13, color: 'var(--ink)', lineHeight: 1.5 }}>
-                ⚠️ Membatalkan hutang ini tidak membebaskan kuota cooldown 50 hari — tetap tidak bisa membuat catatan baru sampai jendela waktu berlalu.
+                Hapus catatan ini? Transaksi terkait akan dihapus dan saldo dikoreksi balik.
               </div>
+              {!isPro && (
+                <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5, marginTop: 6 }}>
+                  ⚠️ Membatalkan hutang ini tidak membebaskan kuota cooldown 50 hari — tetap tidak bisa membuat catatan baru sampai jendela waktu berlalu.
+                </div>
+              )}
               <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                 <button onClick={() => setConfirm('none')} style={{ flex: 1, padding: '10px', background: 'var(--ivory)', border: '1px solid var(--line-soft)', borderRadius: 10, fontSize: 13, color: 'var(--ink-2)', cursor: 'pointer' }}>Batal</button>
                 <button onClick={doDelete} disabled={busy} style={{ flex: 2, padding: '10px', background: 'var(--terra)', color: '#fff', border: 0, borderRadius: 10, fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>{busy ? 'Menghapus…' : 'Hapus Catatan'}</button>

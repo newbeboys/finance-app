@@ -226,6 +226,7 @@ export default function DebtsPage({
           deleteDebt={deleteDebt}
           onToast={setToast}
           openPaymentInitially={payInitial}
+          isPro={isPro}
         />
       )}
 
