@@ -1,8 +1,10 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { CATEGORIES, INCOME_CATEGORIES } from '../data';
+import { CATEGORIES, INCOME_CATEGORIES, fmtShort } from '../data';
 import { CategoryField, CUSTOM_ID, CUSTOM_COLORS } from '../category-field';
 import { DatePickerPopup } from '../transactions';
+import { IconChev } from '../icons';
+import { WalletGlyph } from '../wallets';
 import { useScrollLock } from '../hooks/useScrollLock';
 import { todayISO, fromISO } from '../lib/recurringHelper';
 
@@ -102,7 +104,7 @@ function DateGridField({ value, onChange }) {
 const BUILTIN_IDS = new Set([...CATEGORIES, ...INCOME_CATEGORIES].map((c) => c.id));
 
 // Modal form untuk menambah / mengubah satu jadwal transaksi berulang.
-export default function RecurringTransactionForm({ initial = null, onSave, onCancel }) {
+export default function RecurringTransactionForm({ initial = null, onSave, onCancel, accounts = [] }) {
   const { t } = useTranslation();
   useScrollLock(true);
   const isEdit = !!initial;
@@ -125,10 +127,16 @@ export default function RecurringTransactionForm({ initial = null, onSave, onCan
   const [mulaiDari, setMulaiDari] = React.useState(todayISO());
   const [catatan, setCatatan]   = React.useState('');
   const [showPicker, setShowPicker] = React.useState(false);
+  const [walletId, setWalletId] = React.useState(null);
+  const [walletOpen, setWalletOpen] = React.useState(false);
 
   // Pre-fill saat mode edit
   React.useEffect(() => {
-    if (!initial) return;
+    const primaryWallet = accounts.find((a) => a.primary) || accounts[0];
+    if (!initial) {
+      setWalletId(primaryWallet?.id || null);
+      return;
+    }
     setNama(initial.nama || '');
     setTipe(initial.tipe === 'pemasukan' ? 'pemasukan' : 'pengeluaran');
     setJumlah(String(initial.jumlah || ''));
@@ -138,6 +146,7 @@ export default function RecurringTransactionForm({ initial = null, onSave, onCan
     setBulan(initial.bulan || 1);
     setMulaiDari(initial.mulaiDari || todayISO());
     setCatatan(initial.catatan || '');
+    setWalletId(initial.wallet_id || primaryWallet?.id || null);
     // Kategori: id bawaan → pilih langsung; selain itu → mode Kustom (nama bebas)
     if (initial.kategori && BUILTIN_IDS.has(initial.kategori)) {
       setCat(initial.kategori);
@@ -145,10 +154,13 @@ export default function RecurringTransactionForm({ initial = null, onSave, onCan
       setCat(CUSTOM_ID);
       setPendingCustom({ name: initial.kategori, color: CUSTOM_COLORS[0] });
     }
-  }, [initial]);
+  }, [initial]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const activeCats = tipe === 'pemasukan' ? INCOME_CATEGORIES : CATEGORIES;
   const isCustom = cat === CUSTOM_ID;
+  // Dompet tunggal → pakai otomatis tanpa menampilkan dropdown (pola sama dengan AnalyticsPage)
+  const showWalletPicker = accounts.length > 1;
+  const hasWallet = accounts.length === 0 || !!walletId;
 
   const switchTipe = (next) => {
     setTipe(next);
@@ -159,7 +171,8 @@ export default function RecurringTransactionForm({ initial = null, onSave, onCan
   const valid =
     nama.trim().length > 0 &&
     (+jumlah > 0) &&
-    (!isCustom || (pendingCustom?.name || '').trim().length > 0);
+    (!isCustom || (pendingCustom?.name || '').trim().length > 0) &&
+    hasWallet;
 
   const submit = () => {
     if (!valid) return;
@@ -175,6 +188,7 @@ export default function RecurringTransactionForm({ initial = null, onSave, onCan
       bulan: frekuensi === 'tahunan' ? Number(bulan) : null,
       mulaiDari,
       catatan: catatan.trim(),
+      wallet_id: walletId || null,
       aktif: initial?.aktif ?? true,
     });
   };
@@ -224,6 +238,47 @@ export default function RecurringTransactionForm({ initial = null, onSave, onCan
               onPendingChange={setPendingCustom}
             />
           </Field>
+
+          {showWalletPicker && (
+            <Field label={t('berulang.dompet')}>
+              <div style={{ position: 'relative' }}>
+                <button type="button" onClick={() => setWalletOpen((v) => !v)}
+                  style={{ ...inputStyle, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '10px 12px' }}>
+                  {(() => {
+                    const sel = accounts.find((a) => a.id === walletId);
+                    return sel ? (
+                      <>
+                        <WalletGlyph type={sel.type} size={15} />
+                        <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 14 }}>{sel.name}</span>
+                        <span style={{ color: 'var(--muted)', fontSize: 12, flexShrink: 0, whiteSpace: 'nowrap' }}>{fmtShort(sel.balance)}</span>
+                      </>
+                    ) : (
+                      <span style={{ color: 'var(--muted)', fontSize: 14 }}>{t('berulang.pilihDompet')}</span>
+                    );
+                  })()}
+                  <IconChev size={13} style={{ flexShrink: 0, color: 'var(--muted)' }} />
+                </button>
+
+                {walletOpen && (
+                  <>
+                    <div onClick={() => setWalletOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 80 }} />
+                    <div className="card" style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 81, padding: 6, maxHeight: 200, overflowY: 'auto', boxShadow: '0 8px 24px -8px rgba(42,44,32,.25)' }}>
+                      {accounts.map((a) => (
+                        <button key={a.id} type="button" onClick={() => { setWalletId(a.id); setWalletOpen(false); }}
+                          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 10px', borderRadius: 8, border: 0, background: walletId === a.id ? 'var(--ivory)' : 'transparent', cursor: 'pointer', textAlign: 'left' }}>
+                          <span style={{ width: 28, height: 28, borderRadius: 7, background: `color-mix(in oklch, ${a.color} 18%, var(--ivory))`, color: a.color, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                            <WalletGlyph type={a.type} size={13} />
+                          </span>
+                          <span style={{ flex: 1, fontSize: 13, fontWeight: walletId === a.id ? 500 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--ink)' }}>{a.name}</span>
+                          <span style={{ fontSize: 11.5, color: 'var(--muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>{fmtShort(a.balance)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </Field>
+          )}
 
           {/* Frekuensi */}
           <Field label={t('berulang.frekuensi')}>

@@ -210,7 +210,7 @@ const RC_PACKAGE_MAP = {
   annual:   '$rc_annual',   // Rp 270.000/tahun
 };
 
-export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub, subscription, revenueCat }) {
+export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub, subscription, revenueCat, accounts = [] }) {
   const { t: tr } = useTranslation();
   const { openPaywall } = usePaywall();
   const sub = subscription || {};
@@ -703,7 +703,7 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub, s
         </div>
       )}
 
-      <RecurringTransactionPage open={showRecurring} onClose={() => setShowRecurring(false)} />
+      <RecurringTransactionPage open={showRecurring} onClose={() => setShowRecurring(false)} accounts={accounts} />
 
       <UpgradeModal
         isOpen={showUpgradeModal}

@@ -86,6 +86,7 @@ function normalize(data, id) {
     bulan: frekuensi === 'tahunan' ? Math.min(Math.max(Number(data.bulan) || 1, 1), 12) : null,
     mulaiDari: data.mulaiDari || todayISO(),
     catatan: (data.catatan || '').trim(),
+    wallet_id: data.wallet_id || null,
     aktif: data.aktif !== false,
   };
   item.nextDueDate = computeFirstDueDate(item);

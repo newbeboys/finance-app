@@ -104,7 +104,7 @@ function ConfirmDelete({ item, onConfirm, onCancel }) {
 }
 
 // ── Halaman utama ───────────────────────────────────────────────────
-export default function RecurringTransactionPage({ open, onClose }) {
+export default function RecurringTransactionPage({ open, onClose, accounts = [] }) {
   const { t } = useTranslation();
   useScrollLock(open);
 
@@ -176,6 +176,8 @@ export default function RecurringTransactionPage({ open, onClose }) {
             {items.map((item) => {
               const isIncome = item.tipe === 'pemasukan';
               const color = isIncome ? 'var(--sage)' : 'var(--terra)';
+              const wallet = accounts.find((a) => a.id === item.wallet_id);
+              const walletLabel = wallet ? wallet.name : t('berulang.dompetOtomatis');
               return (
                 <SwipeRow key={item.id} onEdit={() => openEdit(item)} onDelete={() => setConfirm(item)} deleteLabel={t('umum.hapus')}>
                   <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', opacity: item.aktif ? 1 : 0.55, transition: 'opacity .2s ease' }}>
@@ -190,6 +192,11 @@ export default function RecurringTransactionPage({ open, onClose }) {
                       <div style={{ fontSize: 11.5, color: 'var(--muted-2)', marginTop: 2 }}>
                         {t('berulang.jatuhTempoBer')} <span style={{ color: 'var(--ink-2)' }}>{dueLabel(item.nextDueDate)}</span>
                       </div>
+                      {accounts.length > 0 && (
+                        <div style={{ fontSize: 11.5, color: 'var(--muted-2)', marginTop: 2 }}>
+                          {t('berulang.dompet')}: <span style={{ color: wallet ? 'var(--ink-2)' : 'var(--muted)', fontStyle: wallet ? 'normal' : 'italic' }}>{walletLabel}</span>
+                        </div>
+                      )}
                     </div>
                     <MiniSwitch on={item.aktif} onClick={() => handleToggle(item)} />
                   </div>
@@ -208,6 +215,7 @@ export default function RecurringTransactionPage({ open, onClose }) {
           initial={editing}
           onSave={handleSave}
           onCancel={() => { setFormOpen(false); setEditing(null); }}
+          accounts={accounts}
         />
       )}
       {confirm && (

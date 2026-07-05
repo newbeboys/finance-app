@@ -457,7 +457,10 @@
     "catatanOpsional": "Catatan (opsional)",
     "catatanPlaceholder": "Catatan tambahan…",
     "pilihTanggal": "Pilih Tanggal",
-    "tanggalN": "Tanggal {{n}}"
+    "tanggalN": "Tanggal {{n}}",
+    "dompet": "Dompet",
+    "pilihDompet": "Pilih dompet",
+    "dompetOtomatis": "Otomatis"
   },
   "dompet": {
     "rekeningBank": "Rekening Bank",

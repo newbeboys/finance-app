@@ -457,7 +457,10 @@
     "catatanOpsional": "Notes (optional)",
     "catatanPlaceholder": "Additional notes…",
     "pilihTanggal": "Pick Date",
-    "tanggalN": "Date {{n}}"
+    "tanggalN": "Date {{n}}",
+    "dompet": "Wallet",
+    "pilihDompet": "Select wallet",
+    "dompetOtomatis": "Automatic"
   },
   "dompet": {
     "rekeningBank": "Bank Account",
