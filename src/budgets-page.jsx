@@ -66,7 +66,7 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
             </div>
           )}
         </div>
-        <div style={{ display: "flex", padding: 3, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10 }}>
+        <div data-tour="budget-period-toggle" style={{ display: "flex", padding: 3, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10 }}>
           {[{ id: "monthly", labelKey: "anggaran.bulanan" }, { id: "weekly", labelKey: "anggaran.mingguan" }].map(p => (
             <button key={p.id} onClick={() => setPeriod(p.id)} style={{ padding: isMobile ? "9px 16px" : "7px 14px", fontSize: isMobile ? 13 : 12.5, background: period === p.id ? "var(--ivory)" : "transparent", border: period === p.id ? "1px solid var(--line-soft)" : "1px solid transparent", borderRadius: 8, color: period === p.id ? "var(--ink)" : "var(--muted)", fontWeight: period === p.id ? 500 : 400 }}>{tr(p.labelKey)}</button>
           ))}
@@ -85,6 +85,7 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
             {tr('anggaran.deskripsiKosong')}
           </div>
           <button
+            data-tour="budget-add-category"
             onClick={() => setShowAddModal(true)}
             style={{ marginTop: 8, display: "inline-flex", alignItems: "center", gap: 8, padding: "12px 20px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 14, fontWeight: 500 }}>
             <IconPlus size={15} /> {tr('anggaran.tambahKategori')}
@@ -247,7 +248,7 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
             })}
 
             <div style={{ paddingTop: 18, display: "flex", flexDirection: isMobile ? "column" : "row", justifyContent: isMobile ? "stretch" : "flex-start", alignItems: isMobile ? "stretch" : "center", gap: isMobile ? 10 : 0 }}>
-              <button onClick={() => setShowAddModal(true)} style={{ display: "inline-flex", alignItems: "center", justifyContent: isMobile ? "center" : "flex-start", gap: 8, padding: isMobile ? "13px 14px" : "9px 14px", background: "var(--paper)", border: "1px dashed var(--line)", borderRadius: 10, fontSize: isMobile ? 14 : 12.5, color: "var(--ink-2)" }}>
+              <button data-tour="budget-add-category" onClick={() => setShowAddModal(true)} style={{ display: "inline-flex", alignItems: "center", justifyContent: isMobile ? "center" : "flex-start", gap: 8, padding: isMobile ? "13px 14px" : "9px 14px", background: "var(--paper)", border: "1px dashed var(--line)", borderRadius: 10, fontSize: isMobile ? 14 : 12.5, color: "var(--ink-2)" }}>
                 <IconPlus size={14} /> {tr('anggaran.tambahKategori')}
               </button>
             </div>

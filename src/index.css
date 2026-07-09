@@ -403,6 +403,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
     margin-top: 4px !important;
   }
 
+  /* Dompet/Kategori/Metode: satu grup, satu baris, shrink proporsional */
+  .tx-filter-group {
+    gap: 6px !important;
+  }
+
   /* ── Report preview modal ── */
   .report-preview-backdrop {
     padding: 0 !important;
@@ -460,6 +465,24 @@ button { font: inherit; color: inherit; cursor: pointer; }
     padding: 12px 16px;
     background: var(--ivory);
     border-top: 1px solid var(--line-soft);
+  }
+}
+
+/* ── Very narrow phones (≤400px): 3-across Dompet/Kategori/Metode gets too
+   cramped to read, fall back to a 2-col grid (Dompet + Kategori row 1,
+   Metode spans row 2) ── */
+@media (max-width: 400px) {
+  .tx-filter-group {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+    width: 100%;
+  }
+  /* Method selalu jadi elemen ke-3 HANYA kalau Dompet ikut tampil (>1 dompet) —
+     span baris kedua supaya jadi "Dompet + Kategori" (row 1) / "Metode" (row 2).
+     Kalau cuma 2 dropdown (1 dompet), keduanya tetap berdampingan di grid 2-kol. */
+  .tx-filter-group > select:nth-child(3) {
+    grid-column: 1 / -1;
   }
 }
 

@@ -23,7 +23,7 @@ export function SubscriptionStatus({
     : null;
 
   return (
-    <div className={`ss-card ${isPro ? 'ss-pro' : 'ss-basic'}`}>
+    <div data-tour="settings-akun-paket" className={`ss-card ${isPro ? 'ss-pro' : 'ss-basic'}`}>
       <div className="ss-header">
         <div className="ss-icon">{isPro ? '👑' : '🔒'}</div>
         <div className="ss-meta">

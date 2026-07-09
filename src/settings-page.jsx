@@ -74,9 +74,9 @@ function RadioOption({ label, desc, checked, onSelect, last }) {
   );
 }
 
-function SettingCard({ eyebrow, title, children }) {
+function SettingCard({ eyebrow, title, children, dataTour }) {
   return (
-    <div className="card rise" style={{ padding: "20px 24px" }}>
+    <div data-tour={dataTour} className="card rise" style={{ padding: "20px 24px" }}>
       <div style={{ marginBottom: 4 }}>
         <div style={{ fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{eyebrow}</div>
         <div className="serif" style={{ fontSize: 22, letterSpacing: "-0.01em", marginTop: 2 }}>{title}</div>
@@ -547,7 +547,7 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub, s
         </SettingCard>
 
         {/* Security — metode tunggal via radio (Tidak ada / PIN / Biometrik) */}
-        <SettingCard eyebrow={tr('pengaturan.keamanan')} title={tr('pengaturan.kunciAplikasi')}>
+        <SettingCard eyebrow={tr('pengaturan.keamanan')} title={tr('pengaturan.kunciAplikasi')} dataTour="settings-keamanan">
           <div style={{ fontSize: 12.5, color: "var(--muted)", margin: "8px 0 2px", lineHeight: 1.5 }}>
             {tr('pengaturan.pilihMetode')}
           </div>

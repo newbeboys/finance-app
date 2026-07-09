@@ -21,6 +21,15 @@ import { LoginPage } from './pages/Login';
 import { RegisterPage } from './pages/Register';
 import { ForgotPasswordPage } from './pages/ForgotPassword';
 import OnboardingScreen from './components/OnboardingScreen';
+import ProductTour from './components/ProductTour';
+import TransaksiTour from './components/TransaksiTour';
+import SavingsTour from './components/SavingsTour';
+import BudgetsTour from './components/BudgetsTour';
+import AnalitikTour from './components/AnalitikTour';
+import HutangPiutangTour from './components/HutangPiutangTour';
+import LaporanTour from './components/LaporanTour';
+import DompetTour from './components/DompetTour';
+import PengaturanTour from './components/PengaturanTour';
 import SplashScreen from './components/SplashScreen';
 import { GoalCompleteOverlay } from './components/GoalCompleteOverlay';
 import { isSoundAnimEnabled } from './lib/sound';
@@ -67,6 +76,9 @@ export default function App() {
   // Onboarding tampil setiap kali user baru register atau login (fresh session).
   // Bukan disimpan di localStorage: di-trigger dari handler auth, di-reset saat logout.
   const [showOnboarding, setShowOnboarding] = React.useState(false);
+  // Flag sesaat setelah OnboardingScreen selesai — dipakai AuthenticatedApp buat
+  // memicu ProductTour (bukan localStorage, karena hanya perlu momen transisinya).
+  const [onboardingJustCompleted, setOnboardingJustCompleted] = React.useState(false);
 
   // ── Gerbang keamanan → splash → konten ──────────────────────────────
   // Urutan: verifikasi keamanan (PIN/biometrik) DULU, baru splash 3 detik,
@@ -179,9 +191,11 @@ export default function App() {
   } else {
     content = (
       <>
-        <AuthenticatedApp session={session} />
+        <AuthenticatedApp session={session} onboardingJustCompleted={onboardingJustCompleted} />
         {/* Overlay onboarding di atas halaman utama setelah register/login berhasil */}
-        {showOnboarding && <OnboardingScreen onDone={() => setShowOnboarding(false)} />}
+        {showOnboarding && (
+          <OnboardingScreen onDone={() => { setShowOnboarding(false); setOnboardingJustCompleted(true); }} />
+        )}
       </>
     );
   }
@@ -197,6 +211,15 @@ export default function App() {
 
 const TWEAKS_KEY = 'finance_tweaks';
 const NOTIF_PREFS_KEY = 'notif_prefs';
+const TOUR_KEY = 'productTourDone_v1';
+const TOUR_TRANSAKSI_KEY = 'productTourTransaksiDone_v1';
+const TOUR_TABUNGAN_KEY = 'productTourTabunganDone_v1';
+const TOUR_ANGGARAN_KEY = 'productTourAnggaranDone_v1';
+const TOUR_ANALITIK_KEY = 'productTourAnalitikDone_v1';
+const TOUR_HUTANG_PIUTANG_KEY = 'productTourHutangPiutangDone_v1';
+const TOUR_LAPORAN_KEY = 'productTourLaporanDone_v1';
+const TOUR_DOMPET_KEY = 'productTourDompetDone_v1';
+const TOUR_PENGATURAN_KEY = 'productTourPengaturanDone_v1';
 const NOTIF_PREFS_DEFAULTS = { budget: true, income: true, weekly: true, bills: false, debts: true };
 
 function loadSavedTweaks() {
@@ -208,7 +231,7 @@ function loadNotifPrefs() {
   catch { return { ...NOTIF_PREFS_DEFAULTS }; }
 }
 
-function AuthenticatedApp({ session }) {
+function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
   // Merge: hardcoded defaults ← localStorage ← window overrides
   const defaults = React.useMemo(() => ({
     ...TWEAK_DEFAULTS,
@@ -473,6 +496,151 @@ function AuthenticatedApp({ session }) {
   const [depositGoal, setDepositGoal] = React.useState(null);
   const [goalCelebrate, setGoalCelebrate] = React.useState(false);
 
+  // Product Tour — tampil sekali untuk user baru, setelah onboarding selesai,
+  // khusus di tab Beranda, dan tidak boleh tabrakan dengan modal lain yang aktif.
+  const [tourActive, setTourActive] = React.useState(false);
+  const anyModalOpen = modal || scanOpen || addAcct || addGoal || !!depositGoal || goalCelebrate;
+  React.useEffect(() => {
+    if (!onboardingJustCompleted || active !== 'dashboard' || anyModalOpen) return;
+    try {
+      if (localStorage.getItem(TOUR_KEY) === 'true') return;
+    } catch {}
+    setTourActive(true);
+  }, [onboardingJustCompleted]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleTourComplete = React.useCallback(() => {
+    try { localStorage.setItem(TOUR_KEY, 'true'); } catch {}
+    setTourActive(false);
+  }, []);
+
+  // Tour Transaksi — independen dari tour Beranda, tampil sekali saat user
+  // pertama kali membuka tab Transaksi, dan tidak boleh tabrakan dengan modal lain.
+  const [tourTransaksiActive, setTourTransaksiActive] = React.useState(false);
+  React.useEffect(() => {
+    if (active !== 'transactions' || anyModalOpen) return;
+    try {
+      if (localStorage.getItem(TOUR_TRANSAKSI_KEY) === 'true') return;
+    } catch {}
+    setTourTransaksiActive(true);
+  }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleTourTransaksiComplete = React.useCallback(() => {
+    try { localStorage.setItem(TOUR_TRANSAKSI_KEY, 'true'); } catch {}
+    setTourTransaksiActive(false);
+  }, []);
+
+  // Tour Tabungan — independen dari tour Beranda & Transaksi, tampil sekali saat
+  // user pertama kali membuka tab Tabungan, dan tidak boleh tabrakan dengan modal lain.
+  const [tourTabunganActive, setTourTabunganActive] = React.useState(false);
+  React.useEffect(() => {
+    if (active !== 'savings' || anyModalOpen) return;
+    try {
+      if (localStorage.getItem(TOUR_TABUNGAN_KEY) === 'true') return;
+    } catch {}
+    setTourTabunganActive(true);
+  }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleTourTabunganComplete = React.useCallback(() => {
+    try { localStorage.setItem(TOUR_TABUNGAN_KEY, 'true'); } catch {}
+    setTourTabunganActive(false);
+  }, []);
+
+  // Tour Anggaran — independen dari 3 tour lain, tampil sekali saat user
+  // pertama kali membuka tab Anggaran, dan tidak boleh tabrakan dengan modal lain.
+  const [tourAnggaranActive, setTourAnggaranActive] = React.useState(false);
+  React.useEffect(() => {
+    if (active !== 'budgets' || anyModalOpen) return;
+    try {
+      if (localStorage.getItem(TOUR_ANGGARAN_KEY) === 'true') return;
+    } catch {}
+    setTourAnggaranActive(true);
+  }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleTourAnggaranComplete = React.useCallback(() => {
+    try { localStorage.setItem(TOUR_ANGGARAN_KEY, 'true'); } catch {}
+    setTourAnggaranActive(false);
+  }, []);
+
+  // Tour Analitik — independen dari tour lain, tampil sekali saat user
+  // pertama kali membuka tab Analitik, dan tidak boleh tabrakan dengan modal lain.
+  const [tourAnalitikActive, setTourAnalitikActive] = React.useState(false);
+  React.useEffect(() => {
+    if (active !== 'analytics' || anyModalOpen) return;
+    try {
+      if (localStorage.getItem(TOUR_ANALITIK_KEY) === 'true') return;
+    } catch {}
+    setTourAnalitikActive(true);
+  }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleTourAnalitikComplete = React.useCallback(() => {
+    try { localStorage.setItem(TOUR_ANALITIK_KEY, 'true'); } catch {}
+    setTourAnalitikActive(false);
+  }, []);
+
+  // Tour Hutang & Piutang — independen dari tour lain, tampil sekali saat user
+  // pertama kali membuka tab Hutang/Piutang, dan tidak boleh tabrakan dengan modal lain.
+  const [tourHutangPiutangActive, setTourHutangPiutangActive] = React.useState(false);
+  React.useEffect(() => {
+    if (active !== 'debts' || anyModalOpen) return;
+    try {
+      if (localStorage.getItem(TOUR_HUTANG_PIUTANG_KEY) === 'true') return;
+    } catch {}
+    setTourHutangPiutangActive(true);
+  }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleTourHutangPiutangComplete = React.useCallback(() => {
+    try { localStorage.setItem(TOUR_HUTANG_PIUTANG_KEY, 'true'); } catch {}
+    setTourHutangPiutangActive(false);
+  }, []);
+
+  // Tour Laporan — independen dari tour lain, tampil sekali saat user
+  // pertama kali membuka tab Laporan, dan tidak boleh tabrakan dengan modal lain.
+  const [tourLaporanActive, setTourLaporanActive] = React.useState(false);
+  React.useEffect(() => {
+    if (active !== 'reports' || anyModalOpen) return;
+    try {
+      if (localStorage.getItem(TOUR_LAPORAN_KEY) === 'true') return;
+    } catch {}
+    setTourLaporanActive(true);
+  }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleTourLaporanComplete = React.useCallback(() => {
+    try { localStorage.setItem(TOUR_LAPORAN_KEY, 'true'); } catch {}
+    setTourLaporanActive(false);
+  }, []);
+
+  // Tour Dompet — independen dari tour lain, tampil sekali saat user
+  // pertama kali membuka tab Dompet, dan tidak boleh tabrakan dengan modal lain.
+  const [tourDompetActive, setTourDompetActive] = React.useState(false);
+  React.useEffect(() => {
+    if (active !== 'wallets' || anyModalOpen) return;
+    try {
+      if (localStorage.getItem(TOUR_DOMPET_KEY) === 'true') return;
+    } catch {}
+    setTourDompetActive(true);
+  }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleTourDompetComplete = React.useCallback(() => {
+    try { localStorage.setItem(TOUR_DOMPET_KEY, 'true'); } catch {}
+    setTourDompetActive(false);
+  }, []);
+
+  // Tour Pengaturan — independen dari tour lain, tampil sekali saat user
+  // pertama kali membuka tab Pengaturan, dan tidak boleh tabrakan dengan modal lain.
+  const [tourPengaturanActive, setTourPengaturanActive] = React.useState(false);
+  React.useEffect(() => {
+    if (active !== 'settings' || anyModalOpen) return;
+    try {
+      if (localStorage.getItem(TOUR_PENGATURAN_KEY) === 'true') return;
+    } catch {}
+    setTourPengaturanActive(true);
+  }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleTourPengaturanComplete = React.useCallback(() => {
+    try { localStorage.setItem(TOUR_PENGATURAN_KEY, 'true'); } catch {}
+    setTourPengaturanActive(false);
+  }, []);
+
   // ── Gate fitur (Basic vs Pro) — pre-check di tombol pemicu ─────────
   // Wallet/goal: cek limit SEBELUM membuka form supaya form tak terbuka
   // sia-sia (hook tetap punya guard otoritatif sebagai jaring pengaman).
@@ -589,6 +757,16 @@ function AuthenticatedApp({ session }) {
       <DepositModal goal={depositGoal} onClose={() => setDepositGoal(null)} onConfirm={handleDeposit} />
 
       {goalCelebrate && <GoalCompleteOverlay onClose={() => setGoalCelebrate(false)} />}
+
+      <ProductTour isActive={tourActive && !anyModalOpen} onComplete={handleTourComplete} />
+      <TransaksiTour isActive={tourTransaksiActive && !anyModalOpen} onComplete={handleTourTransaksiComplete} isPro={subscription.isPro} hasMultipleWallets={accounts.length > 1} />
+      <SavingsTour isActive={tourTabunganActive && !anyModalOpen} onComplete={handleTourTabunganComplete} hasGoals={goals.length > 0} />
+      <BudgetsTour isActive={tourAnggaranActive && !anyModalOpen} onComplete={handleTourAnggaranComplete} />
+      <AnalitikTour isActive={tourAnalitikActive && !anyModalOpen} onComplete={handleTourAnalitikComplete} hasMultipleWallets={accounts.length > 1} isPro={subscription.isPro} />
+      <HutangPiutangTour isActive={tourHutangPiutangActive && !anyModalOpen} onComplete={handleTourHutangPiutangComplete} />
+      <LaporanTour isActive={tourLaporanActive && !anyModalOpen} onComplete={handleTourLaporanComplete} hasReports={transactions.length > 0} canExport={limits.reportsExportEnabled} />
+      <DompetTour isActive={tourDompetActive && !anyModalOpen} onComplete={handleTourDompetComplete} hasWallets={accounts.length > 0} />
+      <PengaturanTour isActive={tourPengaturanActive && !anyModalOpen} onComplete={handleTourPengaturanComplete} />
 
       {/* Toast: tema font di-reset karena downgrade ke Basic */}
       {fontResetToast && (

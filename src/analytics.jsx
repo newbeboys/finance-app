@@ -271,7 +271,7 @@ export function AnalyticsPage({ transactions = [], customCategories = [], accoun
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             {/* Scope filter */}
-            <div style={{ display: "flex", padding: 3, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10 }}>
+            <div data-tour="analitik-scope-toggle" style={{ display: "flex", padding: 3, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10 }}>
               <button onClick={() => setScope("year")} style={{ padding: "8px 16px", fontSize: 12.5, background: scope === "year" ? "var(--ivory)" : "transparent", border: scope === "year" ? "1px solid var(--line-soft)" : "1px solid transparent", borderRadius: 8, color: scope === "year" ? "var(--ink)" : "var(--muted)", fontWeight: scope === "year" ? 500 : 400 }}>
                 {t('analitik.saTahun')}
               </button>
@@ -283,6 +283,7 @@ export function AnalyticsPage({ transactions = [], customCategories = [], accoun
             {/* Wallet filter — HANYA tampil jika user punya lebih dari 1 dompet */}
             {accounts.length > 1 && (
               <select
+                data-tour="analitik-wallet-filter"
                 value={selectedWalletId}
                 onChange={e => setSelectedWalletId(e.target.value)}
                 style={{
@@ -305,7 +306,7 @@ export function AnalyticsPage({ transactions = [], customCategories = [], accoun
               </select>
             )}
 
-            <button onClick={() => { if (window.buildPayload && window.downloadPdf) window.downloadPdf(window.buildPayload(transactions, "year", String(now.getFullYear()))); }} style={{ padding: "10px 14px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 10, fontSize: 12.5, display: "inline-flex", gap: 7, alignItems: "center" }}>
+            <button data-tour="analitik-unduh-laporan" onClick={() => { if (window.buildPayload && window.downloadPdf) window.downloadPdf(window.buildPayload(transactions, "year", String(now.getFullYear()))); }} style={{ padding: "10px 14px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 10, fontSize: 12.5, display: "inline-flex", gap: 7, alignItems: "center" }}>
               <IconArrowDown size={14} /> {t('analitik.unduhLaporan')}
             </button>
           </div>

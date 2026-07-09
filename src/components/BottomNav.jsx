@@ -121,7 +121,7 @@ export function BottomNav({ active, onNav }) {
       )}
 
       {/* Bottom navigation bar */}
-      <nav className="bottom-nav">
+      <nav data-tour="bottom-nav" className="bottom-nav">
         {MAIN_NAV.map(({ id, tKey, Icon }) => {
           const isActive = active === id;
           return (

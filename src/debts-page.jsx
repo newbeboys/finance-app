@@ -101,6 +101,7 @@ export default function DebtsPage({
           )}
         </div>
         <button
+          data-tour="debts-add"
           onClick={() => setShowAdd(true)}
           style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, cursor: "pointer" }}
         >
@@ -146,7 +147,7 @@ export default function DebtsPage({
       </div>
 
       {/* ── Tab switcher ── */}
-      <div style={{ display: "inline-flex", gap: 4, padding: 4, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 12, marginBottom: 18 }}>
+      <div data-tour="debts-tabs" style={{ display: "inline-flex", gap: 4, padding: 4, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 12, marginBottom: 18 }}>
         {TABS.map(tab => {
           const on = activeTab === tab.id;
           return (

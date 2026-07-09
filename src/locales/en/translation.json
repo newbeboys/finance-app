@@ -425,6 +425,121 @@
     "lanjut": "Next",
     "mulai": "Get Started"
   },
+  "tour": {
+    "lanjut": "Next",
+    "lewati": "Skip",
+    "selesai": "Done",
+    "langkah": "{{current}}/{{total}}",
+    "welcome": {
+      "title": "Welcome to FinanceApp!",
+      "desc": "Let's take a quick look at the main menu."
+    },
+    "bottomNav": {
+      "title": "Explore More Menus",
+      "desc": "All your main pages live in this bottom navigation — transactions, savings, budgets, and more."
+    },
+    "transaksi": {
+      "catatScan": {
+        "title": "Log & Scan Transactions",
+        "desc": "Log a transaction manually or scan a receipt automatically here."
+      },
+      "catatManual": {
+        "title": "Log a Transaction",
+        "desc": "Tap here to log a new income or expense."
+      },
+      "cariSaring": {
+        "title": "Search & Filter Transactions",
+        "desc": "Find a specific transaction or filter by type, category, and payment method.",
+        "descDompet": "Find a specific transaction or filter by wallet, type, category, and payment method."
+      }
+    },
+    "tabungan": {
+      "buatGoal": {
+        "title": "Create a Savings Goal",
+        "desc": "Set up a new savings target here, like a vacation or emergency fund."
+      },
+      "tambahDana": {
+        "title": "Add Funds to a Goal",
+        "desc": "Deposit funds into this goal anytime until you reach your target."
+      }
+    },
+    "anggaran": {
+      "gantiTampilan": {
+        "title": "Switch Budget View",
+        "desc": "Switch the budget view between monthly and weekly mode here."
+      },
+      "tambahKategori": {
+        "title": "Add a Budget Category",
+        "desc": "Add a new budget category to start tracking your spending."
+      }
+    },
+    "analitik": {
+      "gantiRentang": {
+        "title": "Switch Time Range",
+        "desc": "Switch your analysis time range here."
+      },
+      "saringDompet": {
+        "title": "Filter by Wallet",
+        "desc": "Filter analytics by a specific wallet."
+      },
+      "unduhLaporan": {
+        "title": "Download Report",
+        "descPro": "Download your full report in PDF or Excel format.",
+        "descBasic": "Download your full report — this feature is available on the Pro plan."
+      }
+    },
+    "hutangPiutang": {
+      "catatBaru": {
+        "title": "Log a New Debt/Receivable",
+        "desc": "Log a new receivable or debt here."
+      },
+      "gantiTampilan": {
+        "title": "Switch Receivable/Debt View",
+        "desc": "Switch between receivables, debts, and paid-off records."
+      }
+    },
+    "laporan": {
+      "pilihJenis": {
+        "title": "Choose Report Type",
+        "desc": "Choose a monthly or yearly report here."
+      },
+      "lihatUnduh": {
+        "title": "View & Download Reports",
+        "desc": "Preview a report or download it as PDF/Excel.",
+        "descBasic": "Preview a report or download it as PDF/Excel. (Download requires Pro.)"
+      }
+    },
+    "dompet": {
+      "tambahBaru": {
+        "title": "Add a New Wallet",
+        "desc": "Add a new wallet for a bank account, e-wallet, cash, or investment."
+      },
+      "lihatTransaksi": {
+        "title": "View Transactions per Wallet",
+        "desc": "View the transaction history for this wallet."
+      }
+    },
+    "pengaturan": {
+      "kelolaLangganan": {
+        "title": "Manage Subscription",
+        "desc": "Choose or manage your subscription plan here."
+      },
+      "amankanAplikasi": {
+        "title": "Secure the App",
+        "desc": "Turn on a PIN or fingerprint lock to keep your data safer."
+      },
+      "jelajahiLainnya": {
+        "title": "Explore More Settings",
+        "desc": "Scroll down to set your theme, font, language, notifications, and recurring transactions."
+      }
+    },
+    "berulang": {
+      "tambahJadwal": {
+        "title": "Add a New Schedule",
+        "desc": "Create an automatic transaction schedule here — weekly, monthly, or yearly."
+      }
+    }
+  },
   "berulang": {
     "judul": "Recurring Transactions",
     "mingguan": "Weekly",

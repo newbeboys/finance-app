@@ -6,6 +6,9 @@ import {
 } from '../lib/recurringHelper';
 import RecurringTransactionForm from '../components/RecurringTransactionForm';
 import { useScrollLock } from '../hooks/useScrollLock';
+import RecurringTour from '../components/RecurringTour';
+
+const TOUR_RECURRING_KEY = 'productTourRecurringDone_v1';
 
 const MONTH_NAMES = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 
@@ -129,6 +132,23 @@ export default function RecurringTransactionPage({ open, onClose, accounts = [] 
 
   React.useEffect(() => { if (open) refresh(); }, [open, refresh]);
 
+  // Tour — tampil sekali saat halaman ini dibuka pertama kali, independen dari
+  // tour lain. Guard sama seperti tour lain: tidak tabrakan dengan modal lokal
+  // (form tambah/edit, konfirmasi hapus) yang mungkin terbuka di halaman ini.
+  const [tourActive, setTourActive] = React.useState(false);
+  React.useEffect(() => {
+    if (!open) return;
+    try {
+      if (localStorage.getItem(TOUR_RECURRING_KEY) === 'true') return;
+    } catch {}
+    setTourActive(true);
+  }, [open]);
+
+  const handleTourComplete = React.useCallback(() => {
+    try { localStorage.setItem(TOUR_RECURRING_KEY, 'true'); } catch {}
+    setTourActive(false);
+  }, []);
+
   if (!open) return null;
 
   const openAdd = () => { setEditing(null); setFormOpen(true); };
@@ -156,7 +176,7 @@ export default function RecurringTransactionPage({ open, onClose, accounts = [] 
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="serif" style={{ fontSize: 22, letterSpacing: '-0.01em', color: 'var(--ink)' }}>{t('berulang.judul')}</div>
         </div>
-        <button onClick={openAdd} aria-label="Tambah"
+        <button data-tour="recurring-add" onClick={openAdd} aria-label="Tambah"
           style={{ width: 40, height: 40, borderRadius: 12, border: 0, background: 'var(--ink)', color: 'var(--cream)', display: 'grid', placeItems: 'center', cursor: 'pointer', flexShrink: 0 }}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
         </button>
@@ -221,6 +241,8 @@ export default function RecurringTransactionPage({ open, onClose, accounts = [] 
       {confirm && (
         <ConfirmDelete item={confirm} onConfirm={handleDelete} onCancel={() => setConfirm(null)} />
       )}
+
+      <RecurringTour isActive={tourActive && !formOpen && !confirm} onComplete={handleTourComplete} />
     </div>
   );
 }

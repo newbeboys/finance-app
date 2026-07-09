@@ -151,7 +151,7 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
             style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--terra)", color: "#fff", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, opacity: accounts.length < 2 ? 0.5 : 1, cursor: accounts.length < 2 ? "not-allowed" : "pointer" }}>
             🗑️ {t('dompet.hapusDompet', { defaultValue: 'Hapus Dompet' })}
           </button>
-          <button onClick={onAdd} style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, opacity: addLocked ? 0.6 : 1, cursor: addLocked ? "not-allowed" : "pointer" }}>
+          <button data-tour="wallets-add" onClick={onAdd} style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, opacity: addLocked ? 0.6 : 1, cursor: addLocked ? "not-allowed" : "pointer" }}>
             <IconPlus size={15} /> {t('dompet.tambahdompet')}
             {addLocked && <LockBadge />}
           </button>
@@ -229,7 +229,7 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
               </div>
             </div>
             <div className="hairline" style={{ display: "flex" }}>
-              <button onClick={() => setTxSheet(a)} style={{ ...cardFootBtn, flex: 1 }}>{t('dompet.transaksi')}</button>
+              <button data-tour={i === 0 ? "wallets-tx-first" : undefined} onClick={() => setTxSheet(a)} style={{ ...cardFootBtn, flex: 1 }}>{t('dompet.transaksi')}</button>
             </div>
           </div>
         ))}

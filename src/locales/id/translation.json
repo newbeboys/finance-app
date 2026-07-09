@@ -425,6 +425,121 @@
     "lanjut": "Lanjut",
     "mulai": "Mulai"
   },
+  "tour": {
+    "lanjut": "Lanjut",
+    "lewati": "Lewati",
+    "selesai": "Selesai",
+    "langkah": "{{current}}/{{total}}",
+    "welcome": {
+      "title": "Selamat Datang di FinanceApp!",
+      "desc": "Yuk kenalan sebentar sama menu utamanya."
+    },
+    "bottomNav": {
+      "title": "Jelajahi Menu Lainnya",
+      "desc": "Semua halaman utama ada di navigasi bawah ini — transaksi, tabungan, anggaran, dan lainnya."
+    },
+    "transaksi": {
+      "catatScan": {
+        "title": "Catat & Scan Transaksi",
+        "desc": "Catat manual atau scan struk otomatis di sini."
+      },
+      "catatManual": {
+        "title": "Catat Transaksi",
+        "desc": "Tap di sini buat catat pemasukan atau pengeluaran baru."
+      },
+      "cariSaring": {
+        "title": "Cari & Saring Transaksi",
+        "desc": "Cari transaksi tertentu atau saring berdasarkan tipe, kategori, dan metode pembayaran.",
+        "descDompet": "Cari transaksi tertentu atau saring berdasarkan dompet, tipe, kategori, dan metode pembayaran."
+      }
+    },
+    "tabungan": {
+      "buatGoal": {
+        "title": "Buat Target Tabungan",
+        "desc": "Bikin target tabungan baru di sini, misalnya buat liburan atau dana darurat."
+      },
+      "tambahDana": {
+        "title": "Tambah Dana ke Goal",
+        "desc": "Setor dana ke goal ini kapan aja sampai targetmu tercapai."
+      }
+    },
+    "anggaran": {
+      "gantiTampilan": {
+        "title": "Ganti Tampilan Anggaran",
+        "desc": "Ganti tampilan anggaran ke mode bulanan atau mingguan di sini."
+      },
+      "tambahKategori": {
+        "title": "Tambah Kategori Anggaran",
+        "desc": "Tambahkan kategori anggaran baru buat mulai melacak pengeluaranmu."
+      }
+    },
+    "analitik": {
+      "gantiRentang": {
+        "title": "Ganti Rentang Waktu",
+        "desc": "Ganti rentang waktu analisis kamu di sini."
+      },
+      "saringDompet": {
+        "title": "Saring per Dompet",
+        "desc": "Saring analitik berdasarkan dompet tertentu."
+      },
+      "unduhLaporan": {
+        "title": "Unduh Laporan",
+        "descPro": "Unduh laporan lengkap kamu dalam format PDF atau Excel.",
+        "descBasic": "Unduh laporan lengkap — fitur ini tersedia di paket Pro."
+      }
+    },
+    "hutangPiutang": {
+      "catatBaru": {
+        "title": "Catat Hutang/Piutang Baru",
+        "desc": "Catat piutang atau hutang baru di sini."
+      },
+      "gantiTampilan": {
+        "title": "Ganti Tampilan Piutang/Hutang",
+        "desc": "Pindah tampilan antara piutang, hutang, dan yang sudah lunas."
+      }
+    },
+    "laporan": {
+      "pilihJenis": {
+        "title": "Pilih Jenis Laporan",
+        "desc": "Pilih laporan bulanan atau tahunan di sini."
+      },
+      "lihatUnduh": {
+        "title": "Lihat & Unduh Laporan",
+        "desc": "Lihat pratinjau laporan atau unduh dalam format PDF/Excel.",
+        "descBasic": "Lihat pratinjau laporan atau unduh dalam format PDF/Excel. (Unduh perlu Pro.)"
+      }
+    },
+    "dompet": {
+      "tambahBaru": {
+        "title": "Tambah Dompet Baru",
+        "desc": "Tambahkan dompet baru untuk rekening bank, e-wallet, tunai, atau investasi."
+      },
+      "lihatTransaksi": {
+        "title": "Lihat Transaksi per Dompet",
+        "desc": "Lihat riwayat transaksi khusus dompet ini."
+      }
+    },
+    "pengaturan": {
+      "kelolaLangganan": {
+        "title": "Kelola Langganan",
+        "desc": "Pilih atau kelola paket langgananmu di sini."
+      },
+      "amankanAplikasi": {
+        "title": "Amankan Aplikasi",
+        "desc": "Aktifkan PIN atau sidik jari biar datamu lebih aman."
+      },
+      "jelajahiLainnya": {
+        "title": "Jelajahi Pengaturan Lainnya",
+        "desc": "Scroll ke bawah buat atur tema, font, bahasa, notifikasi, dan transaksi berulang."
+      }
+    },
+    "berulang": {
+      "tambahJadwal": {
+        "title": "Tambah Jadwal Baru",
+        "desc": "Bikin jadwal transaksi otomatis di sini — mingguan, bulanan, atau tahunan."
+      }
+    }
+  },
   "berulang": {
     "judul": "Transaksi Berulang",
     "mingguan": "Mingguan",

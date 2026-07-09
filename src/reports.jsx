@@ -1079,7 +1079,7 @@ export function ReportsPage({ transactions = [], customCategories = [], canExpor
             {tr('laporan.deskripsi')}
           </div>
         </div>
-        <div style={{ display: "flex", padding: 3, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10 }}>
+        <div data-tour="laporan-scope-toggle" style={{ display: "flex", padding: 3, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10 }}>
           {[{ id: "month", labelKey: "laporan.bulanan" }, { id: "year", labelKey: "laporan.tahunan" }].map(s => (
             <button key={s.id} onClick={() => setScope(s.id)} style={{
               padding: "8px 16px", fontSize: 12.5,
@@ -1105,7 +1105,7 @@ export function ReportsPage({ transactions = [], customCategories = [], canExpor
         <div className="report-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
           {months.map((m, i) => (
             <ReportCard key={m.key} eyebrow={`${m.full} ${m.year}`} income={m.income} expense={m.expense} net={m.net}
-              latest={i === 0} delay={i * 0.03} big={false}
+              latest={i === 0} delay={i * 0.03} big={false} tourTarget={i === 0}
               onPreview={() => openPreview("month", m.key)}
               onDownload={() => openDownload("month", m.key)} />
           ))}
@@ -1119,7 +1119,7 @@ export function ReportsPage({ transactions = [], customCategories = [], canExpor
             const sub = ms.length ? `${ms[0].abbr} – ${ms[ms.length - 1].abbr} ${y.year}` : null;
             return (
               <ReportCard key={y.year} eyebrow={tr('laporan.tahun', { tahun: y.year })} income={y.income} expense={y.expense} net={y.net}
-                big latest={i === 0} delay={i * 0.04} sub={sub}
+                big latest={i === 0} delay={i * 0.04} sub={sub} tourTarget={i === 0}
                 onPreview={() => openPreview("year", String(y.year))}
                 onDownload={() => openDownload("year", String(y.year))} />
             );
@@ -1140,7 +1140,7 @@ export function ReportsPage({ transactions = [], customCategories = [], canExpor
   );
 }
 
-function ReportCard({ eyebrow, sub, income, expense, net, latest, big, delay, onPreview, onDownload }) {
+function ReportCard({ eyebrow, sub, income, expense, net, latest, big, delay, onPreview, onDownload, tourTarget }) {
   const { t: tr } = useTranslation();
   const rate = income ? Math.round((net / income) * 100) : 0;
   return (
@@ -1175,7 +1175,7 @@ function ReportCard({ eyebrow, sub, income, expense, net, latest, big, delay, on
         </div>
       </div>
 
-      <div className="hairline" style={{ display: "flex" }}>
+      <div data-tour={tourTarget ? "laporan-aksi" : undefined} className="hairline" style={{ display: "flex" }}>
         <button onClick={onPreview} style={{ flex: 1, padding: "12px 0", background: "transparent", border: 0, fontSize: 12.5, color: "var(--ink-2)", display: "inline-flex", gap: 7, alignItems: "center", justifyContent: "center" }}>
           {tr('laporan.pratinjau')}
         </button>

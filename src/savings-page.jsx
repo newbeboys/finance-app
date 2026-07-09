@@ -80,7 +80,7 @@ export function SavingsPage({ goals, onAdd, onDeposit, onDelete }) {
             </div>
           )}
         </div>
-        <button onClick={onAdd} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500 }}>
+        <button data-tour="goal-add" onClick={onAdd} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500 }}>
           <IconPlus size={15} /> {tr('tabungan.buatGoalBaru')}
         </button>
       </div>
@@ -145,6 +145,7 @@ export function SavingsPage({ goals, onAdd, onDeposit, onDelete }) {
               </div>
               <div className="hairline" style={{ display: "flex" }}>
                 <button
+                  data-tour={i === 0 ? "goal-deposit-first" : undefined}
                   onClick={() => g.is_locked ? openPaywall('Tabungan') : onDeposit(g)}
                   style={{ flex: 1, padding: "12px 0", background: "transparent", border: 0, fontSize: 12.5, fontWeight: 500, color: g.is_locked ? "var(--muted)" : "var(--ink)", display: "inline-flex", gap: 7, alignItems: "center", justifyContent: "center", cursor: g.is_locked ? "not-allowed" : "pointer" }}>
                   <IconPlus size={14} /> {tr('tabungan.tambahDana')}

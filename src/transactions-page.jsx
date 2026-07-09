@@ -23,9 +23,25 @@ export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, 
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = React.useState({ year: now.getFullYear(), month: now.getMonth() });
   const [pickerOpen, setPickerOpen] = React.useState(false);
+  // Filter dompet — pola sama seperti AnalyticsPage: default "all", state lokal.
+  const [selectedWalletId, setSelectedWalletId] = React.useState("all");
+
+  // Edge case: dompet yang dipilih dihapus → fallback ke "all" tanpa error
+  // (pola sama seperti AnalyticsPage).
+  React.useEffect(() => {
+    if (selectedWalletId === "all") return;
+    if (!accounts.some(a => a.id === selectedWalletId)) setSelectedWalletId("all");
+  }, [accounts, selectedWalletId]);
+
+  const filteredByWallet = React.useMemo(
+    () => selectedWalletId === "all"
+      ? transactions
+      : transactions.filter(t => t.wallet_id === selectedWalletId),
+    [transactions, selectedWalletId]
+  );
 
   const datePrefix = `${selectedMonth.year}-${String(selectedMonth.month + 1).padStart(2, '0')}`;
-  const txByMonth = transactions.filter(t => t.dateRaw && t.dateRaw.startsWith(datePrefix));
+  const txByMonth = filteredByWallet.filter(t => t.dateRaw && t.dateRaw.startsWith(datePrefix));
 
   const methods = React.useMemo(() => Array.from(new Set(transactions.map(t => t.method))), [transactions]);
 
@@ -53,8 +69,8 @@ export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, 
   });
 
   const catsUsed = [...ALL_CATEGORIES, ...customCategories].filter(c => transactions.some(t => t.category === c.id));
-  const reset = () => { setQ(""); setType("all"); setCat("all"); setMethod("all"); };
-  const active = q || type !== "all" || cat !== "all" || method !== "all";
+  const reset = () => { setQ(""); setType("all"); setCat("all"); setMethod("all"); setSelectedWalletId("all"); };
+  const active = q || type !== "all" || cat !== "all" || method !== "all" || selectedWalletId !== "all";
 
   return (
     <div className="page-wrap" style={{ padding: "16px 32px 48px", maxWidth: 1180, margin: "0 auto" }}>
@@ -76,12 +92,12 @@ export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, 
             {new Date(selectedMonth.year, selectedMonth.month, 1).toLocaleDateString(locale, { month: 'short', year: 'numeric' })} ▾
           </button>
           {onScan && (
-            <button onClick={onScan} title={tr('transaksi.scanStruk')} style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 6, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, opacity: scanLocked ? 0.6 : 1, cursor: scanLocked ? "not-allowed" : "pointer" }}>
+            <button data-tour="tx-scan" onClick={onScan} title={tr('transaksi.scanStruk')} style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 6, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, opacity: scanLocked ? 0.6 : 1, cursor: scanLocked ? "not-allowed" : "pointer" }}>
               📷 {tr('transaksi.scan')}
               {scanLocked && <LockBadge />}
             </button>
           )}
-          <button onClick={onAdd} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500 }}>
+          <button data-tour="tx-add" onClick={onAdd} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500 }}>
             <IconPlus size={15} /> {tr('transaksi.tambahTransaksi')}
           </button>
         </div>
@@ -101,7 +117,7 @@ export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, 
         ))}
       </div>
 
-      <div className="card" style={{ padding: 14, marginBottom: 16, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+      <div data-tour="tx-search-filter" className="card" style={{ padding: 14, marginBottom: 16, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
           <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--muted)" }}><IconSearch size={15} /></span>
           <input value={q} onChange={e => setQ(e.target.value)} placeholder={tr('transaksi.cariPlaceholder')}
@@ -112,14 +128,34 @@ export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, 
             <button key={tb.id} onClick={() => setType(tb.id)} style={{ padding: "7px 13px", fontSize: 12.5, background: type === tb.id ? "var(--ivory)" : "transparent", border: type === tb.id ? "1px solid var(--line-soft)" : "1px solid transparent", borderRadius: 8, color: type === tb.id ? "var(--ink)" : "var(--muted)", fontWeight: type === tb.id ? 500 : 400 }}>{tb.label}</button>
           ))}
         </div>
-        <select value={cat} onChange={e => setCat(e.target.value)} style={selectStyle}>
-          <option value="all">{tr('transaksi.semuaKategori')}</option>
-          {catsUsed.map(c => <option key={c.id} value={c.id}>{categoryLabel(c, tr)}</option>)}
-        </select>
-        <select value={method} onChange={e => setMethod(e.target.value)} style={selectStyle}>
-          <option value="all">{tr('transaksi.semuaMetode')}</option>
-          {methods.map(m => <option key={m} value={m}>{m}</option>)}
-        </select>
+
+        {/* Grup dropdown Dompet → Kategori → Metode — satu grup, satu baris (shrink proporsional),
+            fallback ke grid 2 kolom di layar sangat sempit lewat .tx-filter-group di index.css.
+            Dompet HANYA tampil jika user punya lebih dari 1 dompet (pola sama seperti AnalyticsPage). */}
+        <div className="tx-filter-group" style={{ display: "flex", gap: 8, flex: "1 1 260px" }}>
+          {accounts.length > 1 && (
+            <select
+              data-tour="tx-wallet-filter"
+              value={selectedWalletId}
+              onChange={e => setSelectedWalletId(e.target.value)}
+              style={{ ...selectStyle, flex: 1, minWidth: 0 }}
+            >
+              <option value="all">{tr('analitik.semuaDompet')}</option>
+              {accounts.map(a => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+          )}
+          <select value={cat} onChange={e => setCat(e.target.value)} style={{ ...selectStyle, flex: 1, minWidth: 0 }}>
+            <option value="all">{tr('transaksi.semuaKategori')}</option>
+            {catsUsed.map(c => <option key={c.id} value={c.id}>{categoryLabel(c, tr)}</option>)}
+          </select>
+          <select value={method} onChange={e => setMethod(e.target.value)} style={{ ...selectStyle, flex: 1, minWidth: 0 }}>
+            <option value="all">{tr('transaksi.semuaMetode')}</option>
+            {methods.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </div>
+
         {active && (
           <button onClick={reset} style={{ padding: "9px 12px", background: "transparent", border: "1px solid var(--line-soft)", borderRadius: 10, fontSize: 12.5, color: "var(--muted)" }}>{tr('umum.reset')}</button>
         )}
