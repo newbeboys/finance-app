@@ -14,6 +14,10 @@ dist/
 *.keystore
 financeapp-release.keystore
 keystore-base64.txt
+keystore-base64-clean.txt
+*.jar
+!android/gradle/wrapper/gradle-wrapper.jar
+
 
 
 
