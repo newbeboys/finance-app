@@ -6,6 +6,7 @@ import { CashflowChart, SpendingDonut, Spark, Ring } from './charts';
 import { useIsMobile } from './use-mobile';
 import { categoryLabel } from './category-field';
 import { usePaywall } from './components/PaywallModal';
+import { useMoneyIQ } from './components/MoneyIQChat';
 import { MonthYearPicker } from './components/MonthYearPicker';
 
 // Nama bulan singkat terlokalisasi (mengikuti bahasa aktif)
@@ -322,14 +323,18 @@ function buildInsights(transactions, customCategories, tr, locale) {
   const topCatName = categoryLabel(topCat, tr);
   const topPct = Math.round((sorted[0][1] / totalExp) * 100);
 
+  // Tiap insight punya `kind` + `data` (dipakai untuk menyusun starter
+  // message saat user klik "Tanya Money IQ"). Cara kalkulasi insight TIDAK
+  // diubah — hanya ditambah metadata mesin-baca.
   const insights = [
     {
+      kind: "top_expense",
+      data: { kategori: topCatName, persen: topPct },
       title: tr('insight.pengeluaranTerbesar', { kategori: topCatName }),
       body: tr('insight.pengeluaranTerbesarBody', {
         kategori: topCatName, persen: topPct, bulan: monthName, jumlah: fmt(sorted[0][1]),
         saran: topPct > 40 ? tr('insight.saranKurangi') : tr('insight.saranWajar'),
       }),
-      cta: tr('insight.lihatAnggaran'),
       tone: topPct > 40 ? "warn" : "info",
     },
   ];
@@ -337,23 +342,25 @@ function buildInsights(transactions, customCategories, tr, locale) {
   if (totalInc > 0) {
     const ratio = totalExp / totalInc;
     insights.push({
+      kind: "spending_ratio",
+      data: { persen: Math.round(ratio * 100) },
       title: tr('insight.persenTerpakai', { persen: Math.round(ratio * 100) }),
       body: tr('insight.persenTerpakaiBody', {
         masuk: fmt(totalInc), bulan: monthName, keluar: fmt(totalExp),
         saran: ratio > 0.8 ? tr('insight.saranTingkatkanTabungan') : tr('insight.saranTerkontrol'),
       }),
-      cta: tr('insight.lihatDetail'),
       tone: ratio > 0.8 ? "warn" : "good",
     });
   }
 
   insights.push({
+    kind: "transaction_summary",
+    data: { count: expTx.length },
     title: tr('insight.transaksiTercatat', { count: expTx.length }),
     body: tr('insight.transaksiTercatatBody', {
       count: expTx.length, kategori: sorted.length,
       saran: expTx.length >= 10 ? tr('insight.saranKebiasaanBagus') : tr('insight.saranCatatSetiap'),
     }),
-    cta: tr('insight.tambahTransaksi'),
     tone: expTx.length >= 10 ? "good" : "info",
   });
 
@@ -363,6 +370,7 @@ function buildInsights(transactions, customCategories, tr, locale) {
 export function InsightsCard({ transactions = [], customCategories = [], limits = null }) {
   const { t: tr, i18n } = useTranslation();
   const { openPaywall } = usePaywall();
+  const { openMoneyIQ } = useMoneyIQ();
   const locale = localeOf(i18n);
   const [idx, setIdx] = React.useState(0);
   const insights = React.useMemo(() => buildInsights(transactions, customCategories, tr, locale), [transactions, customCategories, tr, locale]);
@@ -399,6 +407,22 @@ export function InsightsCard({ transactions = [], customCategories = [], limits 
   const ins = insights[Math.min(idx, insights.length - 1)];
   const toneColor = ins.tone === "warn" ? "var(--terra)" : ins.tone === "good" ? "var(--sage)" : "var(--gold)";
 
+  // Susun starter message sesuai isi kartu aktif, lalu buka chat Money IQ.
+  // Kartu ini hanya render untuk Pro (branch Basic sudah dicegat paywall di
+  // atas), jadi klik di sini pasti user Pro.
+  const handleAsk = () => {
+    const d = ins.data || {};
+    let starter;
+    if (ins.kind === "spending_ratio") {
+      starter = tr('moneyIqChat.starterSpendingRatio', { persen: d.persen });
+    } else if (ins.kind === "transaction_summary") {
+      starter = tr('moneyIqChat.starterTxSummary', { count: d.count });
+    } else {
+      starter = tr('moneyIqChat.starterTopExpense', { kategori: d.kategori, persen: d.persen });
+    }
+    openMoneyIQ({ starter, kind: ins.kind });
+  };
+
   return (
     <div className="card rise" style={{ padding: 22, position: "relative", overflow: "hidden", background: "linear-gradient(135deg, var(--ivory) 0%, var(--paper) 100%)" }}>
       <svg style={{ position: "absolute", top: -20, right: -20, opacity: 0.5, pointerEvents: "none" }} width="160" height="160" viewBox="0 0 160 160">
@@ -416,8 +440,8 @@ export function InsightsCard({ transactions = [], customCategories = [], limits 
       <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.55, marginBottom: 18, minHeight: 88 }}>{ins.body}</div>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <button style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 10, fontSize: 12.5 }}>
-          {ins.cta} <IconArrowRight size={12} />
+        <button onClick={handleAsk} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 10, fontSize: 12.5, cursor: "pointer" }}>
+          {tr('insight.tanyaMoneyIq')} <IconArrowRight size={12} />
         </button>
         <div style={{ display: "flex", gap: 6 }}>
           {insights.map((_, i) => (

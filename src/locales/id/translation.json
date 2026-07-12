@@ -115,7 +115,21 @@
     "transaksiTercatatBody": "Kamu sudah mencatat {{count}} transaksi pengeluaran di {{kategori}} kategori bulan ini. {{saran}}",
     "saranKebiasaanBagus": "Kebiasaan mencatat yang bagus — terus pertahankan!",
     "saranCatatSetiap": "Catat setiap pengeluaran untuk analisis yang lebih akurat.",
-    "tambahTransaksi": "Tambah transaksi"
+    "tambahTransaksi": "Tambah transaksi",
+    "tanyaMoneyIq": "Tanya Money IQ"
+  },
+  "moneyIqChat": {
+    "judul": "Money IQ",
+    "subtitle": "Tanya soal keuanganmu",
+    "greeting": "Hai! 👋 Aku Money IQ. Tanya apa aja soal transaksi, pengeluaran, anggaran, tabungan, atau investasimu ya.",
+    "placeholder": "Tulis pertanyaan…",
+    "kirim": "Kirim",
+    "typing": "Money IQ sedang mengetik…",
+    "error": "Waduh, ada gangguan menghubungi Money IQ. Coba lagi sebentar ya. 🙏",
+    "emptyAnswer": "Maaf, belum ada jawaban. Coba tanya lagi dengan detail ya.",
+    "starterTopExpense": "Kategori {{kategori}} jadi pengeluaran terbesarku bulan ini ({{persen}}%). Rincikan pengeluaran {{kategori}}-ku dong.",
+    "starterSpendingRatio": "{{persen}}% pendapatanku terpakai bulan ini. Rincikan pemasukan vs pengeluaranku ya.",
+    "starterTxSummary": "Aku sudah mencatat {{count}} transaksi bulan ini. Ringkas pengeluaranku dong."
   },
   "transaksi": {
     "aktivitasTerbaru": "Aktivitas terbaru",

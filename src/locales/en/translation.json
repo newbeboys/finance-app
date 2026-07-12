@@ -115,7 +115,21 @@
     "transaksiTercatatBody": "You have recorded {{count}} expense transactions across {{kategori}} categories this month. {{saran}}",
     "saranKebiasaanBagus": "Great tracking habit — keep it up!",
     "saranCatatSetiap": "Record every expense for more accurate analysis.",
-    "tambahTransaksi": "Add transaction"
+    "tambahTransaksi": "Add transaction",
+    "tanyaMoneyIq": "Ask Money IQ"
+  },
+  "moneyIqChat": {
+    "judul": "Money IQ",
+    "subtitle": "Ask about your finances",
+    "greeting": "Hi! 👋 I'm Money IQ. Ask me anything about your transactions, spending, budgets, savings, or investments.",
+    "placeholder": "Type a question…",
+    "kirim": "Send",
+    "typing": "Money IQ is typing…",
+    "error": "Oops, couldn't reach Money IQ. Please try again in a moment. 🙏",
+    "emptyAnswer": "Sorry, no answer yet. Try asking again with more detail.",
+    "starterTopExpense": "{{kategori}} is my biggest expense category this month ({{persen}}%). Break down my {{kategori}} spending.",
+    "starterSpendingRatio": "{{persen}}% of my income is spent this month. Break down my income vs expenses.",
+    "starterTxSummary": "I've recorded {{count}} transactions this month. Summarize my spending."
   },
   "transaksi": {
     "aktivitasTerbaru": "Recent activity",

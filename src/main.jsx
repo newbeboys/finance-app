@@ -3,9 +3,12 @@ import './index.css';
 import './i18n';
 import App from './app';
 import { PaywallProvider } from './components/PaywallProvider';
+import { MoneyIQChatProvider } from './components/MoneyIQChat';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <PaywallProvider>
-    <App />
+    <MoneyIQChatProvider>
+      <App />
+    </MoneyIQChatProvider>
   </PaywallProvider>
 );
