@@ -134,6 +134,55 @@ export async function fetchFinancialData(
   }
 }
 
+// UUID mentah (36 karakter, format standar UUID) yang gak ketemu di categoryMap
+// berarti kategori custom sudah tidak ada lagi datanya (orphan/terhapus manual).
+// Tampilkan label netral, bukan UUID mentah yang gak berguna buat user.
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// ── helper: resolve custom category names ───────────────────────────
+async function resolveCategoryNames(
+  supabase: SupabaseClient,
+  userId: string,
+  categoryIds: string[],
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+
+  // Kolom custom_categories.id bertipe uuid di Postgres. Kode kategori
+  // bawaan (food, transport, salary, dll) BUKAN uuid — kalau ikut dikirim
+  // ke .in("id", ...), seluruh query gagal (error 22P02 invalid input
+  // syntax for type uuid), bukan cuma di-skip. Mereka tetap lolos apa
+  // adanya lewat fallback terakhir di displayCategory().
+  const uuidsOnly = categoryIds.filter((id) => UUID_PATTERN.test(id));
+  if (uuidsOnly.length === 0) return map;
+
+  const { data, error } = await supabase
+    .from("custom_categories")
+    .select("id, name")
+    .eq("user_id", userId)
+    .in("id", uuidsOnly);
+
+  if (error) {
+    console.error(
+      `[query-builder] gagal resolve custom_categories (userId=${userId}, ` +
+      `categoryIds=${uuidsOnly.length}):`,
+      error,
+    );
+    return map;
+  }
+
+  for (const row of data ?? []) {
+    map.set(row.id as string, row.name as string);
+  }
+  return map;
+}
+
+function displayCategory(rawCategory: string, categoryMap: Map<string, string>): string {
+  const resolved = categoryMap.get(rawCategory);
+  if (resolved) return resolved;
+  if (UUID_PATTERN.test(rawCategory)) return "Kategori (tidak dikenal)";
+  return rawCategory; // kode kategori bawaan (food, transport, dll) — biarkan apa adanya
+}
+
 // ── transactions (expense / income) ──────────────────────────────────
 async function fetchTransactions(
   supabase: SupabaseClient,
@@ -155,8 +204,16 @@ async function fetchTransactions(
 
   // Urutan & limit: kalau minta total, ambil banyak lalu agregasi.
   const limit = intent.wantsTotal ? 500 : (intent.limit ?? 50);
-  if (intent.order) query = query.order("amount", { ascending: intent.order === "asc" });
-  else query = query.order("date", { ascending: false });
+  if (intent.order) {
+    const wantsBiggest = intent.order === "desc";
+    // Expense disimpan negatif: "terbesar" secara magnitude = angka paling
+    // negatif = ascending TRUE. Income disimpan positif: "terbesar" = angka
+    // paling besar = ascending FALSE. Kebalikan untuk "terkecil".
+    const ascending = type === "expense" ? wantsBiggest : !wantsBiggest;
+    query = query.order("amount", { ascending });
+  } else {
+    query = query.order("date", { ascending: false });
+  }
   query = query.limit(limit);
 
   const { data, error } = await query;
@@ -164,12 +221,17 @@ async function fetchTransactions(
   const rows = (data ?? []) as TransactionRow[];
   if (rows.length === 0) return null;
 
+  // Resolve custom category names
+  const categoryIds = Array.from(new Set(rows.map((r) => r.category as string)));
+  const categoryMap = await resolveCategoryNames(supabase, userId, categoryIds);
+
   const total = rows.reduce((s, r) => s + Number(r.amount), 0);
   const label = type === "expense" ? "Pengeluaran" : "Pemasukan";
 
   const lines = rows.slice(0, intent.wantsTotal ? 10 : rows.length).map((r) => {
-    const desc = r.merchant || r.note || r.category;
-    return `- ${r.date} | ${r.category} | ${rupiah(Number(r.amount))} | ${desc}`;
+    const resolvedCategory = displayCategory(r.category as string, categoryMap);
+    const desc = r.merchant || r.note || resolvedCategory;
+    return `- ${r.date} | ${resolvedCategory} | ${rupiah(Number(r.amount))} | ${desc}`;
   });
 
   const header =
@@ -194,12 +256,19 @@ async function fetchBudgets(supabase: SupabaseClient, userId: string) {
   const rows = data ?? [];
   if (rows.length === 0) return null;
 
+  // Resolve custom category names
+  const categoryIds = Array.from(
+    new Set(rows.map((b: Record<string, unknown>) => b.category as string))
+  );
+  const categoryMap = await resolveCategoryNames(supabase, userId, categoryIds);
+
   const lines = rows.map((b: Record<string, unknown>) => {
     const limit = Number(b.limit);
     const spent = Number(b.spent);
     const sisa = limit - spent;
     const pct = limit > 0 ? Math.round((spent / limit) * 100) : 0;
-    return `- ${b.label} (${b.category}): terpakai ${rupiah(spent)} dari ${rupiah(limit)} (${pct}%), sisa ${rupiah(sisa)}`;
+    const resolvedCategory = displayCategory(b.category as string, categoryMap);
+    return `- ${b.label} (${resolvedCategory}): terpakai ${rupiah(spent)} dari ${rupiah(limit)} (${pct}%), sisa ${rupiah(sisa)}`;
   });
   return { context: `Anggaran aktif:\n${lines.join("\n")}`, rowCount: rows.length };
 }
@@ -269,12 +338,77 @@ async function fetchSummary(
     else expense += Number(r.amount);
   }
   const net = income - expense;
-  // Rasio pengeluaran terhadap pendapatan (persen). Hanya bermakna bila ada
-  // pemasukan; disertakan supaya model bisa menjawab pertanyaan perbandingan
-  // "berapa persen pendapatan terpakai" dengan angka yang tepat.
   const ratioLine = income > 0
     ? `\n- Rasio pengeluaran terhadap pendapatan: ${Math.round((expense / income) * 100)}%`
     : "";
+
+  // Jika user nanya "terbesar/terkecil", ambil transaksi konkret
+  let largestItemsLine = "";
+  if (intent.order) {
+    const wantsBiggest = intent.order === "desc";
+    const orderWord = wantsBiggest ? "terbesar" : "terkecil";
+
+    // Ambil expense terbesar/terkecil. Expense disimpan negatif: "terbesar"
+    // secara magnitude = angka paling negatif = ascending TRUE. Income
+    // disimpan positif: "terbesar" = angka paling besar = ascending FALSE.
+    // Kebalikan untuk "terkecil". (Sama seperti fix Bug A di fetchTransactions().)
+    const expQuery = supabase
+      .from("transactions")
+      .select("category, amount, note, merchant, date")
+      .eq("user_id", userId)
+      .eq("type", "expense")
+      .gte("date", range.start)
+      .lte("date", range.end)
+      .order("amount", { ascending: wantsBiggest })
+      .limit(1);
+
+    const { data: expData } = await expQuery;
+    const expRow = (expData?.[0] as
+      | { category: string; amount: number; note: string; merchant: string; date: string }
+      | undefined);
+
+    // Ambil income terbesar/terkecil
+    const incQuery = supabase
+      .from("transactions")
+      .select("category, amount, note, merchant, date")
+      .eq("user_id", userId)
+      .eq("type", "income")
+      .gte("date", range.start)
+      .lte("date", range.end)
+      .order("amount", { ascending: !wantsBiggest })
+      .limit(1);
+
+    const { data: incData } = await incQuery;
+    const incRow = (incData?.[0] as
+      | { category: string; amount: number; note: string; merchant: string; date: string }
+      | undefined);
+
+    // Resolve custom category names
+    const largestCategoryIds = Array.from(
+      new Set(
+        [expRow?.category, incRow?.category].filter((c): c is string => !!c),
+      ),
+    );
+    const largestCategoryMap = await resolveCategoryNames(supabase, userId, largestCategoryIds);
+
+    const lines: string[] = [];
+
+    if (expRow) {
+      const resolvedCategory = displayCategory(expRow.category, largestCategoryMap);
+      const desc = expRow.merchant || expRow.note || resolvedCategory;
+      lines.push(`Pengeluaran ${orderWord}: ${rupiah(Number(expRow.amount))} (${desc}, ${expRow.date})`);
+    }
+
+    if (incRow) {
+      const resolvedCategory = displayCategory(incRow.category, largestCategoryMap);
+      const desc = incRow.merchant || incRow.note || resolvedCategory;
+      lines.push(`Pemasukan ${orderWord}: ${rupiah(Number(incRow.amount))} (${desc}, ${incRow.date})`);
+    }
+
+    if (lines.length > 0) {
+      largestItemsLine = `\n- ${lines.join("\n- ")}`;
+    }
+  }
 
   return {
     context:
@@ -282,7 +416,7 @@ async function fetchSummary(
       `- Total pemasukan: ${rupiah(income)}\n` +
       `- Total pengeluaran: ${rupiah(expense)}\n` +
       `- Selisih (net): ${rupiah(net)}${ratioLine}\n` +
-      `- Jumlah transaksi: ${rows.length}`,
+      `- Jumlah transaksi: ${rows.length}${largestItemsLine}`,
     rowCount: rows.length,
   };
 }

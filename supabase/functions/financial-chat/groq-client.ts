@@ -45,24 +45,34 @@ interface GroqResponse {
 async function callGroq(
   model: string,
   messages: { role: string; content: string }[],
-  opts: { temperature?: number; maxTokens?: number; timeoutMs?: number } = {},
+  opts: {
+    temperature?: number;
+    maxTokens?: number;
+    timeoutMs?: number;
+    reasoningEffort?: "low" | "medium" | "high";
+  } = {},
 ): Promise<{ content: string; usage: TokenUsage }> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), opts.timeoutMs ?? 15000);
 
   try {
+    const body: Record<string, unknown> = {
+      model,
+      messages,
+      temperature: opts.temperature ?? 0.2,
+      max_tokens: opts.maxTokens ?? 512,
+    };
+    if (opts.reasoningEffort) {
+      body.reasoning_effort = opts.reasoningEffort;
+    }
+
     const res = await fetch(GROQ_ENDPOINT, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${apiKey()}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature: opts.temperature ?? 0.2,
-        max_tokens: opts.maxTokens ?? 512,
-      }),
+      body: JSON.stringify(body),
       signal: controller.signal,
     });
 
@@ -180,7 +190,12 @@ export async function answerFinancialQuestion(
         content: `DATA:\n${dataContext}\n\nPERTANYAAN USER:\n${question}`,
       },
     ],
-    { temperature: 0.3, maxTokens: 512, timeoutMs: 20000 },
+    {
+      temperature: 0.3,
+      maxTokens: 1024,
+      timeoutMs: 20000,
+      reasoningEffort: "low",
+    },
   );
 
   const answer = content.trim() ||
