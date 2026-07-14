@@ -15,7 +15,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-import type { ChatRequest, ChatResponse } from "./types.ts";
+import type { ChatRequest, ChatResponse, WalletRef } from "./types.ts";
 import { classifyWithGroq, keywordFilter } from "./guardrail.ts";
 import { parseIntent } from "./intent-parser.ts";
 import { fetchFinancialData } from "./query-builder.ts";
@@ -150,7 +150,18 @@ serve(async (req) => {
   }
 
   // ── 4. Level 3 — Parse intent → query → answering ──────────────────
-  const intent = parseIntent(question);
+  // Ambil daftar wallet user dulu: dipakai buat deteksi dompet by nama DAN
+  // buat cegah tabrakan kata metode vs nama wallet (lihat intent-parser.ts).
+  const { data: walletRows, error: walletErr } = await supabase
+    .from("wallets")
+    .select("id, name")
+    .eq("user_id", userId);
+  if (walletErr) {
+    console.error("[financial-chat] gagal ambil wallets utk deteksi intent:", walletErr);
+  }
+  const wallets: WalletRef[] = (walletRows ?? []) as WalletRef[];
+
+  const intent = parseIntent(question, wallets);
 
   // Ambil data (RLS aktif via client ter-autentikasi).
   let dataResult: { context: string; rowCount: number } | null;

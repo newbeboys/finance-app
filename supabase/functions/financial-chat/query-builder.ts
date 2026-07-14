@@ -118,6 +118,32 @@ export async function fetchFinancialData(
   intent: ParsedIntent,
   userId: string,
 ): Promise<{ context: string; rowCount: number } | null> {
+  // BUG YANG PERNAH TERJADI: kalau user menyebut nama dompet yang TIDAK ada
+  // (mis. "dompet BRI" padahal user cuma punya BCA/BNI), setiap fetcher di
+  // bawah cuma skip filter `.eq("wallet_id", ...)` karena walletId memang
+  // undefined — hasilnya query jalan TANPA filter (agregat semua dompet),
+  // tapi jawaban dibungkus model seolah itu angka spesifik dompet yang
+  // disebut user. Short-circuit di sini SEBELUM dispatch ke fetcher manapun,
+  // supaya kasus ini tidak pernah sampai ke query agregat sama sekali.
+  if (intent.walletNotFound) {
+    const { data: walletRows } = await supabase
+      .from("wallets")
+      .select("name")
+      .eq("user_id", userId);
+    const names = (walletRows ?? []).map((w) => w.name as string).filter(Boolean);
+    const namesLine = names.length > 0
+      ? `Dompet yang terdaftar di akun ini: ${names.join(", ")}.`
+      : "Akun ini belum punya dompet manapun.";
+    return {
+      context:
+        `Dompet "${intent.walletMentionRaw}" TIDAK DITEMUKAN di akun ini — ` +
+        `JANGAN jawab pakai data agregat semua dompet, JANGAN mengarang ` +
+        `seolah dompet itu ada. ${namesLine} Beri tahu user dompet yang ` +
+        `disebut tidak ditemukan, dan sebutkan daftar dompet asli di atas.`,
+      rowCount: 0,
+    };
+  }
+
   switch (intent.type) {
     case "budget":
       return fetchBudgets(supabase, userId);
@@ -125,6 +151,8 @@ export async function fetchFinancialData(
       return fetchSavings(supabase, userId);
     case "investment":
       return fetchInvestments(supabase, userId);
+    case "debt":
+      return fetchDebts(supabase, intent, userId);
     case "expense":
     case "income":
       return fetchTransactions(supabase, intent, userId, intent.type);
@@ -201,6 +229,9 @@ async function fetchTransactions(
     .lte("date", range.end);
 
   if (intent.category) query = query.eq("category", intent.category);
+  if (intent.walletId) query = query.eq("wallet_id", intent.walletId);
+  if (intent.metode) query = query.eq("method", intent.metode);
+  if (intent.onlyAutomatic) query = query.ilike("note", "[Otomatis]%");
 
   // Urutan & limit: kalau minta total, ambil banyak lalu agregasi.
   const limit = intent.wantsTotal ? 500 : (intent.limit ?? 50);
@@ -237,6 +268,9 @@ async function fetchTransactions(
   const header =
     `${label} periode ${range.start} s/d ${range.end}` +
     (intent.category ? ` (kategori: ${intent.category})` : "") +
+    (intent.walletName ? ` (dompet: ${intent.walletName})` : "") +
+    (intent.metode ? ` (metode: ${intent.metode})` : "") +
+    (intent.onlyAutomatic ? ` (khusus transaksi otomatis)` : "") +
     `\nTotal ${label.toLowerCase()}: ${rupiah(total)} dari ${rows.length} transaksi.`;
 
   return {
@@ -314,6 +348,116 @@ async function fetchInvestments(supabase: SupabaseClient, userId: string) {
   };
 }
 
+// ── debts (hutang / piutang) ─────────────────────────────────────────
+// Baca tabel `debts`. amount SELALU positif; arah uang ditentukan kolom
+// `type` ('receivable' = piutang, 'payable' = hutang), BUKAN tanda minus.
+// PENTING: piutang & hutang TIDAK boleh dijumlahkan jadi satu angka — mereka
+// lawan arah. Breakdown dipisah per arah + per person_name.
+interface DebtRow {
+  type: "receivable" | "payable";
+  person_name: string;
+  amount: number;
+  paid: number;
+  status: string;
+  date: string;
+  due_date: string | null;
+}
+
+function debtDirLabel(t: "receivable" | "payable"): string {
+  return t === "receivable" ? "Piutang" : "Hutang";
+}
+
+async function fetchDebts(
+  supabase: SupabaseClient,
+  intent: ParsedIntent,
+  userId: string,
+) {
+  // Status efektif: kalau user tidak menyebut status, default HANYA 'active'
+  // (catatan yang sudah lunas biasanya tak relevan kecuali diminta eksplisit).
+  const statusFilter = intent.debtStatus ?? "active";
+
+  let query = supabase
+    .from("debts")
+    .select("type, person_name, amount, paid, status, date, due_date")
+    .eq("user_id", userId)
+    .eq("is_deleted", false) // WAJIB: soft-deleted tidak boleh ikut terhitung.
+    .eq("status", statusFilter);
+
+  // Arah (piutang/hutang) hanya difilter kalau user menyebutnya.
+  if (intent.debtDirection) query = query.eq("type", intent.debtDirection);
+  // Filter dompet — INI yang membuat "dompet Mess" vs "dompet BNI" beda angka.
+  if (intent.walletId) query = query.eq("wallet_id", intent.walletId);
+
+  query = query.order("amount", { ascending: false }).limit(200);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  const rows = (data ?? []) as DebtRow[];
+
+  const statusLabel = statusFilter === "paid" ? "lunas" : "aktif";
+  const walletSuffix = intent.walletName ? ` di dompet ${intent.walletName}` : "";
+  const scopeLabel = intent.debtDirection
+    ? debtDirLabel(intent.debtDirection)
+    : "Hutang & Piutang";
+
+  // Kasus tidak ada data: JANGAN return null diam-diam (nanti model bisa
+  // menebak). Beri konteks eksplisit "nol" supaya jawabannya jujur.
+  if (rows.length === 0) {
+    return {
+      context: `${scopeLabel} ${statusLabel}${walletSuffix}: tidak ada catatan. Total Rp0.`,
+      rowCount: 0,
+    };
+  }
+
+  // Pisah per arah supaya piutang & hutang tidak tercampur jadi satu angka.
+  const byDir: Record<"receivable" | "payable", DebtRow[]> = {
+    receivable: [],
+    payable: [],
+  };
+  for (const r of rows) byDir[r.type].push(r);
+
+  // Bug lama: header cuma kasih JUMLAH CATATAN tanpa nominal ("— 2 catatan."),
+  // dan model kadang cuma echo baris ini tanpa turun ke section detail →
+  // jawaban "2 catatan" tanpa rupiah. Fix: header WAJIB sertakan nominal
+  // total per arah juga (redundan dgn section di bawah, sengaja — supaya
+  // model tidak mungkin kehilangan angkanya). Arah tetap dipisah, TIDAK
+  // dijumlah jadi satu angka gabungan.
+  const totalsByDir = (["receivable", "payable"] as const)
+    .filter((dir) => byDir[dir].length > 0)
+    .map((dir) => {
+      const subtotal = byDir[dir].reduce((s, r) => s + Number(r.amount), 0);
+      return `${debtDirLabel(dir)} ${rupiah(subtotal)} (${byDir[dir].length} catatan)`;
+    });
+
+  const sections: string[] = [];
+  for (const dir of ["receivable", "payable"] as const) {
+    const list = byDir[dir];
+    if (list.length === 0) continue;
+    const subtotal = list.reduce((s, r) => s + Number(r.amount), 0);
+    const lines = list.map((r) => {
+      const sisa = Number(r.amount) - Number(r.paid);
+      const due = r.due_date ? `, jatuh tempo ${r.due_date}` : "";
+      return `- ${r.person_name}: ${rupiah(Number(r.amount))} ` +
+        `(terbayar ${rupiah(Number(r.paid))}, sisa ${rupiah(sisa)}${due})`;
+    });
+    sections.push(
+      `${debtDirLabel(dir)} ${statusLabel} — total ${rupiah(subtotal)} (${list.length} catatan):\n` +
+      lines.join("\n"),
+    );
+  }
+
+  // CATATAN: sengaja TIDAK pakai `scopeLabel` di sini — totalsByDir sudah
+  // menyertakan nama arah per item ("Piutang Rp... (N catatan)"), jadi kalau
+  // scopeLabel ikut ditaruh di depan hasilnya jadi dobel ("Piutang — Piutang
+  // Rp...").
+  const header = `Catatan ${statusLabel}${walletSuffix}: ${totalsByDir.join(", ")}.`;
+
+  return {
+    context: `${header}\n\n${sections.join("\n\n")}`,
+    rowCount: rows.length,
+  };
+}
+
 // ── general summary (income vs expense periode) ──────────────────────
 async function fetchSummary(
   supabase: SupabaseClient,
@@ -321,13 +465,16 @@ async function fetchSummary(
   userId: string,
 ) {
   const range = computeDateRange(intent);
-  const { data, error } = await supabase
+  let summaryQuery = supabase
     .from("transactions")
     .select("type, amount")
     .eq("user_id", userId)
     .gte("date", range.start)
-    .lte("date", range.end)
-    .limit(2000);
+    .lte("date", range.end);
+  if (intent.walletId) summaryQuery = summaryQuery.eq("wallet_id", intent.walletId);
+  if (intent.metode) summaryQuery = summaryQuery.eq("method", intent.metode);
+  if (intent.onlyAutomatic) summaryQuery = summaryQuery.ilike("note", "[Otomatis]%");
+  const { data, error } = await summaryQuery.limit(2000);
   if (error) throw error;
   const rows = data ?? [];
   if (rows.length === 0) return null;
@@ -352,15 +499,17 @@ async function fetchSummary(
     // secara magnitude = angka paling negatif = ascending TRUE. Income
     // disimpan positif: "terbesar" = angka paling besar = ascending FALSE.
     // Kebalikan untuk "terkecil". (Sama seperti fix Bug A di fetchTransactions().)
-    const expQuery = supabase
+    let expQuery = supabase
       .from("transactions")
       .select("category, amount, note, merchant, date")
       .eq("user_id", userId)
       .eq("type", "expense")
       .gte("date", range.start)
-      .lte("date", range.end)
-      .order("amount", { ascending: wantsBiggest })
-      .limit(1);
+      .lte("date", range.end);
+    if (intent.walletId) expQuery = expQuery.eq("wallet_id", intent.walletId);
+    if (intent.metode) expQuery = expQuery.eq("method", intent.metode);
+    if (intent.onlyAutomatic) expQuery = expQuery.ilike("note", "[Otomatis]%");
+    expQuery = expQuery.order("amount", { ascending: wantsBiggest }).limit(1);
 
     const { data: expData } = await expQuery;
     const expRow = (expData?.[0] as
@@ -368,15 +517,17 @@ async function fetchSummary(
       | undefined);
 
     // Ambil income terbesar/terkecil
-    const incQuery = supabase
+    let incQuery = supabase
       .from("transactions")
       .select("category, amount, note, merchant, date")
       .eq("user_id", userId)
       .eq("type", "income")
       .gte("date", range.start)
-      .lte("date", range.end)
-      .order("amount", { ascending: !wantsBiggest })
-      .limit(1);
+      .lte("date", range.end);
+    if (intent.walletId) incQuery = incQuery.eq("wallet_id", intent.walletId);
+    if (intent.metode) incQuery = incQuery.eq("method", intent.metode);
+    if (intent.onlyAutomatic) incQuery = incQuery.ilike("note", "[Otomatis]%");
+    incQuery = incQuery.order("amount", { ascending: !wantsBiggest }).limit(1);
 
     const { data: incData } = await incQuery;
     const incRow = (incData?.[0] as
@@ -410,9 +561,14 @@ async function fetchSummary(
     }
   }
 
+  const summaryFilters =
+    (intent.walletName ? ` (dompet: ${intent.walletName})` : "") +
+    (intent.metode ? ` (metode: ${intent.metode})` : "") +
+    (intent.onlyAutomatic ? ` (khusus transaksi otomatis)` : "");
+
   return {
     context:
-      `Ringkasan keuangan ${range.start} s/d ${range.end}:\n` +
+      `Ringkasan keuangan ${range.start} s/d ${range.end}${summaryFilters}:\n` +
       `- Total pemasukan: ${rupiah(income)}\n` +
       `- Total pengeluaran: ${rupiah(expense)}\n` +
       `- Selisih (net): ${rupiah(net)}${ratioLine}\n` +
