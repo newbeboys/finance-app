@@ -66,6 +66,11 @@ export interface ParsedIntent {
   limit?: number;
   // Apakah user minta agregat total ("berapa total ...") vs daftar item.
   wantsTotal?: boolean;
+  // true bila kalimat ada kata "dompet" tapi TANPA nama dompet spesifik, kategori,
+  // periode, atau tipe transaksi lain → user likely asking for general wallet list
+  // (mis. "apa nama dompet yang aku punya", "mana saja dompetku"). fetchFinancialData
+  // harus return daftar dompet asli, bukan "data kurang".
+  wantWalletList?: boolean;
   // Dompet spesifik bila disebut by nama ("di dompet BNI") — dicocokkan thd
   // daftar wallet user. Dideteksi SEBELUM metode (lihat catatan di metode).
   walletId?: string;

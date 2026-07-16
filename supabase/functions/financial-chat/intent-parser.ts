@@ -130,6 +130,27 @@ export function parseIntent(question: string, wallets: WalletRef[] = []): Parsed
     }
   }
 
+  // ── Deteksi "general wallet list request" (pertanyaan umum ttg daftar dompet) ──
+  // Kalau ada kata "dompet" di kalimat TAPI tidak ada nama dompet spesifik yang
+  // cocok (wallet / walletNotFound), dan JUGA tidak ada kategori/periode/tipe
+  // transaksi lain yang spesifik → user likely asking for general wallet list,
+  // bukan specific transaction query. Set flag supaya query-builder bisa handle
+  // case ini dgn jawab daftar dompet asli (bukan gagal dgn "data kurang").
+  // Pattern: cari kata yang CONTAIN "dompet" (bisa nempel kayak "dompetku"/"didompet")
+  // tanpa word boundary check, supaya robust terhadap variasi penulisan.
+  if (!intent.walletId && !intent.walletNotFound && /dompet/.test(q)) {
+    const hasOtherContext =
+      intent.category ||
+      intent.period ||
+      intent.month ||
+      intent.year ||
+      intent.debtDirection ||
+      intent.type !== "expense"; // Non-default type = ada specific intent
+    if (!hasOtherContext) {
+      intent.wantWalletList = true;
+    }
+  }
+
   // ── Metode pembayaran ── dijalankan SETELAH wallet, lihat detectMetode().
   const metode = detectMetode(q, wallets);
   if (metode) intent.metode = metode;

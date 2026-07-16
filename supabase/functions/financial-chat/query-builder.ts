@@ -144,6 +144,29 @@ export async function fetchFinancialData(
     };
   }
 
+  // Kalau user bertanya tentang daftar dompet ("apa nama dompet yang aku punya",
+  // "mana saja dompetku", dll) → short-circuit & return wallet list langsung.
+  // Ini bukan query spesifik (expense/budget/debt/etc), jadi tidak perlu fetch
+  // data transaksi. Prioritas SETELAH walletNotFound: kalau nama dompet tidak
+  // cocok, user definitely asking about specific wallet, bukan general list.
+  if (intent.wantWalletList) {
+    const { data: walletRows } = await supabase
+      .from("wallets")
+      .select("name")
+      .eq("user_id", userId);
+    const names = (walletRows ?? []).map((w) => w.name as string).filter(Boolean);
+    if (names.length === 0) {
+      return {
+        context: `Akun ini belum punya dompet manapun.`,
+        rowCount: 0,
+      };
+    }
+    return {
+      context: `Daftar dompet yang terdaftar di akun ini: ${names.join(", ")}.`,
+      rowCount: names.length,
+    };
+  }
+
   switch (intent.type) {
     case "budget":
       return fetchBudgets(supabase, userId);
