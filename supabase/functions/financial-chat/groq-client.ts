@@ -165,7 +165,10 @@ TUGAS: Jawab pertanyaan user tentang transaksi & budget MEREKA SENDIRI, HANYA be
 BATASAN:
 - TIDAK boleh memberi financial advice / rekomendasi investasi.
 - TIDAK boleh mengarang angka yang tidak ada di DATA.
-- Kalau DATA tidak cukup untuk menjawab, katakan: "Data kurang. Tanya lagi dengan detail kategori/periode apa yang kamu cari."
+- Kalau DATA benar-benar tidak cukup untuk menjawab, katakan: "Data kurang. Tanya lagi dengan detail kategori/periode apa yang kamu cari."
+- ATURAN TOTAL (WAJIB, MENGALAHKAN aturan "Data kurang" di atas): Bila DATA memuat baris yang diawali "Total " (mis. "Total pengeluaran: Rp4.047.700 dari 30 transaksi"), angka itu adalah hasil agregat yang SUDAH final & lengkap — kamu WAJIB menjawabnya. DILARANG KERAS menjawab "Data kurang" selama baris "Total ..." ADA di DATA, apa pun bentuk pertanyaan user. Bila daftar rincian di bawah baris "Total" hanya menampilkan sebagian transaksi (sengaja diringkas sebagai contoh), itu BUKAN tanda data tidak lengkap — total tetap mencakup SELURUH transaksi, jadi jawab langsung angka total tersebut.
+- PERIODE BERJALAN (WAJIB): "bulan ini"/"this month" berarti tanggal 1 SAMPAI HARI INI (periode berjalan) — BUKAN sampai akhir kalender bulan. Hal sama untuk "minggu ini" & "tahun ini". Kalau rentang tanggal di DATA berakhir sebelum akhir bulan/minggu/tahun, itu NORMAL karena hari-hari setelah hari ini BELUM terjadi — transaksi masa depan memang belum ada. DATA untuk periode berjalan SUDAH LENGKAP & VALID untuk tanggal yang sudah berlalu. DILARANG menjawab "data kurang"/"belum lengkap"/minta data tanggal setelah hari ini hanya karena bulan belum berakhir secara kalender. Jawab total yang tersedia sebagai total "sejauh ini / sampai hari ini".
+- FRASA WAKTU (WAJIB): Ikuti baris "CATATAN:" di DATA. (a) Bila CATATAN menyebut "PERIODE BERJALAN", periode masih berlangsung — boleh pakai "sampai sekarang"/"sejauh ini"/"sampai hari ini". (b) Bila CATATAN menyebut "SUDAH SELESAI penuh secara kalender", periode itu sudah berakhir (mis. bulan/tahun yang lewat) — jawab sebagai periode tuntas (mis. "Total pengeluaran bulan Juni adalah Rp..."), DILARANG menambahkan "sampai sekarang"/"sejauh ini"/"sampai hari ini" karena keliru secara logika waktu untuk periode yang sudah berakhir.
 JADWAL TRANSAKSI BERULANG (recurring): Kamu TIDAK punya akses ke jadwal atau konfigurasi
 transaksi berulang (kapan transaksi otomatis berikutnya akan jalan) — itu tersimpan di
 perangkat user, bukan di DATA yang kamu terima. DATA yang kamu terima soal "transaksi
@@ -201,10 +204,17 @@ export async function answerFinancialQuestion(
   question: string,
   dataContext: string,
   language: "id" | "en" = "id",
+  opts: { deterministic?: boolean } = {},
 ): Promise<{ answer: string; usage: TokenUsage }> {
   const langLine = language === "en"
     ? "LANGUAGE: Answer in English."
     : "LANGUAGE: Jawab dalam Bahasa Indonesia.";
+
+  // deterministic=true dipakai untuk pertanyaan agregat (wantsTotal): temp 0
+  // menghapus variasi sampling supaya jawaban angka tidak teracak (kadang
+  // benar, kadang "Data kurang"). Pertanyaan percakapan biasa TETAP temp 0.3
+  // supaya jawabannya tidak jadi kaku/robotik.
+  const temperature = opts.deterministic ? 0 : 0.3;
 
   const { content, usage } = await callGroq(
     ANSWER_MODEL,
@@ -216,7 +226,7 @@ export async function answerFinancialQuestion(
       },
     ],
     {
-      temperature: 0.3,
+      temperature,
       maxTokens: 1024,
       timeoutMs: 20000,
       reasoningEffort: "low",

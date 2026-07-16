@@ -16,7 +16,7 @@ export interface ChatRequest {
 export interface ChatResponse {
   answer: string;
   // Dari level mana jawaban ini berasal (untuk debugging & monitoring).
-  source: "keyword_filter" | "intent_filter" | "answer" | "error";
+  source: "keyword_filter" | "intent_filter" | "answer" | "error" | "rate_limit";
   tokens_used?: { input: number; output: number };
 }
 

@@ -43,6 +43,7 @@ async function logServerError(
   message: string,
   metadata: Record<string, unknown> | null,
   severity: "high" | "medium" = "medium",
+  userId: string | null = null,
 ) {
   try {
     const admin = createClient(
@@ -50,6 +51,7 @@ async function logServerError(
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
     await admin.from("error_logs").insert({
+      user_id: userId, // dari JWT terverifikasi (index handler), BUKAN dari body
       source: "financial-chat",
       message,
       metadata,
@@ -125,6 +127,37 @@ serve(async (req) => {
 
   const lang = detectLang(question);
 
+  // ── 1.5 Rate limit per-user (SEBELUM Level 1/2/3) ──────────────────
+  // Cek + increment counter secara ATOMIK lewat RPC SECURITY DEFINER
+  // (counter otoritatif di server; user tak bisa memalsukannya). Kalau
+  // sudah lewat batas → tolak dengan pesan ramah TANPA menyentuh Groq,
+  // supaya request abusive tidak membakar kuota klasifikasi/answering.
+  try {
+    const { data: rl, error: rlErr } = await supabase.rpc(
+      "check_chat_rate_limit",
+      { p_max_requests: 8, p_window_seconds: 60 },
+    );
+    if (rlErr) {
+      // Fail-open: jangan sampai bug rate-limiter memblokir user sah.
+      console.error("[financial-chat] rate limit RPC error (fail-open):", rlErr);
+    } else if (rl && (rl as { allowed?: boolean }).allowed === false) {
+      console.log(`[financial-chat] rate limit blok: user ${userId}`);
+      // Status 200 (sama pola dgn keyword_filter/intent_filter): supabase-js
+      // functions.invoke memperlakukan non-2xx sbg error & membuang body, jadi
+      // 429 akan menyembunyikan pesan ramah ini di UI (MoneyIQChat.jsx). Sumber
+      // dibedakan lewat `source:"rate_limit"`, bukan HTTP status.
+      return json({
+        answer: lang === "en"
+          ? "Hang on a sec — you've asked a lot in a short time 🙏 try again in a few seconds."
+          : "Tunggu sebentar ya, kamu sudah banyak bertanya 🙏 coba lagi dalam beberapa detik.",
+        source: "rate_limit",
+      });
+    }
+  } catch (e) {
+    // Fail-open juga bila RPC melempar (mis. fungsi belum ter-deploy).
+    console.error("[financial-chat] rate limit exception (fail-open):", e);
+  }
+
   // ── 2. Level 1 — Keyword filter (tanpa panggil Groq) ───────────────
   const kw = keywordFilter(question);
   if (kw.blocked) {
@@ -170,7 +203,7 @@ serve(async (req) => {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[financial-chat] Supabase query error:", msg);
-    await logServerError(msg, { stage: "fetchFinancialData", intent }, "medium");
+    await logServerError(msg, { stage: "fetchFinancialData", intent }, "medium", userId);
     return json({
       answer: lang === "en"
         ? "Couldn't fetch your data. Try again with a specific category or period."
@@ -194,6 +227,7 @@ serve(async (req) => {
       question,
       dataResult.context,
       lang,
+      { deterministic: intent.wantsTotal === true }, // temp 0 khusus agregat
     );
     return json({
       answer,
@@ -203,7 +237,7 @@ serve(async (req) => {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[financial-chat] Groq answering error:", msg);
-    await logServerError(msg, { stage: "answerFinancialQuestion", intent }, "medium");
+    await logServerError(msg, { stage: "answerFinancialQuestion", intent }, "medium", userId);
     return json({
       answer: lang === "en"
         ? "Something went wrong. Please try again in a minute."

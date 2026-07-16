@@ -282,11 +282,35 @@ async function fetchTransactions(
   const total = rows.reduce((s, r) => s + Number(r.amount), 0);
   const label = type === "expense" ? "Pengeluaran" : "Pemasukan";
 
-  const lines = rows.slice(0, intent.wantsTotal ? 10 : rows.length).map((r) => {
+  // Saat wantsTotal, rincian sengaja DIPANGKAS ke 10 baris (user minta angka
+  // agregat, bukan daftar panjang). Tapi `total` di header dihitung dari SEMUA
+  // baris (di atas), jadi header WAJIB menyatakan eksplisit bahwa daftar di
+  // bawah cuma sebagian — kalau tidak, answering model mengira header (mis.
+  // "dari 30 transaksi") kontradiktif dgn daftar 10 baris yang dilihatnya lalu
+  // jatuh ke fallback "Data kurang" (root-cause bug kata "total"/"jumlah"/dll).
+  // Perbaikan ini dikunci ke KONDISI truncation, jadi konsisten untuk SEMUA
+  // kata pemicu wantsTotal, bukan cuma "total".
+  const shownCount = intent.wantsTotal ? Math.min(rows.length, 10) : rows.length;
+  const truncated = shownCount < rows.length;
+  // Rincian diambil dari baris paling atas SESUAI urutan query (amount saat
+  // ada intent.order, selain itu tanggal terbaru) — labelnya harus jujur.
+  const orderNote = intent.order === "desc"
+    ? "terbesar"
+    : intent.order === "asc"
+    ? "terkecil"
+    : "terbaru";
+
+  const lines = rows.slice(0, shownCount).map((r) => {
     const resolvedCategory = displayCategory(r.category as string, categoryMap);
     const desc = r.merchant || r.note || resolvedCategory;
     return `- ${r.date} | ${resolvedCategory} | ${rupiah(Number(r.amount))} | ${desc}`;
   });
+
+  const totalLine = truncated
+    ? `\nTotal ${label.toLowerCase()}: ${rupiah(total)} dari ${rows.length} transaksi ` +
+      `(rincian di bawah hanya menampilkan ${shownCount} transaksi ${orderNote} ` +
+      `sebagai contoh — total di atas SUDAH mencakup seluruh ${rows.length} transaksi).`
+    : `\nTotal ${label.toLowerCase()}: ${rupiah(total)} dari ${rows.length} transaksi.`;
 
   const header =
     `${label} periode ${range.start} s/d ${range.end}` +
@@ -294,10 +318,48 @@ async function fetchTransactions(
     (intent.walletName ? ` (dompet: ${intent.walletName})` : "") +
     (intent.metode ? ` (metode: ${intent.metode})` : "") +
     (intent.onlyAutomatic ? ` (khusus transaksi otomatis)` : "") +
-    `\nTotal ${label.toLowerCase()}: ${rupiah(total)} dari ${rows.length} transaksi.`;
+    totalLine;
+
+  const rincianLabel = truncated
+    ? `Rincian (${shownCount} dari ${rows.length} transaksi, ${orderNote}):`
+    : `Rincian (${shownCount} transaksi):`;
+
+  // Saat user minta agregat (wantsTotal), sisipkan JAWABAN eksplisit di baris
+  // PALING ATAS konteks — bukan cuma di header. Tujuannya deterministik: fakta
+  // total jadi hal pertama yang dilihat answering model, tidak tenggelam di
+  // tengah data, sehingga model tak lagi ragu & menjatuhkan fallback "Data
+  // kurang" (root-cause: variabilitas model pada frasa "total ..."). Nominal
+  // SAMA PERSIS dgn header (rupiah(total)) supaya tidak ada angka yang bentrok.
+  // Deteksi "periode berjalan" berdasarkan FAKTA range.end === HARI INI (WIB),
+  // BUKAN label nama periode. Dengan begitu catatan ini otomatis berlaku untuk
+  // this_month / this_year / this_week / today / default (semua end-nya = hari
+  // ini), dan TIDAK berlaku untuk periode kalender yang sudah TUNTAS (bulan Juni
+  // lalu → end 06-30, tahun lalu → end 12-31, kemarin, last_month) yang end-nya
+  // BUKAN hari ini. Menghindari tambal per-label untuk tiap periode baru.
+  const nowW = nowWIB();
+  const todayStr = ymd(nowW.getUTCFullYear(), nowW.getUTCMonth() + 1, nowW.getUTCDate());
+  const isRunningPeriod = range.end === todayStr;
+
+  const leadAnswer = intent.wantsTotal
+    ? `RINGKASAN JAWABAN (sudah final & lengkap, WAJIB dipakai — JANGAN bilang "Data kurang"): ` +
+      `Total ${label.toLowerCase()} ${range.start} s/d ${range.end}` +
+      (intent.category ? ` kategori ${intent.category}` : "") +
+      (intent.walletName ? ` dompet ${intent.walletName}` : "") +
+      (intent.metode ? ` metode ${intent.metode}` : "") +
+      ` = ${rupiah(total)} (dari ${rows.length} transaksi).` +
+      (isRunningPeriod
+        ? ` CATATAN: ${range.end} adalah HARI INI — rentang di atas adalah PERIODE ` +
+          `BERJALAN yang berakhir hari ini, datanya SUDAH lengkap untuk tanggal yang ` +
+          `telah berlalu. Transaksi tanggal setelah hari ini belum ada (normal); ` +
+          `JANGAN minta data itu, JANGAN bilang belum lengkap.`
+        : ` CATATAN: periode ${range.start} s/d ${range.end} SUDAH SELESAI penuh secara ` +
+          `kalender (BUKAN periode berjalan) — jawab sebagai periode yang sudah tuntas, ` +
+          `JANGAN pakai frasa "sampai sekarang"/"sejauh ini"/"sampai hari ini".`) +
+      `\n\n`
+    : "";
 
   return {
-    context: `${header}\nRincian (maks 10 baris):\n${lines.join("\n")}`,
+    context: `${leadAnswer}${header}\n${rincianLabel}\n${lines.join("\n")}`,
     rowCount: rows.length,
   };
 }
