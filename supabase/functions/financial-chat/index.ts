@@ -62,6 +62,66 @@ async function logServerError(
   }
 }
 
+// ── Log pertanyaan yang GAGAL dijawab (tabel chat_unanswered_log) ─────
+// TERPISAH dari error_logs: ini analitik POLA pertanyaan untuk memperbaiki
+// keyword filter Level 1, BUKAN error teknis/uang.
+//
+// ⚠️ PRIVASI: SENGAJA tanpa user_id / identitas apa pun. Kita insert langsung
+// pakai service_role (bypass RLS), BUKAN via RPC — justru supaya auth.uid()
+// TIDAK ikut tercatat. Lihat migration 20260717000000_add_chat_unanswered_log.sql.
+//
+// Fail-silent seperti logServerError(): kegagalan menulis TIDAK boleh
+// mengganggu alur jawaban ke user — cukup console.error.
+async function logUnanswered(
+  question: string,
+  reason: "level1_blocked" | "level2_blocked" | "level3_declined" | "data_kurang",
+) {
+  try {
+    const admin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+    // Hanya question + reason + created_at (default now()). TIDAK ADA user_id.
+    await admin.from("chat_unanswered_log").insert({ question, reason });
+  } catch (e) {
+    console.error("[financial-chat] logUnanswered gagal (diabaikan):", e);
+  }
+}
+
+// Deteksi jawaban "Data kurang..." yang diinstruksikan di system prompt
+// answering (groq-client.ts). Frasa itu cukup khas untuk dicocokkan literal.
+function isDataKurang(answer: string): boolean {
+  return /\bdata kurang\b/i.test(answer);
+}
+
+// Deteksi PENOLAKAN out-of-scope oleh model di Level 3: pertanyaan yang lolos
+// L1 (keyword) + L2 (fail-open FINANCIAL) tapi ditolak sopan lewat instruksi
+// system prompt (mis. "kenapa market bitcoin turun" → "Maaf, data yang saya
+// miliki hanya tentang transaksi & budget pribadi Anda..."). Kasus ini paling
+// berguna untuk tuning keyword filter L1, tapi tak tertangkap isDataKurang.
+//
+// Pola SENGAJA di-anchor ke penolakan batasan-diri (first-person / "di luar
+// jangkauan/cakupan") supaya jawaban NORMAL (yang cuma menyebut angka/kategori)
+// tidak ikut kena. Selalu dicek SETELAH isDataKurang → keduanya eksklusif.
+function isLevel3Declined(answer: string): boolean {
+  const a = answer.toLowerCase();
+  const patterns: RegExp[] = [
+    // ID — penolakan batasan-diri
+    /data yang (saya|aku) (miliki|punya) hanya/,
+    /(saya|aku) (hanya|cuma) (bisa|dapat) (membantu|menjawab|bantu)/,
+    /(saya|aku) tidak (bisa|dapat) (menjawab|membantu)/,
+    /tidak (memiliki|punya|menyimpan) (informasi|data|akses)[^.!?]{0,25}(tentang|soal|mengenai|seputar|terkait)/,
+    /di luar (jangkauan|cakupan|topik|kemampuan|konteks)/,
+    /bukan (topik|pertanyaan|hal) (keuangan|yang)/,
+    // EN
+    /i can only (help|answer|assist)/,
+    /i (don't|do not|cannot|can't) have (information|data|access)/,
+    /(outside|beyond) (my|the|what)[^.!?]{0,20}(scope|help|assist|can)/,
+    /(that's|that is) (outside|beyond|not something i)/,
+  ];
+  return patterns.some((re) => re.test(a));
+}
+
 // Deteksi bahasa sangat sederhana: kalau tidak ada kata Indonesia umum,
 // asumsikan Inggris. Default Indonesia.
 function detectLang(q: string): "id" | "en" {
@@ -162,6 +222,7 @@ serve(async (req) => {
   const kw = keywordFilter(question);
   if (kw.blocked) {
     console.log(`[financial-chat] Level 1 blok: ${kw.reason}`);
+    await logUnanswered(question, "level1_blocked");
     return json({
       answer: lang === "en"
         ? "I can only answer questions about your own finances (transactions, budgets, savings, investments). 💰"
@@ -174,6 +235,7 @@ serve(async (req) => {
   const classification = await classifyWithGroq(question);
   if (classification === "OUT_OF_SCOPE") {
     console.log("[financial-chat] Level 2 blok: OUT_OF_SCOPE");
+    await logUnanswered(question, "level2_blocked");
     return json({
       answer: lang === "en"
         ? "That's outside what I can help with. Ask me about your transactions, budgets, or savings. 🙂"
@@ -229,6 +291,16 @@ serve(async (req) => {
       lang,
       { deterministic: intent.wantsTotal === true }, // temp 0 khusus agregat
     );
+    // Pertanyaan yang lolos guardrail tapi tetap gagal dilayani di L3 → catat
+    // polanya (tanpa identitas user). Urutan penting & eksklusif:
+    //   1) "Data kurang..." literal        → data_kurang
+    //   2) penolakan out-of-scope oleh model → level3_declined
+    // Jawaban normal (angka/kategori) tidak kena keduanya.
+    if (isDataKurang(answer)) {
+      await logUnanswered(question, "data_kurang");
+    } else if (isLevel3Declined(answer)) {
+      await logUnanswered(question, "level3_declined");
+    }
     return json({
       answer,
       source: "answer",
