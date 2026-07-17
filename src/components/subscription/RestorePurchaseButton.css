@@ -42,3 +42,9 @@ html.dark .rpb--error {
   border-color: color-mix(in oklch, #e07070 25%, transparent);
   background: color-mix(in oklch, #e07070 8%, transparent);
 }
+
+.rpb--web {
+  color: var(--gold);
+  border-color: color-mix(in oklch, var(--gold) 35%, transparent);
+  background: color-mix(in oklch, var(--gold) 8%, transparent);
+}

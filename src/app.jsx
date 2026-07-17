@@ -439,6 +439,7 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
   const ranRecurringRef = React.useRef(false);
   React.useEffect(() => {
     if (ranRecurringRef.current) return;
+    if (!Capacitor.isNativePlatform()) return; // fitur "Transaksi Berulang" khusus Android native
     // Tunggu wallets ter-load dulu: eksekusi butuh wallet_id (kolom NOT NULL) —
     // jalan terlalu awal (accounts kosong) akan melewati semua jadwal.
     if (!accounts || accounts.length === 0) return;

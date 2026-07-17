@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { useScrollLock } from '../../hooks/useScrollLock';
 import './UpgradeModal.css';
+
+const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.Financeapp.app';
 
 const PRICING_PLANS = [
   {
@@ -46,6 +49,42 @@ export function UpgradeModal({ isOpen, onClose, reason, currentLimit, maxLimit, 
     const plan = PRICING_PLANS.find(p => p.id === selectedPlan);
     onSelectPlan?.(selectedPlan, plan);
   };
+
+  // Web tidak punya jalur pembayaran (RevenueCat = Android-only). Jangan tampilkan
+  // pemilihan paket/tombol beli sama sekali — arahkan ke Play Store.
+  if (!Capacitor.isNativePlatform()) {
+    return (
+      <div className="um-overlay" onClick={onClose}>
+        <div className="um-sheet" onClick={(e) => e.stopPropagation()}>
+          <button className="um-close" onClick={onClose} aria-label="Tutup">✕</button>
+
+          <div className="um-header">
+            <div className="um-icon">👑</div>
+            <h2 className="um-title serif">Upgrade ke Pro</h2>
+          </div>
+
+          <div className="um-reason">
+            <p>Upgrade ke Pro saat ini hanya tersedia lewat aplikasi Android.</p>
+          </div>
+
+          <div className="um-actions">
+            <a
+              className="um-btn-primary"
+              href={PLAY_STORE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ display: 'block', boxSizing: 'border-box', textAlign: 'center', textDecoration: 'none' }}
+            >
+              Download di Play Store
+            </a>
+            <button className="um-btn-secondary" onClick={onClose}>
+              Nanti Saja
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="um-overlay" onClick={onClose}>

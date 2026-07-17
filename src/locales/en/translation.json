@@ -589,7 +589,8 @@
     "tanggalN": "Date {{n}}",
     "dompet": "Wallet",
     "pilihDompet": "Select wallet",
-    "dompetOtomatis": "Automatic"
+    "dompetOtomatis": "Automatic",
+    "hanyaAndroid": "Recurring Transactions is only available on the Android app."
   },
   "dompet": {
     "rekeningBank": "Bank Account",

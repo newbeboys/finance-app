@@ -1,5 +1,6 @@
 ﻿import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { Capacitor } from '@capacitor/core';
 import { fmt } from '../data';
 import {
   loadRecurring, addRecurring, updateRecurring, deleteRecurring, toggleRecurring, fromISO,
@@ -150,6 +151,32 @@ export default function RecurringTransactionPage({ open, onClose, accounts = [] 
   }, []);
 
   if (!open) return null;
+
+  // Fitur khusus Android native — kalau halaman ini somehow diakses di web
+  // (mis. lewat state yang diset manual), tampilkan pesan alih-alih halaman
+  // kosong/rusak. RecurringTour & RecurringTransactionForm tidak pernah
+  // di-render lewat cabang ini, jadi otomatis ikut tidak muncul di web.
+  if (!Capacitor.isNativePlatform()) {
+    return (
+      <div style={{ position: 'fixed', inset: 0, zIndex: 1200, background: 'var(--cream)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12, padding: '16px 18px', paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)', borderBottom: '1px solid var(--line-soft)', background: 'var(--ivory)' }}>
+          <button onClick={onClose} aria-label={t('umum.kembali')}
+            style={{ width: 38, height: 38, borderRadius: 10, border: '1px solid var(--line-soft)', background: 'var(--paper)', display: 'grid', placeItems: 'center', color: 'var(--ink-2)', cursor: 'pointer', flexShrink: 0 }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
+          </button>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="serif" style={{ fontSize: 22, letterSpacing: '-0.01em', color: 'var(--ink)' }}>{t('berulang.judul')}</div>
+          </div>
+        </div>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '64px 24px', textAlign: 'center' }}>
+          <div style={{ fontSize: 40 }} aria-hidden>🔄</div>
+          <div style={{ fontSize: 13.5, color: 'var(--muted)', lineHeight: 1.6, maxWidth: 280 }}>
+            {t('berulang.hanyaAndroid')}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const openAdd = () => { setEditing(null); setFormOpen(true); };
   const openEdit = (item) => { setEditing(item); setFormOpen(true); };

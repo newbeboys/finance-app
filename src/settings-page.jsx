@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { Capacitor } from '@capacitor/core';
 import i18n from './i18n';
 import { IconCheck } from './icons';
 import { supabase } from './supabase';
@@ -284,6 +285,13 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub, s
 
   const handleSelectPlan = async (planId) => {
     if (purchaseBusy) return;
+    if (!Capacitor.isNativePlatform()) {
+      // RevenueCat cuma jalan di Android — jangan panggil rc.getOfferings()/purchasePackage()
+      // di web sama sekali (UpgradeModal sendiri sudah tidak menawarkan opsi ini di web,
+      // guard ini jaga-jaga kalau handleSelectPlan terpanggil lewat jalur lain).
+      showPurchaseToast(false, 'Upgrade lewat aplikasi Android');
+      return;
+    }
     const pkgIdentifier = RC_PACKAGE_MAP[planId];
     if (!pkgIdentifier) return;
 
@@ -323,6 +331,11 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub, s
   };
 
   const handleRestorePurchase = async () => {
+    if (!Capacitor.isNativePlatform()) {
+      // Guard langsung di depan panggilan rc.restorePurchases() — RestorePurchaseButton
+      // sudah tidak memanggil onRestore di web, ini lapisan jaga-jaga tambahan.
+      throw new Error('Upgrade lewat aplikasi Android');
+    }
     const customerInfo = await rc.restorePurchases?.();
     const hasPro = customerInfo?.entitlements?.active?.['pro'] !== undefined;
     if (hasPro) await sub.refresh?.();
@@ -582,26 +595,28 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub, s
           )}
         </SettingCard>
 
-        {/* Transaksi Berulang — navigasi ke halaman (Pro) */}
-        <SettingCard eyebrow={tr('pengaturan.otomatis')} title={tr('pengaturan.jadwal')}>
-          <button
-            onClick={openRecurring}
-            style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "14px 0 4px", background: "transparent", border: 0, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}
-          >
-            <span style={{ position: "relative", fontSize: 20, width: 40, height: 40, borderRadius: 11, background: "var(--paper)", border: "1px solid var(--line-soft)", display: "grid", placeItems: "center", flexShrink: 0 }} aria-hidden>
-              🔄
-              {!recurringEnabled && <ProLock />}
-            </span>
-            <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ display: "block", fontSize: 13.5, fontWeight: 500, color: "var(--ink)" }}>
-                {tr('pengaturan.transaksiBerulang')}
-                {!recurringEnabled && <ProTag />}
+        {/* Transaksi Berulang — navigasi ke halaman (Pro). Fitur khusus Android native, disembunyikan di web. */}
+        {Capacitor.isNativePlatform() && (
+          <SettingCard eyebrow={tr('pengaturan.otomatis')} title={tr('pengaturan.jadwal')}>
+            <button
+              onClick={openRecurring}
+              style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "14px 0 4px", background: "transparent", border: 0, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}
+            >
+              <span style={{ position: "relative", fontSize: 20, width: 40, height: 40, borderRadius: 11, background: "var(--paper)", border: "1px solid var(--line-soft)", display: "grid", placeItems: "center", flexShrink: 0 }} aria-hidden>
+                🔄
+                {!recurringEnabled && <ProLock />}
               </span>
-              <span style={{ display: "block", fontSize: 12, color: "var(--muted)", marginTop: 3, lineHeight: 1.45 }}>{tr('pengaturan.transaksiBerulangDesc')}</span>
-            </span>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M9 18l6-6-6-6" /></svg>
-          </button>
-        </SettingCard>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: "block", fontSize: 13.5, fontWeight: 500, color: "var(--ink)" }}>
+                  {tr('pengaturan.transaksiBerulang')}
+                  {!recurringEnabled && <ProTag />}
+                </span>
+                <span style={{ display: "block", fontSize: 12, color: "var(--muted)", marginTop: 3, lineHeight: 1.45 }}>{tr('pengaturan.transaksiBerulangDesc')}</span>
+              </span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M9 18l6-6-6-6" /></svg>
+            </button>
+          </SettingCard>
+        )}
 
         {/* Notifications */}
         <SettingCard eyebrow={tr('pengaturan.notifikasi')} title={tr('pengaturan.pemberitahuan')}>

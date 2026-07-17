@@ -589,7 +589,8 @@
     "tanggalN": "Tanggal {{n}}",
     "dompet": "Dompet",
     "pilihDompet": "Pilih dompet",
-    "dompetOtomatis": "Otomatis"
+    "dompetOtomatis": "Otomatis",
+    "hanyaAndroid": "Fitur Transaksi Berulang hanya tersedia di aplikasi Android."
   },
   "dompet": {
     "rekeningBank": "Rekening Bank",
