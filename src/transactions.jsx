@@ -577,7 +577,7 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
           </div>
         )}
 
-        <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+        <div className="modal-actions" style={{ display: "flex", gap: 10, marginTop: 20 }}>
           <button onClick={onClose} style={{ flex: 1, padding: "13px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 12, fontSize: 14, color: "var(--ink-2)" }}>{tr('umum.batal')}</button>
           <button onClick={submit} disabled={!valid || saving}
             style={{ flex: 2, padding: "13px", background: (valid && !saving) ? "var(--ink)" : "var(--line-soft)", color: (valid && !saving) ? "var(--cream)" : "var(--muted-2)", border: 0, borderRadius: 12, fontSize: 14, fontWeight: 500, cursor: (valid && !saving) ? "pointer" : "default" }}>

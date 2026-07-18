@@ -2,7 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { TRANSACTIONS, ALL_CATEGORIES, fmt, formatNominal, nominalFontSize } from './data';
 import { IconSearch, IconPlus, IconClose, CatIcon } from './icons';
-import { useIsMobile } from './use-mobile';
+import { useIsCompact } from './hooks/useContainerWidth';
 import { AddTransactionModal } from './transactions';
 import { LockBadge } from './components/PaywallModal';
 import { resolveCategory, categoryLabel } from './category-field';
@@ -12,7 +12,9 @@ export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, 
   const { t: tr, i18n } = useTranslation();
   const locale = i18n.language === 'en' ? 'en-US' : 'id-ID';
   const transactions = txProp ?? TRANSACTIONS;
-  const isMobile = useIsMobile();
+  // Ruang konten, bukan lebar layar (lihat useContainerWidth). Baris/header tabel
+  // di-toggle via @container di index.css; cosmetics (judul/padding) ikut sini.
+  const isMobile = useIsCompact();
   const [q, setQ] = React.useState("");
   const [type, setType] = React.useState("all");
   const [deletingId, setDeletingId] = React.useState(null); // id transaksi yang akan dihapus

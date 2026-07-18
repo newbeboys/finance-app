@@ -4,6 +4,7 @@ import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { useTweaks, TweaksPanel, TweakSection, TweakRadio, TweakSelect, TweakToggle } from './tweaks-panel';
 import { BottomNav } from './components/BottomNav';
+import { Sidebar } from './components/Sidebar';
 import { TopBar } from './topbar';
 import { KpiCards, CashflowCard, SpendingCard, InsightsCard, SavingsCard, BudgetsCard, DebtsCard, WeeklySummaryCard } from './widgets';
 import { WalletsPage, AddAccountModal } from './wallets';
@@ -674,26 +675,37 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
 
   return (
     <div className="app" data-screen-label="Dashboard">
+      {/* BottomNav tetap di-mount tanpa syarat (mobile tidak berubah); disembunyikan
+          secara visual di ≥750px lewat CSS, bukan conditional render. */}
       <BottomNav active={active} onNav={setActive} />
+      {/* Sidebar hanya tampil di ≥750px (CSS: .sidebar default display:none). */}
+      <Sidebar active={active} onNav={setActive} />
 
       <main className="main-content">
-        <TopBar
-          theme={t.theme}
-          onTheme={() => setTweak("theme", t.theme === "dark" ? "light" : "dark")}
-          onAdd={() => setModal(true)}
-          accounts={accounts}
-          selectedAcct={selectedAcct}
-          onSelectAcct={setSelectedAcct}
-          onAddAcct={handleAddAcct}
-          addAcctLocked={walletAddLocked}
-          notifEnabled={t.notifications}
-          user={session.user}
-          notifications={notifications}
-          unreadCount={unreadCount}
-          onMarkAllRead={markAllRead}
-          onMarkRead={markRead}
-          onOpenNotif={cleanupExpired}
-        />
+        {/* TopBar hanya di halaman Beranda. Di halaman lain hilang total —
+            konten mulai langsung dari atas (tiap halaman punya padding-top
+            sendiri, jadi tidak ada jarak kosong menggantung). TopBar bukan
+            elemen yang mencadangkan tinggi khusus di .main-content, jadi tak
+            perlu penyesuaian CSS. Berlaku web & mobile. */}
+        {active === "dashboard" && (
+          <TopBar
+            theme={t.theme}
+            onTheme={() => setTweak("theme", t.theme === "dark" ? "light" : "dark")}
+            onAdd={() => setModal(true)}
+            accounts={accounts}
+            selectedAcct={selectedAcct}
+            onSelectAcct={setSelectedAcct}
+            onAddAcct={handleAddAcct}
+            addAcctLocked={walletAddLocked}
+            notifEnabled={t.notifications}
+            user={session.user}
+            notifications={notifications}
+            unreadCount={unreadCount}
+            onMarkAllRead={markAllRead}
+            onMarkRead={markRead}
+            onOpenNotif={cleanupExpired}
+          />
+        )}
 
         {active === "dashboard" && (
           <div className="dash-grid">

@@ -343,7 +343,7 @@ export function DepositModal({ goal, onClose, onConfirm }) {
           ))}
         </div>
 
-        <div style={{ display: "flex", gap: 10, marginTop: 22 }}>
+        <div className="modal-actions" style={{ display: "flex", gap: 10, marginTop: 22 }}>
           <button onClick={onClose} style={{ flex: 1, padding: "11px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 12, fontSize: 13.5, color: "var(--ink-2)" }}>{tr('umum.batal')}</button>
           <button onClick={confirm} style={{ flex: 2, padding: "11px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500 }}>{tr('tabungan.tambahKeTabungan')}</button>
         </div>

@@ -194,7 +194,7 @@ export default function AddDebtModal({ open, onClose, onCreate, wallets = [] }) 
           <div style={{ marginTop: 14, fontSize: 12.5, color: 'var(--terra)' }}>{errorMsg}</div>
         )}
 
-        <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+        <div className="modal-actions" style={{ display: 'flex', gap: 10, marginTop: 20 }}>
           <button onClick={onClose} style={{ flex: 1, padding: '12px', background: 'var(--paper)', border: '1px solid var(--line-soft)', borderRadius: 12, fontSize: 14, color: 'var(--ink-2)', cursor: 'pointer', fontFamily: 'inherit' }}>Batal</button>
           <button onClick={submit} disabled={!valid || submitting}
             style={{ flex: 2, padding: '12px', background: (valid && !submitting) ? 'var(--ink)' : 'var(--line-soft)', color: (valid && !submitting) ? 'var(--cream)' : 'var(--muted)', border: 0, borderRadius: 12, fontSize: 14, fontWeight: 500, cursor: (valid && !submitting) ? 'pointer' : 'default', fontFamily: 'inherit' }}>

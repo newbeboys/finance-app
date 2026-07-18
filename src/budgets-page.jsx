@@ -3,14 +3,15 @@ import { useTranslation } from 'react-i18next';
 import i18n from './i18n';
 import { fmt, fmtShort, formatNominal, nominalFontSize, CATEGORIES } from './data';
 import { IconPlus, IconSpark, IconClose, IconEdit, CatIcon } from './icons';
-import { useIsMobile } from './use-mobile';
+import { useIsCompact } from './hooks/useContainerWidth';
 import { CategoryField, CUSTOM_ID } from './category-field';
 import { useScrollLock } from './hooks/useScrollLock';
 import { formatRupiahInput } from './utils/numberFormat';
 
 export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, onDelete, customCategories = [], onCreateCustom, onDeleteCustom, isPro = false, isBasicAtMax = false, userId }) {
   const { t: tr, i18n: i18nObj } = useTranslation();
-  const isMobile = useIsMobile();
+  // Ruang konten, bukan lebar layar (lihat useContainerWidth). <750px: identik mobile.
+  const isMobile = useIsCompact();
 
   const [period, setPeriod] = React.useState("monthly");
   const [showAddModal, setShowAddModal] = React.useState(false);
@@ -413,7 +414,7 @@ function AddBudgetModal({ onClose, onAdd, onUpdate, initial = null, defaultPerio
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 10, marginTop: 22 }}>
+        <div className="modal-actions" style={{ display: "flex", gap: 10, marginTop: 22 }}>
           <button onClick={onClose} style={{ flex: 1, padding: "13px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 12, fontSize: 14, color: "var(--ink-2)" }}>{tr('umum.batal')}</button>
           <button onClick={submit} disabled={!valid || saving}
             style={{ flex: 2, padding: "13px", background: (valid && !saving) ? "var(--ink)" : "var(--line-soft)", color: (valid && !saving) ? "var(--cream)" : "var(--muted-2)", border: 0, borderRadius: 12, fontSize: 14, fontWeight: 500, cursor: (valid && !saving) ? "pointer" : "default" }}>

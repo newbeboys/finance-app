@@ -2,7 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { IconSearch, IconBell, IconSun, IconMoon, IconPlus, IconClose } from './icons';
 import { AccountSwitcher } from './wallets';
-import { useIsMobile } from './use-mobile';
+import { useIsCompact, TOPBAR_COMPACT_MAX } from './hooks/useContainerWidth';
 import { useScrollLock } from './hooks/useScrollLock';
 
 // Pilih sapaan berdasarkan jam perangkat: pagi (<11) · siang (<18) · malam
@@ -16,7 +16,10 @@ export function TopBar({ theme, onTheme, onAdd, accounts, selectedAcct, onSelect
   const { t, i18n } = useTranslation();
   const [q, setQ] = React.useState("");
   const [bell, setBell] = React.useState(false);
-  const isMobile = useIsMobile();
+  // Berbasis ruang konten (Sidebar memotong 240px di ≥750px), bukan lebar layar,
+  // supaya sapaan/search/switcher tidak pecah di tablet. Ambang 900 (lihat
+  // TOPBAR_COMPACT_MAX). <750px: identik mobile.
+  const isMobile = useIsCompact('.main-content', TOPBAR_COMPACT_MAX);
 
   const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || t('topbar.pengguna');
 
