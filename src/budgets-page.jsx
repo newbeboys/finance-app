@@ -123,7 +123,7 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
               </div>
             </div>
           ) : (
-            <div className="card rise" style={{ padding: 24, display: "grid", gridTemplateColumns: "1.1fr 1px 1fr 1px 1fr", gap: 24, alignItems: "center" }}>
+            <div className="card rise budget-summary-grid" style={{ padding: 24, display: "grid", gridTemplateColumns: "1.1fr 1px 1fr 1px 1fr", gap: 24, alignItems: "center" }}>
               <div>
                 <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{isBulanan ? tr('anggaran.totalAnggaranBulanan') : tr('anggaran.totalAnggaranMingguan')}</div>
                 <div className="serif tnum kpi-nominal" style={{ fontSize: nominalFontSize(totalLimit, { hero: true }), letterSpacing: "-0.02em", marginTop: 6 }}>{formatNominal(totalLimit)}</div>
@@ -158,7 +158,7 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
           {/* ── Budget rows card ── */}
           <div className="card rise" style={{ padding: isMobile ? "8px 16px 16px" : "8px 24px 16px" }}>
             {!isMobile && (
-              <div style={{ display: "grid", gridTemplateColumns: "minmax(200px,1.4fr) 1.6fr 150px 80px", padding: "16px 0 10px", borderBottom: "1px solid var(--line-soft)", fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)", alignItems: "center", gap: 16 }}>
+              <div className="budget-cols-header" style={{ display: "grid", gridTemplateColumns: "minmax(200px,1.4fr) 1.6fr 150px 80px", padding: "16px 0 10px", borderBottom: "1px solid var(--line-soft)", fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)", alignItems: "center", gap: 16 }}>
                 <span>{tr('anggaran.tableKategori')}</span><span>{tr('anggaran.tableProgress')}</span>
                 <span style={{ textAlign: "right" }}>{isBulanan ? tr('anggaran.tableBatasBulanan') : tr('anggaran.tableBatasMingguan')}</span>
                 <span />
@@ -214,7 +214,7 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
               }
 
               return (
-                <div key={r.id} style={{ display: "grid", gridTemplateColumns: "minmax(200px,1.4fr) 1.6fr 150px 80px", alignItems: "center", gap: 16, padding: "16px 0", borderBottom: i < visibleRows.length - 1 ? "1px solid var(--line-soft)" : 0 }}>
+                <div key={r.id} className="budget-cols-row" style={{ display: "grid", gridTemplateColumns: "minmax(200px,1.4fr) 1.6fr 150px 80px", alignItems: "center", gap: 16, padding: "16px 0", borderBottom: i < visibleRows.length - 1 ? "1px solid var(--line-soft)" : 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
                     <span style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: `color-mix(in oklch, ${r.color} 16%, var(--ivory))`, color: r.color, display: "grid", placeItems: "center" }}>
                       <CatIcon kind={r.categoryId || r.id} size={16} />

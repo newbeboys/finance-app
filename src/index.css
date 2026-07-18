@@ -486,3 +486,214 @@ button { font: inherit; color: inherit; cursor: pointer; }
   }
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   STOPGAP LAYOUT DESKTOP — SEMENTARA, sebelum redesign sidebar dikerjakan.
+   Di layar lebar (≥768px "niat"-nya) app di-render sebagai kolom ~480px
+   yang center (meniru lebar mobile) supaya konten tidak melebar edge-to-edge
+   dan bottom nav tidak membentang penuh.
+
+   Threshold diset 750px, BUKAN 768px, dengan sengaja: window.innerWidth /
+   document.documentElement.clientWidth (basis @media min-width) memotong
+   lebar scrollbar vertikal classic (non-overlay) — umum ~15–17px di Chrome
+   Windows. Jendela yang secara VISUAL/niat "768px" jadi terukur ~751-753px
+   begitu ada scrollbar, sehingga @media (min-width:768px) TIDAK PERNAH
+   nyala — dikonfirmasi lewat pengukuran langsung: di 751px computed style
+   select balik ke appearance:auto/tanpa chevron (persis keluhan user),
+   di 768px baru appearance:none/chevron custom muncul. Buffer 18px di sini
+   menutup kasus itu tanpa mengubah blok mobile (≤767px) — hanya angka
+   threshold blok INI yang berubah. Overlap kecil ~750-767px antara blok
+   mobile & stopgap ini sengaja dibiarkan menang ke stopgap (aturannya lebih
+   akhir di file + !important), karena user di rentang itu memang menuju
+   desktop, bukan HP. HAPUS seluruh blok ini begitu sidebar desktop
+   sungguhan dibuat. */
+@media (min-width: 750px) {
+  /* Belt: batasi shell. Tanpa transform di sini supaya overlay/modal
+     position:fixed tetap menutup penuh viewport. */
+  .app {
+    max-width: 480px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* Suspenders + bingkai visual: KOLOM KONTEN yang benar-benar terlihat adalah
+     .main-content, jadi containment 480px + border dipasang DI SINI, bukan cuma
+     di .app. min-width:0 memutus rantai min-content: apa pun lebar intrinsik
+     turunan (header nowrap, dash-grid, account switcher, dll) tidak bisa lagi
+     mendorong kolom melar. margin auto men-center kolom bahkan jika .app —
+     karena alasan intrinsic-width apa pun — sempat melebar. Inilah yang
+     memastikan containment tetap jalan setelah header di-set wrap di bawah. */
+  .main-content {
+    max-width: 480px;
+    margin-left: auto;
+    margin-right: auto;
+    min-width: 0;
+    border-left: 1px solid var(--line-soft);
+    border-right: 1px solid var(--line-soft);
+  }
+
+  /* Pin containment ke .page-wrap juga. SEMUA halaman (Transaksi, Anggaran,
+     Tabungan, Analitik, Laporan) membungkus isinya dgn .page-wrap yang di-set
+     maxWidth:1180 inline untuk layar lebar. .main-content sudah 480px, tapi
+     kalau ada satu halaman yang — karena intrinsic-width anak atau quirk cascade
+     — lolos dari cap itu, .page-wrap sendiri tetap mengunci ke 480px & center.
+     Aman untuk halaman yang sudah benar (mereka memang sudah ≤480). */
+  .page-wrap {
+    max-width: 480px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    min-width: 0 !important;
+    /* Clip HANYA overflow horizontal: kalau ada anak runtime yang lebih lebar
+       dari 480 (mis. tabel/elemen yang belum ke-reflow), dia dipotong ke kolom
+       alih-alih menarik halaman melebar. clip (bukan hidden) tidak memaksa
+       overflow-y jadi auto, jadi dropdown/menu yang membuka ke bawah tetap aman. */
+    overflow-x: clip;
+  }
+
+  /* Bottom nav ikut dibungkus kolom yang sama. Karena position:fixed,
+     containing block-nya viewport (bukan .app), jadi harus dibatasi &
+     di-center sendiri agar sejajar tepat dengan kolom konten di atasnya. */
+  .bottom-nav {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 480px;
+    border-left: 1px solid var(--line-soft);
+    border-right: 1px solid var(--line-soft);
+  }
+
+  /* ── Fix judul sapaan pecah satu-kata-per-baris ──
+     Di ≥768px TopBar me-render layout DESKTOP-nya (search 280px + account
+     switcher + tombol teks), BUKAN layout mobile. Dijejalkan ke kolom 480px
+     stopgap, blok sapaan (flex:1) kehabisan ruang sampai "Selamat pagi, Nama."
+     pecah per kata. Bukan soal satuan vw (tak ada font-size vw di app ini) —
+     murni starvation lebar. Solusi CSS: izinkan header wrap, beri blok sapaan
+     satu baris penuh, dan set ukuran judul via px di dalam media query ini
+     (tidak terikat viewport asli) agar proporsional terhadap kolom 480px.
+     Header ini satu-satunya <header> anak langsung .main-content (TopBar). */
+  .main-content > header {
+    flex-wrap: wrap !important;
+    min-width: 0 !important;
+  }
+  .main-content > header > div:first-child {
+    flex-basis: 100% !important;
+    min-width: 0 !important;
+  }
+  .main-content > header h1.serif {
+    font-size: 24px !important;
+    line-height: 1.15 !important;
+  }
+
+  /* ── Dash-grid: paksa SATU KOLOM di kolom 480px stopgap ──
+     Grid dasar .dash-grid = repeat(4, 1fr). Di kolom 480px, kartu single-track
+     (mis. Hutang & Piutang + Ringkasan Mingguan yang tampil berdampingan) jadi
+     ~100px — angka nominal ("Rp 5.600.000") pecah per-digit karena span-nya
+     overflow-wrap:anywhere di ruang sesempit itu. Solusi: stack vertikal persis
+     seperti perlakuan mobile (≤767px sudah display:block), supaya tiap kartu
+     dapat lebar penuh dan angka muat satu baris. display:block bikin span-2/
+     span-4 (grid-column) jadi inert, jadi semua kartu jadi satu kolom penuh. */
+  .dash-grid {
+    display: block !important;
+    grid-template-columns: 1fr !important;
+  }
+  .dash-grid > * {
+    width: 100% !important;
+    min-width: 0 !important;
+    margin-bottom: 16px;
+    grid-column: 1 / -1 !important;
+  }
+
+  /* ══ Reflow konten halaman lain yang overflow di kolom 480px ══
+     Kartu/tabel di halaman ini aslinya multi-kolom / fixed-width untuk layar
+     lebar; di kolom 480px stopgap mereka terpotong di kanan. Reflow ke 1–2
+     kolom / stack — meniru perlakuan blok mobile (≤767px) yang sudah benar,
+     pakai HOOK KELAS YANG SAMA, TANPA menyentuh blok mobile itu. */
+
+  /* ── Transaksi — baris list (Beranda card + halaman Transaksi) ──
+     Baris desktop grid 5–6 kolom (minmax 220px + kolom fixed) tak muat di 480px;
+     tukar ke baris mobile ringkas (ikon · info · nominal). */
+  .tx-header-desktop { display: none !important; }
+  .tx-row-desktop    { display: none !important; }
+  .tx-row-mobile     { display: flex !important; }
+
+  /* Transaksi — kartu statistik (3 kolom → 2, Selisih span penuh) & grup filter */
+  .tx-stats-grid   { grid-template-columns: 1fr 1fr !important; }
+  .tx-stat-selisih { grid-column: 1 / -1 !important; }
+  .tx-filter-group { gap: 6px !important; }
+
+  /* Transaksi — 3 select (Dompet/Kategori/Metode) di kolom 480px cuma dapat
+     ~133px masing-masing. Selama ini mereka pakai chevron NATIVE browser
+     (tak ada appearance:none) — tiap engine (Chrome/Firefox/Edge/Safari)
+     mereservasi ruang & merender panah beda-beda saat box sesempit ini,
+     jadi salah satu bisa tampak kepepet/tanpa panah tergantung browser user,
+     walau ketiganya secara kode & lebar 100% identik. Ambil alih sepenuhnya
+     lewat appearance:none + chevron SVG kustom (path sama seperti IconChev)
+     supaya tampilannya PASTI identik di ketiga select, di semua browser. */
+  .tx-filter-group select {
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236E6B58' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") !important;
+    background-repeat: no-repeat !important;
+    background-position: right 10px center !important;
+    background-size: 13px !important;
+    padding-right: 30px !important;
+  }
+  html.dark .tx-filter-group select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239A9580' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") !important;
+  }
+
+  /* Beranda — KPI grid (4 kolom → 2) */
+  .kpi-grid { grid-template-columns: 1fr 1fr !important; }
+
+  /* Analitik — donut + tabel berdampingan → stack (donut dulu, tabel di bawah) */
+  .analytics-chart-grid    { grid-template-columns: 1fr !important; }
+  .analytics-income-donut  { order: 1; }
+  .analytics-expense-donut { order: 2; }
+  .analytics-income-table  { order: 3; }
+  .analytics-expense-table { order: 4; }
+
+  /* Analitik & Dompet — stat grid 3–4 kolom → 2 kolom */
+  .stat-grid-4 { grid-template-columns: 1fr 1fr !important; }
+
+  /* Tabungan — goals grid 3 kolom → 1 kolom */
+  .goals-grid { grid-template-columns: 1fr !important; }
+
+  /* Laporan — grid bulan/tahun 2–3 kolom → 1 kolom */
+  .report-grid { grid-template-columns: 1fr !important; }
+
+  /* Pengaturan — baris setting stack; preview tema full-width */
+  .setting-row {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 14px !important;
+  }
+  .setting-widget    { width: 100%; flex-shrink: 0; }
+  .theme-preview-wrap { width: 100% !important; max-width: none !important; }
+
+  /* ── Anggaran — cabang layout DESKTOP-nya di-render lewat isMobile (JSX),
+     bukan lewat CSS toggle, jadi tak ada varian mobile via CSS. Hook kelas
+     ditambahkan di budgets-page.jsx khusus untuk stack manual di sini. ── */
+
+  /* Summary card: grid "1.1fr 1px 1fr 1px 1fr" (2 pemisah 1px) → 1 kolom,
+     pemisah 1px (anak genap) disembunyikan, tiap seksi diberi garis atas. */
+  .budget-summary-grid { grid-template-columns: 1fr !important; gap: 0 !important; }
+  .budget-summary-grid > div:nth-child(even) { display: none !important; }
+  .budget-summary-grid > div:nth-child(n+3) {
+    border-top: 1px solid var(--line-soft);
+    margin-top: 16px;
+    padding-top: 16px;
+  }
+
+  /* Baris kategori: header kolom disembunyikan; tiap baris jadi
+     [kategori | aksi] (baris 1), progress bar full (baris 2), batas (baris 3). */
+  .budget-cols-header { display: none !important; }
+  .budget-cols-row {
+    grid-template-columns: 1fr auto !important;
+    gap: 10px 12px !important;
+  }
+  .budget-cols-row > div:nth-child(1) { grid-column: 1; grid-row: 1; }
+  .budget-cols-row > div:nth-child(4) { grid-column: 2; grid-row: 1; }
+  .budget-cols-row > div:nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
+  .budget-cols-row > div:nth-child(3) { grid-column: 1 / -1; grid-row: 3; text-align: left !important; }
+}
+

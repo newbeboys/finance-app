@@ -2,7 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { TRANSACTIONS, CATEGORIES, INCOME_CATEGORIES, fmt, fmtShort } from './data';
 
-import { IconFilter, IconPlus, IconArrowRight, IconClose, IconCalendar, IconChev, CatIcon } from './icons';
+import { IconPlus, IconArrowRight, IconClose, IconCalendar, IconChev, CatIcon } from './icons';
 import { WalletGlyph } from './wallets';
 import { ghostBtn } from './widgets';
 import { ScanStrukButton } from './components/ScanStruk';
@@ -55,7 +55,6 @@ export function TransactionsCard({ onAdd, onScan, scanLocked = false, limit, onS
               </button>
             ))}
           </div>
-          {!isMobile && <button style={ghostBtn}><IconFilter size={13} /></button>}
           {onScan && <ScanStrukButton onClick={onScan} isMobile={isMobile} locked={scanLocked} />}
           <button onClick={onAdd} style={{ padding: isMobile ? "8px 12px" : "7px 12px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 10, fontSize: 12.5, display: "inline-flex", alignItems: "center", gap: 6 }}>
             <IconPlus size={13} /> {tr('transaksi.tambah')}
