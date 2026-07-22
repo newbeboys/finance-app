@@ -404,7 +404,7 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
   };
 
   return (
-    <div className="modal-backdrop" style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(42,44,32,.32)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 16, animation: "rise .25s ease-out" }} onClick={onClose}>
+    <div className="modal-backdrop" style={{ zIndex: 50, background: "rgba(42,44,32,.32)", backdropFilter: "blur(4px)", padding: 16, animation: "rise .25s ease-out" }} onClick={onClose}>
       <div className="card modal-sheet" onClick={e => e.stopPropagation()} style={{ width: "min(480px, 100%)", padding: 24, animation: "rise .3s ease-out", boxShadow: "0 30px 80px -20px rgba(42,44,32,.4)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>

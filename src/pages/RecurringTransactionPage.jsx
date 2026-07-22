@@ -91,8 +91,8 @@ function SwipeRow({ onDelete, onEdit, children, deleteLabel = 'Hapus' }) {
 function ConfirmDelete({ item, onConfirm, onCancel }) {
   const { t } = useTranslation();
   return (
-    <div onClick={onCancel}
-      style={{ position: 'fixed', inset: 0, zIndex: 1400, background: 'rgba(42,44,32,.4)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 16 }}>
+    <div className="modal-backdrop" onClick={onCancel}
+      style={{ zIndex: 1400, background: 'rgba(42,44,32,.4)', backdropFilter: 'blur(4px)', padding: 16 }}>
       <div className="card" onClick={(e) => e.stopPropagation()} style={{ width: 'min(380px, 100%)', padding: 24, textAlign: 'center', boxShadow: '0 30px 80px -20px rgba(42,44,32,.4)' }}>
         <div className="serif" style={{ fontSize: 22, letterSpacing: '-0.01em' }}>{t('berulang.hapusJadwal')}</div>
         <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 8, lineHeight: 1.5 }}>

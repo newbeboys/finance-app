@@ -194,8 +194,8 @@ export default function RecurringTransactionForm({ initial = null, onSave, onCan
   };
 
   return (
-    <div onClick={onCancel}
-      style={{ position: 'fixed', inset: 0, zIndex: 1300, background: 'rgba(42,44,32,.32)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 16, animation: 'rise .25s ease-out' }}>
+    <div className="modal-backdrop" onClick={onCancel}
+      style={{ zIndex: 1300, background: 'rgba(42,44,32,.32)', backdropFilter: 'blur(4px)', padding: 16, animation: 'rise .25s ease-out' }}>
       <div className="card" onClick={(e) => e.stopPropagation()}
         style={{ width: 'min(480px, 100%)', maxHeight: '92vh', overflowY: 'auto', padding: 24, animation: 'rise .3s ease-out', boxShadow: '0 30px 80px -20px rgba(42,44,32,.4)' }}>
 

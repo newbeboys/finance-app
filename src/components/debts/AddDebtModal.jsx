@@ -78,7 +78,7 @@ export default function AddDebtModal({ open, onClose, onCreate, wallets = [] }) 
   const isReceivable = type === 'receivable';
 
   return (
-    <div className="modal-backdrop" onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(42,44,32,.32)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', padding: 20, animation: 'rise .25s ease-out' }}>
+    <div className="modal-backdrop" onClick={onClose} style={{ zIndex: 50, background: 'rgba(42,44,32,.32)', backdropFilter: 'blur(4px)', padding: 20, animation: 'rise .25s ease-out' }}>
       <div className="card modal-sheet" onClick={e => e.stopPropagation()} style={{ width: 'min(480px, 100%)', maxHeight: '92vh', overflowY: 'auto', padding: 26, animation: 'rise .3s ease-out', boxShadow: '0 30px 80px -20px rgba(42,44,32,.4)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>

@@ -151,7 +151,7 @@ function LanguageModal({ onClose, onToast }) {
   ];
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(0,0,0,.5)", display: "grid", placeItems: "center", padding: 24 }}
+    <div className="modal-backdrop" style={{ zIndex: 3000, background: "rgba(0,0,0,.5)", padding: 24 }}
       onClick={onClose}>
       <div className="card" style={{ padding: 0, maxWidth: 360, width: "100%", overflow: "hidden" }}
         onClick={e => e.stopPropagation()}>
@@ -671,7 +671,7 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub, s
       )}
 
       {confirmNone && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(0,0,0,.5)", display: "grid", placeItems: "center", padding: 24 }}>
+        <div className="modal-backdrop" style={{ zIndex: 3000, background: "rgba(0,0,0,.5)", padding: 24 }}>
           <div className="card" style={{ padding: 24, maxWidth: 360, width: "100%", textAlign: "center" }}>
             <div className="serif" style={{ fontSize: 20, marginBottom: 8 }}>{tr('pengaturan.nonaktifkanKeamanan')}</div>
             <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.5, marginBottom: 20 }}>

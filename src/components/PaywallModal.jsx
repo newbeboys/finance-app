@@ -92,11 +92,12 @@ export function PaywallModal({ open, isOpen, featureName, message, onClose }) {
 
   return (
     <div
+      className="modal-backdrop"
       onClick={onClose}
       style={{
-        position: 'fixed', inset: 0, zIndex: 5000,
+        zIndex: 5000,
         background: 'rgba(42,44,32,.45)', backdropFilter: 'blur(4px)',
-        display: 'grid', placeItems: 'center', padding: 24,
+        padding: 24,
         animation: 'rise .2s ease-out',
       }}
     >

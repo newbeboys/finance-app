@@ -199,7 +199,7 @@ export function AddGoalModal({ open, onClose, onCreate }) {
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(42,44,32,.32)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 20, animation: "rise .25s ease-out" }}>
+    <div className="modal-backdrop" onClick={onClose} style={{ zIndex: 50, background: "rgba(42,44,32,.32)", backdropFilter: "blur(4px)", padding: 20, animation: "rise .25s ease-out" }}>
       <div className="card modal-sheet goal-modal" onClick={e => e.stopPropagation()} style={{ width: 520, padding: 28, animation: "rise .3s ease-out", boxShadow: "0 30px 80px -20px rgba(42,44,32,.4)" }}>
         <div className="goal-modal-body">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -315,7 +315,7 @@ export function DepositModal({ goal, onClose, onConfirm }) {
   const confirm = () => { if (num(amount) > 0) { onConfirm(goal.id, num(amount)); onClose(); } };
 
   return (
-    <div className="modal-backdrop" onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 51, background: "rgba(42,44,32,.32)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 20, animation: "rise .25s ease-out" }}>
+    <div className="modal-backdrop" onClick={onClose} style={{ zIndex: 51, background: "rgba(42,44,32,.32)", backdropFilter: "blur(4px)", padding: 20, animation: "rise .25s ease-out" }}>
       <div className="card modal-sheet" onClick={e => e.stopPropagation()} style={{ width: 420, padding: 26, animation: "rise .3s ease-out", boxShadow: "0 30px 80px -20px rgba(42,44,32,.4)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <span style={{ width: 40, height: 40, borderRadius: 11, background: `color-mix(in oklch, ${goal.color} 16%, var(--ivory))`, color: goal.color, display: "grid", placeItems: "center" }}>

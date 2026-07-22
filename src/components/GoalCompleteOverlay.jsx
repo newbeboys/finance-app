@@ -17,7 +17,7 @@ export function GoalCompleteOverlay({ onClose }) {
   }, []);
 
   return (
-    <div style={backdropStyle} onClick={onClose}>
+    <div className="modal-backdrop" style={backdropStyle} onClick={onClose}>
       <div style={cardStyle} onClick={(e) => e.stopPropagation()}>
         <div style={animWrapStyle}>
           <Lottie
@@ -37,13 +37,9 @@ export function GoalCompleteOverlay({ onClose }) {
 }
 
 const backdropStyle = {
-  position: 'fixed',
-  inset: 0,
   zIndex: 1100,
   background: 'rgba(42,44,32,.45)',
   backdropFilter: 'blur(4px)',
-  display: 'grid',
-  placeItems: 'center',
   padding: 24,
   animation: 'rise .25s ease-out',
 };

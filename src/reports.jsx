@@ -881,7 +881,7 @@ function ReportPreview({ previewMeta, transactions, customCategories, accounts, 
   };
 
   return (
-    <div className="report-preview-backdrop" onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(42,44,32,.4)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 24, animation: "rise .25s ease-out" }}>
+    <div className="report-preview-backdrop" onClick={onClose} style={{ zIndex: 200, background: "rgba(42,44,32,.4)", backdropFilter: "blur(4px)", padding: 24, animation: "rise .25s ease-out" }}>
       <div className="report-preview-container" onClick={e => e.stopPropagation()} style={{ width: 820, maxWidth: "100%", height: "88vh", display: "flex", flexDirection: "column", background: "var(--ivory)", borderRadius: 16, overflow: "hidden", boxShadow: "0 30px 80px -20px rgba(42,44,32,.5)" }}>
 
         <div className="report-preview-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px", borderBottom: "1px solid var(--line-soft)", gap: 10, flexWrap: "wrap" }}>
@@ -1008,7 +1008,7 @@ function FormatPicker({ payload, onClose }) {
   const iconWrap = (bg) => ({ width: 44, height: 44, borderRadius: 12, background: bg, color: "#fff", display: "grid", placeItems: "center", flexShrink: 0 });
 
   return (
-    <div onClick={() => busy || onClose()} style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(42,44,32,.45)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 24, animation: "rise .2s ease-out" }}>
+    <div className="modal-backdrop" onClick={() => busy || onClose()} style={{ zIndex: 300, background: "rgba(42,44,32,.45)", backdropFilter: "blur(4px)", padding: 24, animation: "rise .2s ease-out" }}>
       <div onClick={e => e.stopPropagation()} style={{ position: "relative", width: "min(400px, 90vw)", background: "var(--ivory)", borderRadius: 18, padding: 20, boxSizing: "border-box", boxShadow: "0 30px 80px -20px rgba(42,44,32,.5)" }}>
         <button onClick={onClose} disabled={!!busy} aria-label={tr('umum.tutup')} style={{ position: "absolute", top: 12, right: 12, zIndex: 1, width: 32, height: 32, borderRadius: 9, border: "1px solid var(--line-soft)", background: "var(--paper)", display: "grid", placeItems: "center", color: "var(--ink-2)", opacity: busy ? 0.5 : 1, cursor: busy ? "default" : "pointer" }}>
           <IconClose size={14} />

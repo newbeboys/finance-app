@@ -121,11 +121,12 @@ export function EditCategoryModal({ open, category, userId, onClose }) {
 
   return (
     <div
+      className="modal-backdrop"
       onClick={onClose}
       style={{
-        position: 'fixed', inset: 0, zIndex: 5100,
+        zIndex: 5100,
         background: 'rgba(42,44,32,.45)', backdropFilter: 'blur(4px)',
-        display: 'grid', placeItems: 'center', padding: 24,
+        padding: 24,
         animation: 'rise .2s ease-out',
       }}
     >

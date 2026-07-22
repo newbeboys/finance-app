@@ -649,9 +649,23 @@ button { font: inherit; color: inherit; cursor: pointer; }
    blok @media(max-width:767) sudah membuat modal jadi bottom-sheet ber-scroll.
    ══════════════════════════════════════════════════════════════════════ */
 
+/* Base — position/centering dipindah ke sini dari inline style tiap file modal,
+   supaya override Sidebar (BUG 1 di bawah) konsisten berlaku di SEMUA modal,
+   bukan cuma yang kebetulan sudah pakai class ini secara manual. Tiap file modal
+   tetap mengatur sendiri z-index/background/backdropFilter/padding/animation
+   inline (berbeda-beda per modal), hanya position/inset/display/place-items
+   yang standar lewat class ini. */
+.modal-backdrop,
+.report-preview-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
 /* BUG 1 — modal ketutup Sidebar. Backdrop di-center di viewport PENUH, padahal
    Sidebar 240px menutupi kiri. Fix: geser backdrop ke kanan Sidebar (left:240)
-   sehingga area center = area konten yang terlihat. inset:0 inline meng-set
+   sehingga area center = area konten yang terlihat. inset:0 di atas meng-set
    left:0; kita override left:240 (right:0 tetap → backdrop mengisi 240..kanan),
    place-items:center otomatis benar. Berlaku ≥750px (sama dgn breakpoint Sidebar);
    di 750-767px modal masih bottom-sheet, geser ini menaruhnya di area konten. */
