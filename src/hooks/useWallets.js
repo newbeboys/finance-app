@@ -138,13 +138,34 @@ export function useWallets(userId, limits) {
     return { error };
   }
 
-  // Atomic-safe balance adjustment: baca saldo saat ini dari state (sudah di-sync via
-  // realtime), hitung nilai baru di client, lalu tulis sekaligus. Aman untuk single-user.
+  // Balance adjustment: baca saldo TERBARU langsung dari DB (bukan dari state React
+  // `accounts`), hitung nilai baru, lalu tulis. Membaca dari state bikin race condition
+  // saat adjustBalance dipanggil dua kali berturut-turut (mis. reverse tx lama + apply
+  // tx baru di handleUpdateTransaction): kedua panggilan membaca closure `accounts` yang
+  // sama, jadi panggilan kedua menimpa hasil panggilan pertama dengan angka salah.
+  // Pemanggil WAJIB `await` secara berurutan (jangan Promise.all) supaya baca-tulis
+  // benar-benar sequential.
   async function adjustBalance(walletId, delta) {
     if (!walletId || !delta) return { error: null };
-    const wallet = accounts.find(a => a.id === walletId);
-    if (!wallet) return { error: null };
-    const newBalance = wallet.balance + delta;
+
+    const { data: freshWallet, error: fetchErr } = await supabase
+      .from('wallets')
+      .select('balance')
+      .eq('id', walletId)
+      .eq('user_id', userId)
+      .single();
+
+    if (fetchErr || !freshWallet) {
+      console.error('[useWallets] adjustBalance fetch FAILED:', fetchErr?.message);
+      if (fetchErr) {
+        logError('adjustBalance', fetchErr.message, {
+          wallet_id: walletId, delta, phase: 'fetch', code: fetchErr.code,
+        }, 'high');
+      }
+      return { error: fetchErr };
+    }
+
+    const newBalance = Number(freshWallet.balance) + delta;
     const { error } = await supabase
       .from('wallets')
       .update({ balance: newBalance })

@@ -405,7 +405,8 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
   } = useDebts(session.user.id, limits, { transactions, createTransaction, deleteTransaction, adjustBalance });
 
   // Wrapper: setelah create/update/delete transaksi, sesuaikan saldo dompet terkait.
-  // adjustBalance membaca saldo saat ini dari state (sudah sync via realtime Supabase).
+  // adjustBalance membaca saldo terbaru langsung dari DB, jadi aman dipanggil
+  // berturut-turut — TAPI harus di-`await` sequential (jangan Promise.all).
   const handleCreateTransaction = React.useCallback(async (tx) => {
     const res = await createTransaction(tx);
     if (!res.error && !res.limitReached && tx.wallet_id) {

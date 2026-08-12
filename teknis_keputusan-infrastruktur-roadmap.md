@@ -1,6 +1,6 @@
 # FinanceApp — Keputusan Arsitektur, Infrastruktur, & Roadmap
 
-> **Dibuat:** 2026-06-28 | **Terakhir diperbarui:** 2026-07-18 | **Versi App:** 2.6.0  
+> **Dibuat:** 2026-06-28 | **Terakhir diperbarui:** 2026-07-23 | **Versi App:** 2.6.0  
 > **Tujuan:** Dokumentasi keputusan teknis, infrastruktur, status project, dan roadmap pengembangan.
 
 ---
@@ -68,14 +68,16 @@ const dateToISO = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'
 
 **Pengganti:** Semua operasi tulis dari client ke `user_subscriptions` menggunakan RPC function dengan `SECURITY DEFINER` yang memvalidasi `auth.uid()`:
 
-| RPC Function | Tujuan | Dipanggil dari |
-|---|---|---|
-| `update_category_edit_cooldown(p_user_id)` | Update `last_custom_category_edit_at` | `EditCategoryModal.jsx` |
-| `set_plan_for_testing(p_user_id, p_plan, ...)` | Ubah plan untuk testing (DEV only) | `useSubscription.js → setPlanForTesting` |
-| `check_chat_rate_limit(p_max_requests, p_window_seconds)` | Cek & update rate limit chatbot | `index.ts (financial-chat)` |
-| `log_error(p_source, p_message, p_metadata, p_severity)` | Catat error ke error_logs | `errorLogger.js` (client-side logging) |
+| RPC Function | Tujuan | Dipanggil dari | Execute grant (per migration `20260723010000`, belum di-push) |
+|---|---|---|---|
+| `update_category_edit_cooldown(p_user_id)` | Update `last_custom_category_edit_at` | `EditCategoryModal.jsx` | `authenticated` saja (revoke dari `public, anon`) |
+| `set_plan_for_testing(p_user_id, p_plan, ...)` | Ubah plan untuk testing (DEV only) | `useSubscription.js → setPlanForTesting` | **Revoke TOTAL** dari `authenticated, anon, public` — lihat bagian "CRITICAL SECURITY" di bawah |
+| `check_chat_rate_limit(p_max_requests, p_window_seconds)` | Cek & update rate limit chatbot | `index.ts (financial-chat)` | `authenticated` saja (revoke dari `public, anon`) |
+| `log_error(p_source, p_message, p_metadata, p_severity)` | Catat error ke error_logs | `errorLogger.js` (client-side logging) | `authenticated` saja (revoke dari `public, anon`) |
 
 Kolom sensitif (`plan`, `expires_at`, RC fields) **hanya bisa diupdate** oleh Edge Function `revenuecat-webhook` via `service_role` (bypass RLS).
+
+**⚠️ Catatan status (23 Juli 2026):** Kolom grant di atas mencerminkan isi migration file `20260723010000_harden_functions_search_path_and_grants.sql` yang **sudah dibuat lokal tapi belum dieksekusi/push** ke Supabase. Sampai migration ini benar-benar dijalankan di SQL Editor / `supabase db push`, grant yang aktif di production masih yang lama (lihat detail lengkap di bagian 1.11 & 1.12, dan status blocker di bagian "CRITICAL SECURITY").
 
 **Lapisan keamanan ganda untuk `setPlanForTesting`:**
 1. Guard `import.meta.env.DEV` di level fungsi JS — tidak jalan di production build
@@ -112,6 +114,39 @@ Kolom sensitif (`plan`, `expires_at`, RC fields) **hanya bisa diupdate** oleh Ed
 - RPC `check_chat_rate_limit()` SECURITY DEFINER dengan atomic SELECT FOR UPDATE (serialize per-user request)
 - Fail-open pattern: jika RPC error, log dan lanjut (don't block user sah karena bug rate-limiter)
 - Response status 200 (bukan 429) dengan `source:"rate_limit"` supaya pesan friendly ditampilkan
+
+---
+
+### 1.11 Dokumentasi Resmi View `user_summary` + Perbaikan Security Advisor (22-23 Juli 2026)
+
+**Konteks:** View `public.user_summary` (referensi manual admin — daftar user + ringkasan saldo/pemasukan/pengeluaran bulan berjalan) sudah ada di production sejak pertengahan Juni 2026, dibuat langsung via SQL Editor, tanpa pernah tercatat sebagai migration file.
+
+**Investigasi (22 Juli 2026):** Grep menyeluruh atas codebase (`src/`, `supabase/functions/`) untuk pola `supabase.from('user_summary')`, pemanggilan `.rpc()`, dan string literal `"user_summary"` — **tidak ditemukan satu pun kecocokan**. Kesimpulan: view ini murni referensi manual admin, tidak pernah dipanggil oleh kode aplikasi mana pun.
+
+**Temuan Security Advisor Supabase (22 Juli 2026) atas view ini — 2 isu kritis:**
+1. **Security Definer View** — view berjalan dengan hak akses pembuat (admin), melompati RLS tabel `transactions` di baliknya.
+2. **Exposed Auth Users** — bisa diakses `anon`/`authenticated` lewat Data API publik, dan menyentuh data `auth.users.email`.
+
+**Keputusan:** Kedua isu diperbaiki manual di SQL Editor (`security_invoker = on` + `revoke all ... from anon, authenticated`), lalu diformalkan sebagai migration `20260723000000_document_user_summary_view.sql` — dibuat lokal sebagai dokumentasi resmi, **belum di-push/dieksekusi ulang** (perbaikan aslinya sudah jalan manual di SQL Editor; migration ini untuk histori/reproducibility).
+
+**Detail lengkap:** Lihat `teknis_arsitektur-database.md` bagian "View `public.user_summary`".
+
+---
+
+### 1.12 Function Search Path & Execute Grants Hardening (23 Juli 2026)
+
+**Konteks:** Lanjutan audit Security Advisor Supabase (22-23 Juli 2026) menemukan 3 kategori warning tambahan di luar view `user_summary`:
+1. **Function Search Path Mutable** (3 warning) — sejumlah fungsi di schema `public` tidak punya `search_path` eksplisit, berisiko fungsi "ditipu" membaca objek dari schema lain kalau `search_path` dimanipulasi pemanggil.
+2. **Execute grant terlalu longgar** pada fungsi trigger-only dan RPC yang seharusnya hanya untuk `authenticated`.
+3. **`set_plan_for_testing` masih bisa dipanggil `authenticated`** — ini adalah blocker kritis yang sudah lama ditandai di bagian "CRITICAL SECURITY" di bawah.
+
+**Keputusan:** Dibuat 2 migration file baru untuk mengatasi seluruhnya sekaligus:
+- `20260723010000_harden_functions_search_path_and_grants.sql` — set `search_path = public, pg_temp` untuk semua fungsi `public` yang belum di-set (loop otomatis via `pg_proc`/`pg_get_function_identity_arguments`, bukan hardcode nama fungsi satu-satu); revoke total execute `handle_new_user_subscription` (trigger-only); revoke `public, anon` (tetap grant `authenticated`) untuk `check_chat_rate_limit`, `log_error`, `update_category_edit_cooldown`; **revoke total** `set_plan_for_testing` dari `authenticated, anon, public`.
+- `20260723020000_revoke_rls_auto_enable_execute.sql` — revoke execute `rls_auto_enable` (event trigger function auto-enable RLS pada tabel baru); murni hygiene, Postgres sudah menolak pemanggilan langsung fungsi `RETURNS event_trigger` jadi tidak ada risiko fungsional yang berubah.
+
+**Status (23 Juli 2026): ⏳ KEDUA FILE DIBUAT LOKAL, BELUM DIEKSEKUSI/PUSH.** Ini penting karena migration `20260723010000` bagian 4 adalah fix untuk blocker kritis `set_plan_for_testing` yang sudah lama tercatat di roadmap — status blocker itu di bawah **masih "belum selesai"** sampai migration ini benar-benar dijalankan via `supabase db push` atau SQL Editor.
+
+**Detail lengkap:** Lihat `teknis_arsitektur-database.md` bagian "Function Security Hardening".
 
 ---
 
@@ -334,7 +369,9 @@ supabase.rpc('set_plan_for_testing', { p_user_id: '...', p_plan: 'pro', p_expire
 REVOKE EXECUTE ON FUNCTION public.set_plan_for_testing(uuid, text, timestamptz, text) FROM authenticated;
 ```
 
-**Verifikasi:** Setelah REVOKE, test di browser console → RPC call harus return permission denied error (42501).
+**Update status (23 Juli 2026):** SQL fix di atas sudah dituliskan (dalam bentuk lebih lengkap — revoke dari `authenticated, anon, public` sekaligus) di migration file `supabase/migrations/20260723010000_harden_functions_search_path_and_grants.sql` (bagian 4). **Migration ini baru dibuat sebagai file lokal — BELUM dieksekusi/push ke Supabase.** Lihat bagian 1.12 untuk detail. Sampai `supabase db push` dijalankan (atau SQL dieksekusi manual di SQL Editor), status blocker ini **TETAP belum selesai** — RPC masih bisa dipanggil `authenticated` di production saat ini.
+
+**Verifikasi:** Setelah REVOKE benar-benar dieksekusi, test di browser console → RPC call harus return permission denied error (42501).
 
 **Timeline:** WAJIB sebelum submit ke Play Store production — tidak bisa ditunda.
 
@@ -375,6 +412,12 @@ REVOKE EXECUTE ON FUNCTION public.set_plan_for_testing(uuid, text, timestamptz, 
    - RPC `check_chat_rate_limit()` tidak akan tersedia sampai migration dieksekusi
    - Sudah tested via manual request throttling, tapi perlu verifikasi di production database
 
+8. ⏳ **3 migration baru (23 Juli 2026) — dibuat lokal, BELUM di-push/dieksekusi sama sekali:**
+   - `20260723000000_document_user_summary_view.sql` — dokumentasi resmi view `user_summary` (fix Security Advisor sudah jalan manual di SQL Editor sebelumnya; migration ini untuk histori)
+   - `20260723010000_harden_functions_search_path_and_grants.sql` — fix search_path mutable + revoke/grant execute beberapa fungsi, **termasuk fix blocker kritis `set_plan_for_testing`** (lihat item 0 di section 5 & bagian "CRITICAL SECURITY")
+   - `20260723020000_revoke_rls_auto_enable_execute.sql` — hygiene revoke execute `rls_auto_enable`
+   - **Prioritas:** migration `20260723010000` bagian 4 (`set_plan_for_testing`) harus dieksekusi SEBELUM production — statusnya sama urgennya dengan item 0 di bawah, karena keduanya adalah blocker yang sama
+
 ---
 
 ## 5. Roadmap Selanjutnya
@@ -400,6 +443,10 @@ REVOKE EXECUTE ON FUNCTION public.set_plan_for_testing(uuid, text, timestamptz, 
    - ✅ `20260705000000` (add_is_locked to debts) — EXECUTED (status terverifikasi)
    - ⏳ `20260706000000` (add_error_logs) — BELUM DIKONFIRMASI, perlu verifikasi di SQL Editor
    - ⏳ `20260716000000` (add_chat_rate_limits) — BELUM DIKONFIRMASI, perlu verifikasi di SQL Editor
+   - ⏳ `20260717000000` (add_chat_unanswered_log) — BELUM DIKONFIRMASI, perlu verifikasi di SQL Editor
+   - ❌ `20260723000000` (document_user_summary_view) — BARU DIBUAT, BELUM DI-PUSH sama sekali
+   - ❌ `20260723010000` (harden_functions_search_path_and_grants) — BARU DIBUAT, BELUM DI-PUSH sama sekali. **Berisi fix blocker kritis `set_plan_for_testing` (lihat item 0 di atas)**
+   - ❌ `20260723020000` (revoke_rls_auto_enable_execute) — BARU DIBUAT, BELUM DI-PUSH sama sekali
 
 2. **Mulai Closed Testing 14 hari**
    - Rekrut/konfirmasi minimal 12 tester aktif berkelanjutan
@@ -460,6 +507,11 @@ REVOKE EXECUTE ON FUNCTION public.set_plan_for_testing(uuid, text, timestamptz, 
 | 18 Juli | useContainerWidth hook + container queries @container main-content + responsive layouts (TopBar, Transaksi, Budgets, Analytics) | ✅ Implemented | Claude Code |
 | 18 Juli | Modal sticky footer fix + Sidebar overlap prevention (web ≥750px) | ✅ Implemented | Claude Code |
 | 18 Juli | Dokumentasi teknis diperbarui: struktur folder, responsive design section (arsitektur-database.md), TopBar conditional (fitur-tier.md), TODO list (keputusan-infrastruktur-roadmap.md) | ✅ Completed | Claude Code |
+| 22 Juli | Grep investigasi codebase: view `user_summary` dikonfirmasi TIDAK dipanggil kode aplikasi manapun (murni referensi admin) | ✅ Completed | Claude Code |
+| 23 Juli | Migration `20260723000000_document_user_summary_view.sql` dibuat — dokumentasi resmi view `user_summary` (security_invoker=on, revoke anon/authenticated) | ❌ Belum di-push | Claude Code |
+| 23 Juli | Migration `20260723010000_harden_functions_search_path_and_grants.sql` dibuat — fix search_path mutable, revoke/grant execute beberapa RPC, **fix blocker kritis `set_plan_for_testing`** | ❌ Belum di-push | Claude Code |
+| 23 Juli | Migration `20260723020000_revoke_rls_auto_enable_execute.sql` dibuat — hygiene revoke execute event trigger function | ❌ Belum di-push | Claude Code |
+| 23 Juli | Dokumentasi teknis diperbarui (arsitektur-database.md, keputusan-infrastruktur-roadmap.md, fitur-dan-tier.md) untuk mencatat investigasi & 3 migration baru di atas | ✅ Completed | Claude Code |
 
 ### Versi-Versi Sebelumnya
 - v2.5.6 (1 Juli): Deadline date picker & goal sorting

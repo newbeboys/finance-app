@@ -1,6 +1,6 @@
 # FinanceApp — Arsitektur Sistem & Database Schema
 
-> **Dibuat:** 2026-06-28 | **Terakhir diperbarui:** 2026-07-18 | **Versi App:** 2.6.0  
+> **Dibuat:** 2026-06-28 | **Terakhir diperbarui:** 2026-07-23 | **Versi App:** 2.6.0  
 > **Tujuan:** Dokumentasi teknis struktur project, data flow, dan database schema untuk developer.
 
 ---
@@ -103,7 +103,11 @@ root/
 │   │   ├── 20260704000000_add_debts.sql
 │   │   ├── 20260705000000_add_is_locked_to_debts.sql
 │   │   ├── 20260706000000_add_error_logs.sql
-│   │   └── 20260716000000_add_chat_rate_limits.sql
+│   │   ├── 20260716000000_add_chat_rate_limits.sql
+│   │   ├── 20260717000000_add_chat_unanswered_log.sql
+│   │   ├── 20260723000000_document_user_summary_view.sql       ← belum di-push
+│   │   ├── 20260723010000_harden_functions_search_path_and_grants.sql  ← belum di-push
+│   │   └── 20260723020000_revoke_rls_auto_enable_execute.sql   ← belum di-push
 │   └── functions/
 │       ├── financial-chat/
 │       │   ├── index.ts, types.ts, guardrail.ts
@@ -344,6 +348,48 @@ window_start            timestamptz     Awal jendela 60 detik
 **Fungsi RPC:** `check_chat_rate_limit(p_max_requests=8, p_window_seconds=60) SECURITY DEFINER`
 - Returns jsonb: `{allowed: boolean, remaining: int, reset_at: timestamptz}`
 - Atomic UPDATE via SELECT FOR UPDATE untuk serialize per-user
+
+---
+
+### View `public.user_summary` (Referensi Manual Admin — Baru Didokumentasikan 23 Juli 2026)
+
+**Status migration:** File `20260723000000_document_user_summary_view.sql` sudah dibuat lokal, **BELUM di-push/dieksekusi** ke Supabase.
+
+**Riwayat:** View ini sudah ada di production sejak ~pertengahan Juni 2026, dibuat langsung via SQL Editor tanpa pernah tercatat sebagai migration file — baru diformalkan lewat migration di atas.
+
+**Konfirmasi via grep codebase (22 Juli 2026):** **TIDAK** dipanggil oleh kode aplikasi manapun (tidak ada `supabase.from('user_summary')`, `.rpc()`, atau string literal `"user_summary"` di `src/` maupun `supabase/functions/`) — murni referensi manual admin lewat SQL Editor.
+
+**Kolom (hasil join `auth.users` + `transactions`, grouped per user):**
+```sql
+user_id                            uuid      dari auth.users.id
+email                               text      dari auth.users.email
+total_saldo_dompet                 numeric   sum(transactions.amount) semua waktu
+total_pemasukan_bulan_ini          numeric   sum amount tipe income, bulan berjalan
+total_pengeluaran_bulan_ini        numeric   abs(sum amount tipe expense), bulan berjalan
+```
+
+**Temuan Security Advisor (22 Juli 2026) — 2 isu kritis, sudah diperbaiki manual di SQL Editor sebelum migration dibuat:**
+1. **"Security Definer View"** — view berjalan dengan hak akses pembuat (admin), melompati RLS tabel `transactions` di baliknya. **Fix:** `with (security_invoker = on)`.
+2. **"Exposed Auth Users"** — bisa diakses `anon`/`authenticated` lewat Data API publik, menyentuh `auth.users.email`. **Fix:** `revoke all on public.user_summary from anon, authenticated`.
+
+Definisi di migration adalah salinan persis dari yang live di production per 23 Juli 2026 (sudah termasuk kedua fix di atas).
+
+**Catatan akurasi (non-security, tidak diperbaiki):** Filter "bulan ini" pakai `created_at` (UTC), bukan kolom `date` (lokal WIB) sesuai konvensi project (lihat bagian 2 di atas). Bisa meleset di sekitar pergantian bulan. Diputuskan aman diabaikan karena view ini referensi internal admin saja, bukan data yang tampil ke user.
+
+---
+
+### Function Security Hardening (23 Juli 2026 — Belum Di-push)
+
+Hasil audit Security Advisor Supabase menghasilkan 2 migration file tambahan (dibuat lokal, **belum dieksekusi/push**):
+
+**`20260723010000_harden_functions_search_path_and_grants.sql`:**
+- **Search path mutable fix:** Semua fungsi di schema `public` yang belum punya `search_path` eksplisit di-set ke `search_path = public, pg_temp` (loop otomatis, bukan hardcode per nama) — mencegah fungsi "ditipu" baca objek dari schema lain kalau `search_path` dimanipulasi pemanggil.
+- **`handle_new_user_subscription`** (trigger-only, auto-jalan saat user baru daftar): execute di-revoke total dari `public, anon, authenticated` — trigger tetap jalan normal karena dieksekusi lewat mekanisme trigger Postgres, bukan panggilan API.
+- **`check_chat_rate_limit`, `log_error`, `update_category_edit_cooldown`** (RPC yang memang dipanggil app dari user login): execute di-revoke dari `public, anon`, tetap `grant` ke `authenticated` — menutup akses dari user belum login, tanpa mematahkan fungsi untuk user yang sudah login.
+- **`set_plan_for_testing`** — **KRITIS**, lihat detail di `teknis_keputusan-infrastruktur-roadmap.md` bagian 1.7 & bagian "CRITICAL SECURITY": execute di-revoke total dari `authenticated, anon, public`.
+
+**`20260723020000_revoke_rls_auto_enable_execute.sql`:**
+- `rls_auto_enable` adalah event trigger function (auto-enable RLS pada tabel baru) — Postgres sendiri menolak pemanggilan langsung fungsi `RETURNS event_trigger`, jadi ini murni hygiene fix untuk warning linter, tidak ada risiko fungsional.
 
 ---
 
