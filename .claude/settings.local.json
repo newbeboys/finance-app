@@ -5,7 +5,20 @@
       "Bash(Select-Object FullName, PSIsContainer)",
       "Bash(Sort-Object FullName)",
       "Bash(Select-Object Name)",
-      "Bash(agent-browser eval *)"
+      "Bash(agent-browser eval *)",
+      "Bash(JAVA_HOME='C:/Program Files/Android/Android Studio/jbr' KEYSTORE_PATH=C:/Users/HP/AppData/Local/Temp/claude/d--LSA-2025-LAST-PROJT-finance-app-finance-apps-Ori/e4ceb9a1-415a-4408-8853-5ab01fe35cbd/scratchpad/verify-only.keystore KEYSTOREPASSWORD=verify123 KEYALIAS=verifyonly KEYPASSWORD=verify123 ./gradlew bundleRelease --console=plain)",
+      "Bash(JAVA_HOME=\"C:/Program Files/Android/Android Studio/jbr\" ./gradlew --stop)",
+      "Bash(tasklist)",
+      "Bash(powershell -NoProfile -Command '$os=Get-CimInstance Win32_OperatingSystem; '\\\\''{0,-22}{1,10:N0} MB'\\\\'' -f '\\\\''TotalVisibleMemory:'\\\\'',\\($os.TotalVisibleMemorySize/1KB\\); '\\\\''{0,-22}{1,10:N0} MB'\\\\'' -f '\\\\''FreePhysical:'\\\\'',\\($os.FreePhysicalMemory/1KB\\); '\\\\''{0,-22}{1,10:N0} MB'\\\\'' -f '\\\\''TotalVirtual:'\\\\'',\\($os.TotalVirtualMemorySize/1KB\\); '\\\\''{0,-22}{1,10:N0} MB'\\\\'' -f '\\\\''FreeVirtual:'\\\\'',\\($os.FreeVirtualMemory/1KB\\); Get-CimInstance Win32_PageFileUsage | ForEach-Object { '\\\\''{0,-22}{1,10:N0} MB \\(peak {2:N0}\\)'\\\\'' -f '\\\\''PageFile:'\\\\'',$_.AllocatedBaseSize,$_.PeakUsage }')",
+      "Bash(powershell -NoProfile -Command 'Get-Process | Sort-Object -Descending WorkingSet | Select-Object -First 10 Name,@{n='\\\\''WS_MB'\\\\'';e={[int]\\($_.WorkingSet/1MB\\)}} | Format-Table -AutoSize | Out-String -Width 60')",
+      "Bash(JAVA_HOME=\"C:/Program Files/Android/Android Studio/jbr\" ./gradlew :app:tasks --all --console=plain)",
+      "Bash(node C:/Users/HP/AppData/Local/Temp/claude/d--LSA-2025-LAST-PROJT-finance-app-finance-apps-Ori/e4ceb9a1-415a-4408-8853-5ab01fe35cbd/scratchpad/elf-sections.mjs arm64-v8a/*.so armeabi-v7a/*.so)",
+      "Bash(node -e ' *)",
+      "Bash(powershell -NoProfile -Command 'Get-Process java -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 3; $os=Get-CimInstance Win32_OperatingSystem; '\\\\''FreePhysical: {0:N0} MB  FreeVirtual: {1:N0} MB'\\\\'' -f \\($os.FreePhysicalMemory/1KB\\),\\($os.FreeVirtualMemory/1KB\\)')",
+      "Bash(echo \"exit=$?\")",
+      "Bash(git check-ignore *)",
+      "Bash(git hash-object *)",
+      "Bash(git reflog *)"
     ]
   }
 }

@@ -18,6 +18,7 @@ keystore-base64-clean.txt
 *.jar
 !android/gradle/wrapper/gradle-wrapper.jar
 build-test-apk.ps1
+.claude/settings.local.json
 
 
 
