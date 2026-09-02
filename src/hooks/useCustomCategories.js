@@ -1,6 +1,7 @@
 import React from 'react';
 import { supabase } from '../supabase';
 import { CATEGORIES, INCOME_CATEGORIES } from '../data';
+import { DEFAULT_CATEGORY_ICON } from '../icons';
 import { usePaywall } from '../components/PaywallModal';
 
 // Supabase row → bentuk kategori yang dipakai komponen (sama seperti CATEGORIES)
@@ -9,6 +10,7 @@ function toCustomCat(row) {
     id:         row.id,                    // uuid — disimpan sebagai `category` di transaksi/budget
     label:      row.name,
     color:      row.color || 'var(--sage)',
+    icon:       row.icon,                   // kind CatIcon — kolom NOT NULL DEFAULT 'other', tidak perlu fallback di sini
     type:       row.type || 'expense',     // 'income' | 'expense' — dipakai filter tampilan
     custom:     true,
     is_locked:  row.is_locked  || false,
@@ -72,7 +74,7 @@ export function useCustomCategories(userId, limits) {
   // Tambah kategori kustom. Mengembalikan objek kategori siap pakai
   // ({ id, label, color }). Anti-duplikat: kalau nama sudah ada
   // (bawaan ATAU kustom), kembalikan yang sudah ada tanpa insert baru.
-  async function addCustomCategory({ name, color, type = 'expense' }) {
+  async function addCustomCategory({ name, color, type = 'expense', icon }) {
     const clean = (name || '').trim();
     if (!clean) return { error: 'Nama kategori kosong', category: null };
 
@@ -98,7 +100,7 @@ export function useCustomCategories(userId, limits) {
 
     const { data, error } = await supabase
       .from('custom_categories')
-      .insert({ user_id: userId, name: clean, color: color || 'var(--sage)', type })
+      .insert({ user_id: userId, name: clean, color: color || 'var(--sage)', type, icon: icon || DEFAULT_CATEGORY_ICON })
       .select()
       .single();
 
@@ -134,7 +136,7 @@ export function useCustomCategories(userId, limits) {
     if (!error) {
       setCustomCategories(prev => prev.map(c =>
         c.id === categoryId
-          ? { ...c, ...(updates.name ? { label: updates.name } : {}), ...(updates.color ? { color: updates.color } : {}), ...(updates.type ? { type: updates.type } : {}) }
+          ? { ...c, ...(updates.name ? { label: updates.name } : {}), ...(updates.color ? { color: updates.color } : {}), ...(updates.icon ? { icon: updates.icon } : {}), ...(updates.type ? { type: updates.type } : {}) }
           : c
       ));
     }

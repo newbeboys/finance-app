@@ -1,9 +1,11 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { ALL_CATEGORIES } from './data';
+import { CatIcon, DEFAULT_CATEGORY_ICON } from './icons';
 import { PLAN_LIMITS } from './lib/planLimits';
 import { DeleteCategoryModal } from './components/DeleteCategoryModal';
 import { EditCategoryModal } from './components/EditCategoryModal';
+import { IconColorPicker } from './components/IconColorPicker';
 
 // Nilai khusus untuk opsi "Kustom (nama bebas)" di dropdown
 export const CUSTOM_ID = '__custom__';
@@ -29,7 +31,11 @@ export const CUSTOM_COLORS = [
   '#8C7B5C', '#7A8A6E', '#6E8A8C', '#9A6B55',
 ];
 
-// Cari {id,label,color} dari sebuah id kategori, termasuk kategori kustom.
+// Cari {id,label,color,...} dari sebuah id kategori, termasuk kategori kustom.
+// Kategori kustom juga bawa `icon` (kind CatIcon, dibaca langsung dari kolom
+// custom_categories.icon — lihat useCustomCategories.toCustomCat). Kategori
+// bawaan TIDAK punya field `icon` (tidak berubah): pemanggil yang menampilkan
+// CatIcon harus fallback ke id kategori itu sendiri, mis. `cat?.icon || id`.
 export function resolveCategory(id, customCategories = []) {
   return ALL_CATEGORIES.find(c => c.id === id)
       || customCategories.find(c => c.id === id)
@@ -110,6 +116,7 @@ export function CategoryField({
   // Modal state
   const [deletingCat, setDeletingCat] = React.useState(null);
   const [editingCat, setEditingCat] = React.useState(null);
+  const [pickerOpen, setPickerOpen] = React.useState(false);
 
   // Hitung kategori kustom aktif (non-deleted) dari prop — dipakai untuk gating edit button
   const activeCustomCount = customCategories.filter(c => !c.is_deleted).length;
@@ -138,7 +145,11 @@ export function CategoryField({
 
   const pick = (id) => {
     onChange(id);
-    if (id === CUSTOM_ID) onPendingChange?.({ name: pending?.name || '', color: pending?.color || CUSTOM_COLORS[0] });
+    if (id === CUSTOM_ID) onPendingChange?.({
+      name: pending?.name || '',
+      color: pending?.color || CUSTOM_COLORS[0],
+      icon: pending?.icon || DEFAULT_CATEGORY_ICON,
+    });
     setOpen(false);
   };
 
@@ -291,18 +302,35 @@ export function CategoryField({
             onChange={e => onPendingChange?.({ ...pending, name: e.target.value })}
             placeholder={t('kategori.namaKategoriPlaceholder')}
             style={fieldInput} />
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {CUSTOM_COLORS.map(col => (
-              <button key={col} type="button" onClick={() => onPendingChange?.({ ...pending, color: col })}
-                title={col}
-                style={{
-                  width: 26, height: 26, borderRadius: '50%', background: col, cursor: 'pointer',
-                  border: (pending?.color || CUSTOM_COLORS[0]) === col ? '2px solid var(--ink)' : '2px solid transparent',
-                  outline: (pending?.color || CUSTOM_COLORS[0]) === col ? '2px solid var(--ivory)' : 'none',
-                  outlineOffset: '-4px',
-                }} />
-            ))}
-          </div>
+          <button type="button" onClick={() => setPickerOpen(true)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8, width: 'fit-content',
+              padding: pending?.icon ? '6px 14px 6px 6px' : '10px 14px',
+              borderRadius: 10, border: '1px solid var(--line-soft)', background: 'var(--paper)',
+              fontSize: 13, fontFamily: 'inherit', cursor: 'pointer',
+              color: pending?.icon ? 'var(--ink)' : 'var(--muted)',
+            }}>
+            {pending?.icon ? (
+              <>
+                <span style={{
+                  width: 26, height: 26, borderRadius: 8, display: 'grid', placeItems: 'center', flexShrink: 0,
+                  background: `color-mix(in oklch, ${pending.color || CUSTOM_COLORS[0]} 18%, var(--paper))`,
+                  color: pending.color || CUSTOM_COLORS[0],
+                }}>
+                  <CatIcon kind={pending.icon} size={14} />
+                </span>
+                {t('kategori.ikonWarnaDipilih')}
+              </>
+            ) : t('kategori.pilihIkonWarna')}
+          </button>
+
+          <IconColorPicker
+            isOpen={pickerOpen}
+            onClose={() => setPickerOpen(false)}
+            onConfirm={(icon, color) => onPendingChange?.({ ...pending, icon, color })}
+            initialIcon={pending?.icon || DEFAULT_CATEGORY_ICON}
+            initialColor={pending?.color || CUSTOM_COLORS[0]}
+          />
         </div>
       )}
 

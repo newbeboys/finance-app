@@ -301,7 +301,7 @@ function AccountTxSheet({ account, transactions, customCategories = [], onClose 
               return (
                 <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: i < transactions.length - 1 ? "1px solid var(--line-soft)" : 0 }}>
                   <span style={{ width: 38, height: 38, borderRadius: 10, background: `color-mix(in oklch, ${color} 14%, var(--ivory))`, color, display: "grid", placeItems: "center", flexShrink: 0 }}>
-                    <CatIcon kind={t.category} size={15} />
+                    <CatIcon kind={cat?.icon || t.category} size={15} />
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13.5, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.merchant}</div>

@@ -4,7 +4,7 @@ import i18n from './i18n';
 import { fmt, fmtShort, formatNominal, nominalFontSize, CATEGORIES } from './data';
 import { IconPlus, IconSpark, IconClose, IconEdit, CatIcon } from './icons';
 import { useIsCompact } from './hooks/useContainerWidth';
-import { CategoryField, CUSTOM_ID } from './category-field';
+import { CategoryField, CUSTOM_ID, resolveCategory } from './category-field';
 import { useScrollLock } from './hooks/useScrollLock';
 import { formatRupiahInput } from './utils/numberFormat';
 
@@ -185,13 +185,16 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
               const currentLimit  = r.limit;
               const pct  = currentLimit ? computedSpent / currentLimit : 0;
               const over = computedSpent > currentLimit;
+              // Kategori kustom baca `icon` dari resolveCategory(); bawaan (tanpa field
+              // icon) fallback ke id-nya sendiri, sama seperti CatIcon selama ini.
+              const catIcon = resolveCategory(r.categoryId, customCategories)?.icon || r.categoryId || r.id;
 
               if (isMobile) {
                 return (
                   <div key={r.id} style={{ padding: "16px 0", borderBottom: i < visibleRows.length - 1 ? "1px solid var(--line-soft)" : 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
                       <span style={{ width: 38, height: 38, borderRadius: 10, flexShrink: 0, background: `color-mix(in oklch, ${r.color} 16%, var(--ivory))`, color: r.color, display: "grid", placeItems: "center" }}>
-                        <CatIcon kind={r.categoryId || r.id} size={17} />
+                        <CatIcon kind={catIcon} size={17} />
                       </span>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 14, fontWeight: 500 }}>{r.label}</div>
@@ -218,7 +221,7 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
                 <div key={r.id} className="budget-cols-row" style={{ display: "grid", gridTemplateColumns: "minmax(200px,1.4fr) 1.6fr 150px 80px", alignItems: "center", gap: 16, padding: "16px 0", borderBottom: i < visibleRows.length - 1 ? "1px solid var(--line-soft)" : 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
                     <span style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: `color-mix(in oklch, ${r.color} 16%, var(--ivory))`, color: r.color, display: "grid", placeItems: "center" }}>
-                      <CatIcon kind={r.categoryId || r.id} size={16} />
+                      <CatIcon kind={catIcon} size={16} />
                     </span>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 13.5, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.label}</div>
@@ -331,7 +334,7 @@ function AddBudgetModal({ onClose, onAdd, onUpdate, initial = null, defaultPerio
     let categoryId, label, color;
     if (isCustom) {
       if (!onCreateCustom) { setSaving(false); return; }
-      const res = await onCreateCustom({ name: pendingCustom.name, color: pendingCustom.color });
+      const res = await onCreateCustom({ name: pendingCustom.name, color: pendingCustom.color, icon: pendingCustom.icon });
       // Limit plan tercapai → PaywallModal sudah tampil; batal diam-diam.
       if (res?.limitReached) { setSaving(false); return; }
       const { category, error } = res;

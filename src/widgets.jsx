@@ -4,7 +4,7 @@ import { CATEGORIES, ALL_CATEGORIES, fmtShort, fmt, formatNominal, nominalFontSi
 import { IconArrowUp, IconArrowDown, IconArrowRight, IconSpark, CatIcon } from './icons';
 import { CashflowChart, SpendingDonut, Spark, Ring } from './charts';
 import { useIsMobile } from './use-mobile';
-import { categoryLabel } from './category-field';
+import { categoryLabel, resolveCategory } from './category-field';
 import { usePaywall } from './components/PaywallModal';
 import { useMoneyIQ } from './components/MoneyIQChat';
 import { MonthYearPicker } from './components/MonthYearPicker';
@@ -501,7 +501,7 @@ export function SavingsCard({ goals = GOALS, onManage }) {
   );
 }
 
-export function BudgetsCard({ onManage, transactions = [], budgets: allBudgets = [] }) {
+export function BudgetsCard({ onManage, transactions = [], budgets: allBudgets = [], customCategories = [] }) {
   const { t: tr, i18n } = useTranslation();
   const locale = localeOf(i18n);
   const budgets = allBudgets.filter(b => b.enabled);
@@ -556,7 +556,7 @@ export function BudgetsCard({ onManage, transactions = [], budgets: allBudgets =
               <div key={b.id}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13 }}>
-                    <CatIcon kind={b.categoryId || b.id} size={14} /> {b.label}
+                    <CatIcon kind={resolveCategory(b.categoryId, customCategories)?.icon || b.categoryId || b.id} size={14} /> {b.label}
                   </span>
                   <span className="tnum" style={{ fontSize: 12.5, color: over ? "var(--terra)" : "var(--muted)" }}>
                     <span style={{ color: "var(--ink)", fontWeight: 500 }}>{fmtShort(computedSpent)}</span>{" / "}{fmtShort(b.limit)}

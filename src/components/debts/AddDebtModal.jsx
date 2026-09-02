@@ -41,11 +41,14 @@ export default function AddDebtModal({ open, onClose, onCreate, wallets = [] }) 
   const [submitting, setSubmitting] = React.useState(false);
   const [errorMsg, setErrorMsg] = React.useState('');
   const [cooldown, setCooldown] = React.useState(null); // { date } | null
+  // Hanya dipakai utk type='receivable' — lihat cashDisbursedAtCreation di
+  // useDebts.createDebt(). Untuk 'payable' selalu dikirim true, apapun state ini.
+  const [cashDisbursed, setCashDisbursed] = React.useState(true);
 
   React.useEffect(() => {
     if (open) {
       setType('receivable'); setPerson(''); setAmount(''); setWalletId(primaryId);
-      setDateISO(todayISO()); setDueISO(null); setNote('');
+      setDateISO(todayISO()); setDueISO(null); setNote(''); setCashDisbursed(true);
       setShowDate(false); setShowDue(false); setSubmitting(false); setErrorMsg(''); setCooldown(null);
     }
   }, [open, primaryId]);
@@ -66,6 +69,9 @@ export default function AddDebtModal({ open, onClose, onCreate, wallets = [] }) 
       date: dateISO,
       due_date: dueISO,
       note: note.trim(),
+      // Hutang selalu true (tidak ada toggle di UI utk itu) — hook juga memaksa
+      // ini, tapi dikirim eksplisit di sini supaya niatnya jelas dari pemanggil.
+      cash_disbursed_at_creation: isReceivable ? cashDisbursed : true,
     });
     setSubmitting(false);
     if (!res) { setErrorMsg('Gagal menyimpan catatan'); return; }
@@ -102,6 +108,40 @@ export default function AddDebtModal({ open, onClose, onCreate, wallets = [] }) 
             );
           })}
         </div>
+
+        {/* Mode pencatatan — HANYA utk Piutang. Hutang selalu dianggap uang
+            sudah berpindah saat dibuat, tak ada opsi apapun ditampilkan. */}
+        {isReceivable && (
+          <div style={{ marginTop: 14, padding: '2px 14px', background: 'var(--paper)', border: '1px solid var(--line-soft)', borderRadius: 12 }}>
+            {[
+              { val: true,  label: 'Saya sudah kasih uang/barang duluan', desc: 'Transaksi & saldo dompet langsung disesuaikan sekarang.' },
+              { val: false, label: 'Ini baru tagihan, uang belum berpindah', desc: 'Saldo dompet baru disesuaikan saat orangnya membayar.' },
+            ].map((opt, i) => {
+              const checked = cashDisbursed === opt.val;
+              return (
+                <button key={String(opt.val)} type="button" role="radio" aria-checked={checked} onClick={() => setCashDisbursed(opt.val)}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '12px 0', borderBottom: i === 0 ? '1px solid var(--line-soft)' : 0,
+                    background: 'transparent', border: 0, borderTop: 0, borderLeft: 0, borderRight: 0,
+                    cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+                  }}>
+                  <span style={{
+                    width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
+                    border: `2px solid ${checked ? 'var(--sage)' : 'var(--line)'}`,
+                    display: 'grid', placeItems: 'center', transition: 'border-color .15s',
+                  }}>
+                    {checked && <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'var(--sage)' }} />}
+                  </span>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--ink)' }}>{opt.label}</span>
+                    <span style={{ display: 'block', fontSize: 11.5, color: 'var(--muted)', marginTop: 2, lineHeight: 1.4 }}>{opt.desc}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         <div style={{ display: 'grid', gap: 14, marginTop: 18 }}>
           <label>

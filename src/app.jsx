@@ -721,7 +721,7 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
 
             <TransactionsCard onAdd={() => setModal(true)} onScan={handleScan} scanLocked={!limits.receiptScanEnabled} limit={8} onSeeAll={() => setActive("transactions")} transactions={transactions} loading={txLoading} customCategories={customCategories} />
             <SavingsCard goals={goals} onManage={() => setActive("savings")} />
-            <BudgetsCard onManage={() => setActive("budgets")} transactions={transactions} budgets={budgets} />
+            <BudgetsCard onManage={() => setActive("budgets")} transactions={transactions} budgets={budgets} customCategories={customCategories} />
             <DebtsCard debts={debts} onManage={() => setActive("debts")} />
             <WeeklySummaryCard transactions={transactions} />
           </div>

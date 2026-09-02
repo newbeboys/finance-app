@@ -193,6 +193,9 @@ export default function DebtsPage({
                     {d.is_locked && (
                       <span style={{ fontSize: 10.5, fontWeight: 600, color: "#fff", background: "rgba(42,44,32,.72)", borderRadius: 99, padding: "2px 8px", display: "inline-flex", alignItems: "center", gap: 4 }}>🔒 Terkunci</span>
                     )}
+                    {d.type === 'receivable' && !d.cash_disbursed_at_creation && (
+                      <span title="Uang belum berpindah — baru akan tercatat saat orangnya membayar" style={{ fontSize: 10.5, fontWeight: 600, color: "var(--gold)", border: "1px solid var(--gold)", borderRadius: 99, padding: "1px 8px", display: "inline-flex", alignItems: "center", gap: 4 }}>📋 Belum Ditagih</span>
+                    )}
                     {badge && (
                       <span style={{ fontSize: 10.5, fontWeight: 600, color: "#fff", background: badge.color, borderRadius: 99, padding: "2px 8px" }}>{badge.label}</span>
                     )}

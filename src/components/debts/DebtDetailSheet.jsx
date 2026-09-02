@@ -95,6 +95,9 @@ export default function DebtDetailSheet({ debt, onClose, getPayments, addPayment
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 10.5, fontWeight: 600, color: '#fff', background: accent, borderRadius: 99, padding: '2px 9px' }}>{isReceivable ? 'Piutang' : 'Hutang'}</span>
               {debt.status === 'paid' && <span style={{ fontSize: 10.5, fontWeight: 600, color: accent, border: `1px solid ${accent}`, borderRadius: 99, padding: '1px 8px' }}>Lunas</span>}
+              {isReceivable && !debt.cash_disbursed_at_creation && (
+                <span title="Uang belum berpindah — baru akan tercatat saat orangnya membayar" style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--gold)', border: '1px solid var(--gold)', borderRadius: 99, padding: '1px 8px' }}>📋 Belum Ditagih</span>
+              )}
             </div>
             <div className="serif" style={{ fontSize: 22, letterSpacing: '-0.01em', marginTop: 6 }}>{debt.person_name}</div>
             {debt.note && <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 2 }}>{debt.note}</div>}

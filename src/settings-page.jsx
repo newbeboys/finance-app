@@ -15,6 +15,18 @@ import { UpgradeModal } from './components/subscription/UpgradeModal';
 import { SubscriptionStatus } from './components/subscription/SubscriptionStatus';
 import { FeatureComparison } from './components/subscription/FeatureComparison';
 import { RestorePurchaseButton } from './components/subscription/RestorePurchaseButton';
+// Bendera SVG — emoji 🇮🇩/🇬🇧 tidak dirender sebagai bendera di Windows/sebagian
+// WebView (jatuh ke huruf "ID"/"GB"), jadi pakai file asset supaya konsisten.
+import flagId from './assets/nation/indonesia flag.svg';
+import flagEn from './assets/nation/United-Kingdom Flag.svg';
+
+// Kedua SVG punya kanvas persegi dengan bidang bendera ter-center vertikal
+// (ID: viewBox 36x36 bidang y5–31, UK: viewBox 32x32 bidang y4–28), jadi ukuran
+// render persegi yang sama bikin keduanya tampak sepadan.
+const FlagIcon = ({ src, size }) => (
+  <img src={src} alt="" aria-hidden width={size} height={size}
+    style={{ width: size, height: size, display: 'block', flexShrink: 0 }} />
+);
 
 // ── Halaman Pengaturan (Settings) ──────────────────────────────────
 // Reads & writes the same tweak state (theme, palette, sidebar, showAI,
@@ -146,8 +158,8 @@ function LanguageModal({ onClose, onToast }) {
   };
 
   const LANGS = [
-    { id: 'id', flag: '🇮🇩', label: tr('bahasa.indonesia') },
-    { id: 'en', flag: '🇬🇧', label: tr('bahasa.inggris') },
+    { id: 'id', flag: flagId, label: tr('bahasa.indonesia') },
+    { id: 'en', flag: flagEn, label: tr('bahasa.inggris') },
   ];
 
   return (
@@ -165,7 +177,7 @@ function LanguageModal({ onClose, onToast }) {
             borderBottom: i < LANGS.length - 1 ? "1px solid var(--line-soft)" : 0,
             cursor: "pointer", fontFamily: "inherit", textAlign: "left",
           }}>
-            <span style={{ fontSize: 26 }}>{lng.flag}</span>
+            <FlagIcon src={lng.flag} size={26} />
             <span style={{ flex: 1, fontSize: 14, fontWeight: 500, color: "var(--ink)" }}>{lng.label}</span>
             {cur === lng.id && <span style={{ color: "var(--sage)" }}><IconCheck size={18} /></span>}
           </button>
@@ -548,8 +560,8 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub, s
             onClick={() => setShowLangModal(true)}
             style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "14px 0 4px", background: "transparent", border: 0, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}
           >
-            <span style={{ fontSize: 20, width: 40, height: 40, borderRadius: 11, background: "var(--paper)", border: "1px solid var(--line-soft)", display: "grid", placeItems: "center", flexShrink: 0 }} aria-hidden>
-              {i18n.language === 'en' ? '🇬🇧' : '🇮🇩'}
+            <span style={{ width: 40, height: 40, borderRadius: 11, background: "var(--paper)", border: "1px solid var(--line-soft)", display: "grid", placeItems: "center", flexShrink: 0 }} aria-hidden>
+              <FlagIcon src={i18n.language === 'en' ? flagEn : flagId} size={24} />
             </span>
             <span style={{ flex: 1, minWidth: 0 }}>
               <span style={{ display: "block", fontSize: 13.5, fontWeight: 500, color: "var(--ink)" }}>{curLangLabel}</span>

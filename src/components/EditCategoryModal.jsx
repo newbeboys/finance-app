@@ -2,6 +2,8 @@ import React from 'react';
 import { supabase } from '../supabase';
 import { useScrollLock } from '../hooks/useScrollLock';
 import { CUSTOM_COLORS } from '../category-field';
+import { CatIcon, DEFAULT_CATEGORY_ICON } from '../icons';
+import { IconColorPicker } from './IconColorPicker';
 
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
 
@@ -15,15 +17,18 @@ export function EditCategoryModal({ open, category, userId, onClose }) {
   const [name, setName] = React.useState('');
   const [type, setType] = React.useState('expense');
   const [color, setColor] = React.useState(CUSTOM_COLORS[0]);
+  const [icon, setIcon] = React.useState(DEFAULT_CATEGORY_ICON);
   const [cooldown, setCooldown] = React.useState(null); // null = loading, { isOnCooldown, daysRemaining, nextEditDate }
   const [loading, setLoading] = React.useState(false);
   const [toast, setToast] = React.useState('');
+  const [pickerOpen, setPickerOpen] = React.useState(false);
 
   React.useEffect(() => {
     if (!open || !userId) return;
     setName(category?.label || '');
     setType(category?.type || 'expense');
     setColor(category?.color || CUSTOM_COLORS[0]);
+    setIcon(category?.icon || DEFAULT_CATEGORY_ICON);
     setCooldown(null);
     setToast('');
 
@@ -84,7 +89,7 @@ export function EditCategoryModal({ open, category, userId, onClose }) {
 
     const { error } = await supabase
       .from('custom_categories')
-      .update({ name: cleanName, type, color })
+      .update({ name: cleanName, type, color, icon })
       .eq('id', category.id)
       .eq('user_id', userId);
 
@@ -231,23 +236,34 @@ export function EditCategoryModal({ open, category, userId, onClose }) {
 
               <div>
                 <span style={{ display: 'block', fontSize: 11, color: 'var(--muted)', letterSpacing: '.05em', textTransform: 'uppercase', marginBottom: 6 }}>
-                  Warna
+                  Ikon &amp; Warna
                 </span>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {CUSTOM_COLORS.map((col) => (
-                    <button
-                      key={col}
-                      type="button"
-                      onClick={() => setColor(col)}
-                      style={{
-                        width: 26, height: 26, borderRadius: '50%', background: col, cursor: 'pointer',
-                        border: color === col ? '2px solid var(--ink)' : '2px solid transparent',
-                        outline: color === col ? '2px solid var(--ivory)' : 'none',
-                        outlineOffset: '-4px',
-                      }}
-                    />
-                  ))}
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setPickerOpen(true)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8, width: 'fit-content',
+                    padding: '6px 14px 6px 6px', borderRadius: 10, cursor: 'pointer',
+                    border: '1px solid var(--line-soft)', background: 'var(--paper)',
+                    fontSize: 13, fontFamily: 'inherit', color: 'var(--ink)',
+                  }}
+                >
+                  <span style={{
+                    width: 26, height: 26, borderRadius: 8, display: 'grid', placeItems: 'center', flexShrink: 0,
+                    background: `color-mix(in oklch, ${color} 18%, var(--paper))`, color,
+                  }}>
+                    <CatIcon kind={icon} size={14} />
+                  </span>
+                  Ikon &amp; warna dipilih
+                </button>
+
+                <IconColorPicker
+                  isOpen={pickerOpen}
+                  onClose={() => setPickerOpen(false)}
+                  onConfirm={(nextIcon, nextColor) => { setIcon(nextIcon); setColor(nextColor); }}
+                  initialIcon={icon}
+                  initialColor={color}
+                />
               </div>
             </div>
 

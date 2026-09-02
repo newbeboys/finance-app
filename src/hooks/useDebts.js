@@ -58,6 +58,10 @@ function toAppDebt(row, lastPaymentDate = null) {
     status:      row.status || 'active',        // 'active' | 'paid'
     is_deleted:  row.is_deleted || false,
     is_locked:   row.is_locked || false,        // dikunci saat downgrade Pro→Basic (lihat planReconciliation)
+    // Hanya relevan utk type='receivable'. false = piutang berupa tagihan yang
+    // belum dibayar — belum ada transaksi pokok/uang berpindah saat dibuat.
+    // Kolom DB NOT NULL DEFAULT true, jadi baca apa adanya (bukan `|| false`).
+    cash_disbursed_at_creation: row.cash_disbursed_at_creation !== false,
     created_at:  row.created_at,
     lastPaymentDate,                            // ISO yyyy-mm-dd | null
   };
@@ -226,7 +230,10 @@ export function useDebts(userId, limits, ledger = {}) {
   }
 
   // ── Buat catatan hutang/piutang ────────────────────────────────────
-  // Input: { type, person_name, amount, wallet_id, date, due_date, note }
+  // Input: { type, person_name, amount, wallet_id, date, due_date, note,
+  //          cash_disbursed_at_creation }
+  //   cash_disbursed_at_creation hanya dipakai utk type='receivable' (lihat
+  //   komentar di dalam fungsi); diabaikan/dipaksa true utk type='payable'.
   // Output: { error, debtId, limitReached, cooldownUntilDate }
   async function createDebt(input) {
     const gate = await checkCreateAllowed();
@@ -243,6 +250,13 @@ export function useDebts(userId, limits, ledger = {}) {
     if (absAmount <= 0) return { error: new Error('Jumlah harus lebih dari 0') };
     if (!input.person_name?.trim()) return { error: new Error('Nama orang wajib diisi') };
 
+    // Toggle mode pencatatan HANYA berlaku utk piutang (type='receivable').
+    // Hutang (payable) selalu dianggap uang sudah berpindah saat dibuat — tidak
+    // ada opsi di UI utk ini, jadi paksa true apapun yang terkirim di input.
+    const cashDisbursedAtCreation = input.type === 'payable'
+      ? true
+      : input.cash_disbursed_at_creation !== false;
+
     // 1) Insert baris debts
     const { data: debtRow, error: dErr } = await supabase
       .from('debts')
@@ -257,6 +271,7 @@ export function useDebts(userId, limits, ledger = {}) {
         date:        input.date || undefined,       // biarkan DB pakai default CURRENT_DATE bila kosong
         due_date:    input.due_date || null,
         status:      'active',
+        cash_disbursed_at_creation: cashDisbursedAtCreation,
       })
       .select()
       .single();
@@ -264,6 +279,15 @@ export function useDebts(userId, limits, ledger = {}) {
     if (dErr || !debtRow) {
       console.error('[useDebts] createDebt insert FAILED:', dErr?.code, dErr?.message);
       return { error: dErr || new Error('Gagal membuat catatan') };
+    }
+
+    // Piutang berupa tagihan yang belum dibayar: TIDAK ada uang yang berpindah
+    // sama sekali saat ini — skip total transaksi pokok & adjustBalance. Uang
+    // baru dicatat & saldo baru disesuaikan saat pembayaran masuk lewat
+    // addPayment() (lihat txForEvent kind='payment', tidak berubah sama sekali).
+    if (!cashDisbursedAtCreation) {
+      setDebts(prev => [toAppDebt(debtRow), ...prev]);
+      return { error: null, debtId: debtRow.id };
     }
 
     // 2) Transaksi pokok tertaut

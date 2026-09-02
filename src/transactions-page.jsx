@@ -199,7 +199,7 @@ export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, 
                     <div className="tx-row-mobile"
                       style={{ alignItems: "center", gap: 10, padding: "12px 2px", borderBottom }}>
                       <span onClick={() => setEditingTx(t)} style={{ width: 38, height: 38, borderRadius: 10, background: `color-mix(in oklch, ${color} 14%, var(--ivory))`, color, display: "grid", placeItems: "center", flexShrink: 0, cursor: "pointer" }}>
-                        <CatIcon kind={t.category} size={16} />
+                        <CatIcon kind={c?.icon || t.category} size={16} />
                       </span>
                       <div onClick={() => setEditingTx(t)} style={{ flex: 1, minWidth: 0, cursor: "pointer" }}>
                         <div style={{ fontSize: 14, fontWeight: 500, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.merchant}</div>
@@ -222,7 +222,7 @@ export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, 
                       style={{ display: "grid", gridTemplateColumns: "minmax(220px,1.6fr) 1fr 1fr 0.7fr 130px 72px", alignItems: "center", padding: "12px 4px", borderBottom, background: hover === t.id ? "var(--paper)" : "transparent", transition: "background .15s ease" }}>
                       <div onClick={() => setEditingTx(t)} style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0, cursor: "pointer" }}>
                         <span style={{ width: 34, height: 34, borderRadius: 10, background: `color-mix(in oklch, ${color} 14%, var(--ivory))`, color, display: "grid", placeItems: "center", flexShrink: 0 }}>
-                          <CatIcon kind={t.category} size={15} />
+                          <CatIcon kind={c?.icon || t.category} size={15} />
                         </span>
                         <div style={{ minWidth: 0 }}>
                           <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.merchant}</div>

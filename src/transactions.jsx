@@ -111,7 +111,7 @@ export function TransactionsCard({ onAdd, onScan, scanLocked = false, limit, onS
                 <div className="tx-row-mobile"
                   style={{ alignItems: "center", gap: 12, padding: "11px 2px", borderBottom }}>
                   <span style={{ width: 36, height: 36, borderRadius: 10, background: `color-mix(in oklch, ${color} 14%, var(--ivory))`, color, display: "grid", placeItems: "center", flexShrink: 0 }}>
-                    <CatIcon kind={t.category} size={15} />
+                    <CatIcon kind={cat?.icon || t.category} size={15} />
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.merchant}</div>
@@ -128,7 +128,7 @@ export function TransactionsCard({ onAdd, onScan, scanLocked = false, limit, onS
                   style={{ display: "grid", gridTemplateColumns: "minmax(220px,1.5fr) 1fr 1fr 1fr 140px", alignItems: "center", padding: "12px 4px", borderBottom, background: hover === t.id ? "var(--paper)" : "transparent", transition: "background .15s ease", cursor: "pointer" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
                     <span style={{ width: 34, height: 34, borderRadius: 10, background: `color-mix(in oklch, ${color} 14%, var(--ivory))`, color, display: "grid", placeItems: "center", flexShrink: 0 }}>
-                      <CatIcon kind={t.category} size={15} />
+                      <CatIcon kind={cat?.icon || t.category} size={15} />
                     </span>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.merchant}</div>
@@ -361,7 +361,7 @@ export function AddTransactionModal({ open, onClose, onSave, onUpdate, initial =
     let categoryId = cat;
     if (isCustom) {
       if (!onCreateCustom) { setSaving(false); return; }
-      const res = await onCreateCustom({ name: pendingCustom.name, color: pendingCustom.color, type });
+      const res = await onCreateCustom({ name: pendingCustom.name, color: pendingCustom.color, icon: pendingCustom.icon, type });
       if (res?.limitReached) { setSaving(false); return; }
       const { category, error } = res;
       if (error || !category) {
