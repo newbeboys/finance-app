@@ -2,12 +2,40 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../supabase';
 import { logError } from '../lib/errorLogger';
+import { markRecoveryPending, clearRecoveryPending } from '../lib/recoveryFlow';
 import { IconEye, IconEyeOff } from '../icons';
 
-export function ForgotPasswordPage({ onBack }) {
+// Terjemahkan error Supabase Auth (selalu bahasa Inggris) ke pesan yang jelas
+// untuk user. Pesan aslinya tetap dikirim ke logError supaya bisa didebug.
+function mapAuthError(err, t) {
+  if (!err) return '';
+  const msg = String(err.message || '').toLowerCase();
+  const code = String(err.code || err.name || '').toLowerCase();
+
+  // Gagal jaringan dilempar sebagai TypeError dari fetch, bukan AuthError Supabase.
+  if (code === 'typeerror' || msg.includes('failed to fetch') || msg.includes('network') || msg.includes('load failed')) {
+    return t('lupa.errJaringan');
+  }
+  if (code === 'otp_expired' || msg.includes('token has expired') || msg.includes('invalid token') || msg.includes('invalid or has expired')) {
+    return t('lupa.errOtpSalah');
+  }
+  // Rate limit Supabase: 1 permintaan OTP per 60 detik.
+  if (code.includes('rate_limit') || msg.includes('for security purposes') || msg.includes('rate limit')) {
+    return t('lupa.errTerlaluSering');
+  }
+  if (msg.includes('should be at least') || msg.includes('password should be')) return t('lupa.passwordMinimal');
+  if (msg.includes('different from the old password')) return t('lupa.errPasswordSama');
+  if (msg.includes('unable to validate email') || msg.includes('user not found')) return t('lupa.errEmailTidakValid');
+  return t('lupa.errUmum');
+}
+
+// resumeEmail terisi bila app dibuka ulang dengan sesi recovery yang belum tuntas
+// (OTP sudah diverifikasi, password belum diganti) — lihat lib/recoveryFlow.js.
+// Dalam kondisi itu layar langsung dibuka di step 3, bukan dari input email lagi.
+export function ForgotPasswordPage({ onBack, onAuthSuccess, resumeEmail = null }) {
   const { t } = useTranslation();
-  const [step, setStep] = React.useState(1); // 1=email, 2=OTP, 3=password baru, 4=sukses
-  const [email, setEmail] = React.useState('');
+  const [step, setStep] = React.useState(resumeEmail ? 3 : 1); // 1=email, 2=OTP, 3=password baru, 4=sukses
+  const [email, setEmail] = React.useState(resumeEmail || '');
   const [otp, setOtp] = React.useState('');
   const [newPassword, setNewPassword] = React.useState('');
   const [confirmPassword, setConfirmPassword] = React.useState('');
@@ -15,6 +43,7 @@ export function ForgotPasswordPage({ onBack }) {
   const [showConfirm, setShowConfirm] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
+  const [info, setInfo] = React.useState('');
   const [cooldown, setCooldown] = React.useState(0);
 
   // Hitung mundur cooldown kirim ulang
@@ -24,70 +53,91 @@ export function ForgotPasswordPage({ onBack }) {
     return () => clearInterval(id);
   }, [cooldown]);
 
-  // Auto-redirect ke login 3 detik setelah sukses
+  // Sukses → session dari verifyOtp sudah jadi session penuh, jadi user
+  // langsung dibawa ke halaman utama tanpa perlu login ulang.
   React.useEffect(() => {
     if (step !== 4) return;
-    const id = setTimeout(onBack, 3000);
+    const id = setTimeout(() => onAuthSuccess?.(), 2000);
     return () => clearTimeout(id);
-  }, [step, onBack]);
+  }, [step, onAuthSuccess]);
 
   async function handleSendOtp(e) {
     e.preventDefault();
     setError('');
+    setInfo('');
     setLoading(true);
-    const { error: err } = await supabase.auth.resetPasswordForEmail(email);
-    setLoading(false);
-    if (err) {
-      setError(err.message);
+    try {
+      const { error: err } = await supabase.auth.resetPasswordForEmail(email);
+      if (err) throw err;
+      setCooldown(60);
+      setInfo(t('lupa.kodeTerkirim'));
+      setStep(2);
+    } catch (err) {
+      setError(mapAuthError(err, t));
       // Gagal kirim email reset (user belum login → user_id NULL, email di metadata).
-      logError('auth-reset-password', err.message, { email }, 'high');
-      return;
+      logError('auth-reset-password', err?.message || String(err), { email }, 'high');
+    } finally {
+      setLoading(false);
     }
-    setCooldown(60);
-    setStep(2);
   }
 
   async function handleResendOtp() {
     if (cooldown > 0 || loading) return;
     setError('');
+    setInfo('');
     setLoading(true);
-    const { error: err } = await supabase.auth.resetPasswordForEmail(email);
-    setLoading(false);
-    if (err) {
-      setError(err.message);
+    try {
+      const { error: err } = await supabase.auth.resetPasswordForEmail(email);
+      if (err) throw err;
+      setCooldown(60);
+      setInfo(t('lupa.kodeTerkirim'));
+    } catch (err) {
+      setError(mapAuthError(err, t));
       // Titik yang sama (resetPasswordForEmail) di jalur kirim-ulang.
-      logError('auth-reset-password', err.message, { email }, 'high');
-      return;
+      logError('auth-reset-password', err?.message || String(err), { email }, 'high');
+    } finally {
+      setLoading(false);
     }
-    setCooldown(60);
   }
 
   async function handleVerifyOtp(e) {
     e.preventDefault();
     setError('');
+    setInfo('');
     setLoading(true);
-    const { error: err } = await supabase.auth.verifyOtp({ email, token: otp, type: 'recovery' });
-    setLoading(false);
-    if (err) {
-      setError(err.message);
+    try {
+      const { data, error: err } = await supabase.auth.verifyOtp({ email, token: otp, type: 'recovery' });
+      if (err) throw err;
+      // Sesi recovery sudah aktif tapi password lama MASIH berlaku. Tandai dulu,
+      // supaya kalau app ditutup sekarang user dikembalikan ke step 3, bukan Beranda.
+      markRecoveryPending(email, data?.user?.id || data?.session?.user?.id);
+      setStep(3); // session recovery aktif → field password baru boleh tampil
+    } catch (err) {
+      setError(mapAuthError(err, t));
       // Medium: sering karena user salah ketik OTP, bukan murni kegagalan kirim email.
-      logError('auth-verify-otp', err.message, { email }, 'medium');
-      return;
+      logError('auth-verify-otp', err?.message || String(err), { email }, 'medium');
+    } finally {
+      setLoading(false);
     }
-    setStep(3);
   }
 
   async function handleUpdatePassword(e) {
     e.preventDefault();
     setError('');
-    if (newPassword !== confirmPassword) { setError(t('lupa.passwordTidakCocok')); return; }
     if (newPassword.length < 6) { setError(t('lupa.passwordMinimal')); return; }
+    if (newPassword !== confirmPassword) { setError(t('lupa.passwordTidakCocok')); return; }
     setLoading(true);
-    const { error: err } = await supabase.auth.updateUser({ password: newPassword });
-    if (err) { setLoading(false); setError(err.message); return; }
-    try { await supabase.auth.signOut(); } catch {}
-    setLoading(false);
-    setTimeout(() => onBack(), 2000);
+    try {
+      const { error: err } = await supabase.auth.updateUser({ password: newPassword });
+      if (err) throw err;
+      clearRecoveryPending(); // alur tuntas → sesi boleh dipakai masuk Beranda
+      setStep(4); // tetap login — session dari verifyOtp kini jadi session penuh
+    } catch (err) {
+      setError(mapAuthError(err, t));
+      logError('auth-update-password', err?.message || String(err), { email }, 'high');
+    } finally {
+      setLoading(false);
+    }
   }
 
   const subtitle = {
@@ -141,6 +191,7 @@ export function ForgotPasswordPage({ onBack }) {
         {/* Step 2 — OTP */}
         {step === 2 && (
           <form onSubmit={handleVerifyOtp} style={formStyle}>
+            {info && <InfoBox>{info}</InfoBox>}
             <div>
               <label style={labelStyle}>{t('lupa.emailTujuan')}</label>
               <input
@@ -179,7 +230,7 @@ export function ForgotPasswordPage({ onBack }) {
             </button>
             <button
               type="button"
-              onClick={() => { setStep(1); setOtp(''); setError(''); }}
+              onClick={() => { setStep(1); setOtp(''); setError(''); setInfo(''); }}
               style={{ ...ghostBtnStyle, borderColor: 'transparent', color: 'var(--muted)', fontSize: 13 }}
             >
               {t('lupa.kembali')}
@@ -187,9 +238,10 @@ export function ForgotPasswordPage({ onBack }) {
           </form>
         )}
 
-        {/* Step 3 — Password Baru */}
+        {/* Step 3 — Password Baru (hanya muncul setelah OTP terverifikasi) */}
         {step === 3 && (
           <form onSubmit={handleUpdatePassword} style={formStyle}>
+            {resumeEmail && <InfoBox>{t('lupa.lanjutkanReset')}</InfoBox>}
             <div>
               <label style={labelStyle}>{t('lupa.passwordBaru')}</label>
               <div style={{ position: 'relative' }}>
@@ -212,6 +264,7 @@ export function ForgotPasswordPage({ onBack }) {
                   {showPassword ? <IconEyeOff size={16} stroke={1.6} /> : <IconEye size={16} stroke={1.6} />}
                 </button>
               </div>
+              <p style={hintStyle}>{t('lupa.passwordMinimal')}</p>
             </div>
             <div>
               <label style={labelStyle}>{t('lupa.konfirmasiPassword')}</label>
@@ -244,22 +297,27 @@ export function ForgotPasswordPage({ onBack }) {
             >
               {loading ? t('lupa.menyimpan') : t('lupa.simpan')}
             </button>
+            {/* Jalan keluar: tanpa ini user yang membuka app dengan sesi recovery
+                tertinggal akan terkunci di layar ini. onBack juga men-signOut. */}
+            <button type="button" onClick={onBack} disabled={loading} style={ghostBtnStyle}>
+              {t('lupa.batalkan')}
+            </button>
           </form>
         )}
 
-        {/* Step 4 — Sukses */}
+        {/* Step 4 — Sukses, user sudah otomatis login */}
         {step === 4 && (
           <div style={formStyle}>
             <div style={{
               width: 56, height: 56, borderRadius: '50%',
-              background: 'color-mix(in oklch, var(--ink) 8%, transparent)',
+              background: 'color-mix(in oklch, var(--sage) 16%, transparent)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              margin: '0 auto 8px', fontSize: 26, color: 'var(--ink)',
+              margin: '0 auto 8px', fontSize: 26, color: 'var(--sage)',
             }}>
               ✓
             </div>
-            <button type="button" onClick={onBack} style={btnStyle(false)}>
-              {t('lupa.keLogin')}
+            <button type="button" onClick={() => onAuthSuccess?.()} style={btnStyle(false)}>
+              {t('lupa.keBeranda')}
             </button>
           </div>
         )}
@@ -275,6 +333,22 @@ function ErrorBox({ children }) {
       color: 'var(--terra)',
       background: 'color-mix(in oklch, var(--terra) 10%, transparent)',
       border: '1px solid color-mix(in oklch, var(--terra) 25%, transparent)',
+      borderRadius: 10,
+      padding: '10px 12px',
+      lineHeight: 1.4,
+    }}>
+      {children}
+    </div>
+  );
+}
+
+function InfoBox({ children }) {
+  return (
+    <div style={{
+      fontSize: 13,
+      color: 'var(--sage)',
+      background: 'color-mix(in oklch, var(--sage) 10%, transparent)',
+      border: '1px solid color-mix(in oklch, var(--sage) 25%, transparent)',
       borderRadius: 10,
       padding: '10px 12px',
       lineHeight: 1.4,
@@ -315,6 +389,13 @@ const labelStyle = {
   fontWeight: 500,
   color: 'var(--ink)',
   marginBottom: 6,
+};
+
+const hintStyle = {
+  fontSize: 11.5,
+  color: 'var(--muted)',
+  margin: '6px 0 0',
+  lineHeight: 1.4,
 };
 
 const inputStyle = {

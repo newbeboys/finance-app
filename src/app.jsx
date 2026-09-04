@@ -21,6 +21,7 @@ import { supabase } from './supabase';
 import { LoginPage } from './pages/Login';
 import { RegisterPage } from './pages/Register';
 import { ForgotPasswordPage } from './pages/ForgotPassword';
+import { getRecoveryPending, clearRecoveryPending } from './lib/recoveryFlow';
 import OnboardingScreen from './components/OnboardingScreen';
 import ProductTour from './components/ProductTour';
 import TransaksiTour from './components/TransaksiTour';
@@ -73,7 +74,15 @@ const FONT_THEMES = {
 export default function App() {
   const { t } = useTranslation();
   const [session, setSession] = React.useState(undefined); // undefined = loading
-  const [authView, setAuthView] = React.useState('login');
+  // Penanda reset password yang belum tuntas dibaca SINKRON saat render pertama,
+  // sebelum onAuthStateChange sempat emit INITIAL_SESSION. Kalau dibaca async,
+  // sesi recovery lolos duluan dan Beranda sempat berkedip sebelum ditarik lagi.
+  const [pendingRecovery] = React.useState(getRecoveryPending); // lazy init: dibaca sekali
+  const [authView, setAuthView] = React.useState(pendingRecovery ? 'forgot' : 'login');
+  const [resumeEmail, setResumeEmail] = React.useState(pendingRecovery?.email || null);
+  // true selama layar Lupa Password aktif. Alur itu memegang sendiri sesi recovery
+  // supaya app tidak melompat ke Beranda sebelum password baru benar-benar tersimpan.
+  const recoveryFlowRef = React.useRef(!!pendingRecovery);
   // Onboarding tampil setiap kali user baru register atau login (fresh session).
   // Bukan disimpan di localStorage: di-trigger dari handler auth, di-reset saat logout.
   const [showOnboarding, setShowOnboarding] = React.useState(false);
@@ -108,6 +117,26 @@ export default function App() {
           await logoutDeletedUser(); // triggers onAuthStateChange → session = null
           return;
         }
+        // Sesi ini berasal dari verifyOtp recovery yang belum dilanjutkan ke
+        // updateUser → password lama masih berlaku. Tahan di layar set password
+        // baru, jangan diloloskan ke Beranda. session sengaja dibiarkan null.
+        if (pendingRecovery && pendingRecovery.userId === currentSession.user?.id) {
+          setSession(null);
+          return;
+        }
+        // Penanda basi (milik user lain / sesi yang sudah tak ada) → buang saja.
+        if (pendingRecovery) {
+          clearRecoveryPending();
+          recoveryFlowRef.current = false;
+          setResumeEmail(null);
+          setAuthView('login');
+        }
+      } else if (pendingRecovery) {
+        // Tidak ada sesi sama sekali → penanda tak ada gunanya, mulai dari awal.
+        clearRecoveryPending();
+        recoveryFlowRef.current = false;
+        setResumeEmail(null);
+        setAuthView('login');
       }
       setSession(currentSession);
     });
@@ -115,6 +144,12 @@ export default function App() {
       // PASSWORD_RECOVERY event means verifyOtp succeeded for reset — tetap di alur lupa password,
       // jangan update session supaya ForgotPasswordPage bisa lanjut ke step 3 (updateUser).
       if (_event === 'PASSWORD_RECOVERY') return;
+      // Selama layar Lupa Password aktif, alur itu yang memegang kendali sesi:
+      // INITIAL_SESSION/TOKEN_REFRESHED (sesi recovery tertinggal saat app dibuka)
+      // dan USER_UPDATED (dari updateUser) sama-sama ditahan supaya app tidak
+      // melompat ke Beranda. Perpindahan dilakukan eksplisit di handleResetSuccess.
+      // SIGNED_OUT tetap diproses — itu justru sinyal alurnya dibatalkan.
+      if (recoveryFlowRef.current && _event !== 'SIGNED_OUT') return;
       setSession(s ?? null);
       if (!s) setShowOnboarding(false); // logout → bersihkan flag onboarding
     });
@@ -143,6 +178,28 @@ export default function App() {
     setShowSplash(true);
   }, []);
   const onSplashFinish = React.useCallback(() => setShowSplash(false), []);
+
+  // Reset password selesai → sesi dari verifyOtp sudah jadi sesi penuh, jadi user
+  // langsung masuk ke Beranda tanpa login ulang. Tanpa onboarding: ini akun lama.
+  const handleResetSuccess = React.useCallback(async () => {
+    clearRecoveryPending();
+    recoveryFlowRef.current = false;
+    const { data } = await supabase.auth.getSession();
+    setResumeEmail(null);
+    setAuthView('login');
+    setSession(data.session ?? null);
+  }, []);
+
+  // Keluar dari alur lupa password tanpa menyelesaikannya → buang penanda DAN sesi
+  // recovery-nya, supaya tidak ada sesi setengah jadi yang tertinggal di perangkat.
+  const handleResetBack = React.useCallback(async () => {
+    clearRecoveryPending();
+    recoveryFlowRef.current = false;
+    try { await supabase.auth.signOut(); } catch {}
+    setResumeEmail(null);
+    setAuthView('login');
+    setSession(null);
+  }, []);
 
   // Lupa PIN / 5× gagal → reset keamanan, lanjut splash, paksa login ulang Supabase
   const handleForgotPin = React.useCallback(async () => {
@@ -183,11 +240,11 @@ export default function App() {
     content = <div style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', background: 'var(--cream)', color: 'var(--muted)', fontSize: 14 }}>{t('umum.memuat')}</div>;
   } else if (!session) {
     if (authView === 'forgot') {
-      content = <ForgotPasswordPage onBack={() => setAuthView('login')} />;
+      content = <ForgotPasswordPage onBack={handleResetBack} onAuthSuccess={handleResetSuccess} resumeEmail={resumeEmail} />;
     } else if (authView === 'register') {
       content = <RegisterPage onSwitch={() => setAuthView('login')} onAuthSuccess={() => setShowOnboarding(true)} />;
     } else {
-      content = <LoginPage onSwitch={() => setAuthView('register')} onAuthSuccess={() => setShowOnboarding(true)} onForgot={() => setAuthView('forgot')} />;
+      content = <LoginPage onSwitch={() => setAuthView('register')} onAuthSuccess={() => setShowOnboarding(true)} onForgot={() => { recoveryFlowRef.current = true; setAuthView('forgot'); }} />;
     }
   } else {
     content = (

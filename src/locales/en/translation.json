@@ -652,7 +652,7 @@
     "step2Sub": "Enter the 6-digit code sent to your email",
     "step3Sub": "Create a new password for your account",
     "berhasil": "Password Updated!",
-    "berhasilSub": "Your password has been changed. Please sign in with your new password.",
+    "berhasilSub": "Your password has been changed and you are now signed in.",
     "kirimKode": "Send OTP Code",
     "mengirim": "Sending…",
     "emailTujuan": "Destination email",
@@ -668,7 +668,17 @@
     "passwordTidakCocok": "Passwords do not match, please try again",
     "passwordMinimal": "Password must be at least 6 characters",
     "keLogin": "Go to Login",
-    "kembali": "Back"
+    "kembali": "Back",
+    "kodeTerkirim": "A verification code has been sent to your email",
+    "keBeranda": "Continue to Home",
+    "errJaringan": "Could not reach the server. Check your internet connection and try again.",
+    "errOtpSalah": "The OTP code is wrong or has expired. Request a new code and try again.",
+    "errTerlaluSering": "Too many code requests. Please wait a moment before trying again.",
+    "errPasswordSama": "The new password must be different from the old one.",
+    "errEmailTidakValid": "That email is invalid or not registered.",
+    "errUmum": "Something went wrong. Please try again in a moment.",
+    "lanjutkanReset": "Your code was verified, but the password was never changed. Finish now to secure your account.",
+    "batalkan": "Cancel & back to Sign In"
   },
   "scan": {
     "judulSheet": "Scan Receipt",

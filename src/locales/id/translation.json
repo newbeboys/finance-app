@@ -652,7 +652,7 @@
     "step2Sub": "Masukkan kode 6 digit yang dikirim ke emailmu",
     "step3Sub": "Buat password baru untuk akunmu",
     "berhasil": "Password Diperbarui!",
-    "berhasilSub": "Passwordmu berhasil diubah. Silakan masuk dengan password barumu.",
+    "berhasilSub": "Passwordmu berhasil diubah dan kamu sudah otomatis masuk.",
     "kirimKode": "Kirim Kode OTP",
     "mengirim": "Mengirim…",
     "emailTujuan": "Email tujuan",
@@ -668,7 +668,17 @@
     "passwordTidakCocok": "Password tidak cocok, coba lagi",
     "passwordMinimal": "Password minimal 6 karakter",
     "keLogin": "Ke halaman Masuk",
-    "kembali": "Kembali"
+    "kembali": "Kembali",
+    "kodeTerkirim": "Kode verifikasi telah dikirim ke email Anda",
+    "keBeranda": "Lanjut ke Beranda",
+    "errJaringan": "Gagal terhubung ke server. Periksa koneksi internetmu, lalu coba lagi.",
+    "errOtpSalah": "Kode OTP salah atau sudah kedaluwarsa. Minta kode baru, lalu coba lagi.",
+    "errTerlaluSering": "Terlalu sering meminta kode. Tunggu sebentar sebelum mencoba lagi.",
+    "errPasswordSama": "Password baru harus berbeda dari password lama.",
+    "errEmailTidakValid": "Email tidak valid atau tidak terdaftar.",
+    "errUmum": "Terjadi kesalahan. Coba lagi beberapa saat lagi.",
+    "lanjutkanReset": "Verifikasi kode kamu sudah berhasil, tapi password belum sempat diganti. Selesaikan sekarang untuk mengamankan akunmu.",
+    "batalkan": "Batalkan & kembali ke Masuk"
   },
   "scan": {
     "judulSheet": "Scan Struk",
