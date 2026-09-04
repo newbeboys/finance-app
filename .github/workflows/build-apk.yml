@@ -1,7 +1,11 @@
-name: Build AAB
+name: Build AAB & APK
 
 on:
   push:
+    branches: [ main, master ]
+  # APK untuk test manual di perangkat: AAB tidak bisa di-sideload, dan tanpa
+  # trigger ini branch/PR tidak pernah menghasilkan artifact sama sekali.
+  pull_request:
     branches: [ main, master ]
   workflow_dispatch:
 
@@ -42,7 +46,11 @@ jobs:
       - name: Decode keystore
         run: echo "${{ secrets.KEYSTOREBASE64 }}" | base64 --decode > android/app/financeapp-release.keystore
 
-      - name: Build AAB (signed release)
+      # assembleRelease dipakai bersama bundleRelease: keduanya memakai buildType
+      # release yang sama (minifyEnabled false, signingConfig dari env di
+      # app/build.gradle), jadi APK yang keluar berperilaku sama dengan AAB rilis
+      # — bedanya APK bisa langsung di-install ke perangkat untuk test.
+      - name: Build AAB + APK (signed release)
         env:
           KEYSTORE_PATH: financeapp-release.keystore
           KEYSTOREPASSWORD: ${{ secrets.KEYSTOREPASSWORD }}
@@ -51,7 +59,7 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew bundleRelease
+          ./gradlew bundleRelease assembleRelease
 
       - name: Cleanup keystore
         if: always()
@@ -62,4 +70,12 @@ jobs:
         with:
           name: finance-app-release
           path: android/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 30
+
+      # Artifact inilah yang di-download untuk test manual di HP.
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: finance-app-release-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
           retention-days: 30
