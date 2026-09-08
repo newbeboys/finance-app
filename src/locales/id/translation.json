@@ -725,6 +725,121 @@
       "deleteFailed": "Gagal menghapus"
     }
   },
+  "paywall": {
+    "title": "Fitur Khusus Pro",
+    "descFeature": "{{feature}} adalah fitur khusus Pro.",
+    "descGeneric": "Fitur ini khusus untuk pengguna Pro.",
+    "descSuffix": "Tingkatkan ke Pro untuk membuka fitur ini tanpa batas.",
+    "understand": "Mengerti",
+    "feature": {
+      "walletTambahan": "Wallet / Dompet tambahan",
+      "goalsTambahan": "Goals / Tabungan tambahan",
+      "scanNota": "Scan Nota",
+      "moneyIq": "Money IQ",
+      "transaksiBerulang": "Transaksi berulang",
+      "temaFontIni": "Tema font ini",
+      "tabungan": "Tabungan",
+      "laporanUnduh": "Unduh laporan PDF/Excel",
+      "kategoriKustomTambahan": "Kategori kustom tambahan",
+      "hutangPiutangTanpaBatas": "Hutang / Piutang tanpa batas"
+    },
+    "message": {
+      "transaksiLimit": "Penggunaan transaksi sudah maksimal bulan ini. Upgrade ke Pro untuk fleksibilitas tanpa batas.",
+      "anggaranLimit": "Penggunaan anggaran sudah maksimal. Upgrade ke Pro untuk fleksibilitas tanpa batas."
+    }
+  },
+  "subscription": {
+    "section": {
+      "eyebrow": "Langganan",
+      "title": "Akun & Paket"
+    },
+    "compare": {
+      "plan": {
+        "monthly": "Monthly",
+        "sixMonths": "6 Bulan",
+        "annual": "Tahunan"
+      },
+      "period": {
+        "monthly": "/bulan",
+        "sixMonths": "/6 bln",
+        "annual": "/tahun"
+      },
+      "perMonthApprox": "≈ {{price}}/bln",
+      "table": {
+        "feature": "Fitur"
+      },
+      "feature": {
+        "transaksi": { "label": "Transaksi", "basic": "75/bulan" },
+        "kustomKategori": { "label": "Custom kategori", "basic": "Maks. 3" },
+        "dompet": { "label": "Dompet", "basic": "1 dompet" },
+        "goalsTabungan": { "label": "Goals tabungan", "basic": "Maks. 2" },
+        "anggaran": { "label": "Anggaran", "basic": "Maks. 7" },
+        "hutangPiutang": { "label": "Hutang/Piutang", "basic": "Maks. 5 aktif" },
+        "transaksiBerulang": { "label": "Transaksi berulang" },
+        "laporanPdfExcel": { "label": "Laporan PDF / Excel", "basic": "Preview saja" },
+        "scanNota": { "label": "Scan nota" },
+        "moneyIq": { "label": "Money IQ" },
+        "temaFontPremium": { "label": "Tema font premium", "basic": "2 tema", "pro": "Semua tema" },
+        "widgetLayarUtama": { "label": "Widget layar utama" }
+      },
+      "unlimited": "Tak terbatas",
+      "cta": "Mulai Pro — {{price}}{{period}}",
+      "hideToggle": "Sembunyikan perbandingan fitur ▲",
+      "showToggle": "Lihat perbandingan fitur Basic vs Pro ▼"
+    },
+    "upgrade": {
+      "title": "Upgrade ke Pro",
+      "webOnlyDesc": "Upgrade ke Pro saat ini hanya tersedia lewat aplikasi Android.",
+      "downloadPlayStore": "Download di Play Store",
+      "later": "Nanti Saja",
+      "limitUsed": "{{currentLimit}}/{{maxLimit}} terpakai",
+      "period": {
+        "monthly": "/bulan",
+        "sixMonths": "/6 bulan",
+        "annual": "/tahun"
+      },
+      "saveBadge": "HEMAT {{percent}}%",
+      "perMonthApprox": "≈ {{price}}/bulan",
+      "confirm": "Upgrade Sekarang",
+      "processing": "Memproses...",
+      "terms": "Perpanjang otomatis sesuai plan. Batalkan kapan saja di Settings."
+    },
+    "status": {
+      "billing": {
+        "monthly": "Monthly · {{price}}/bulan",
+        "sixMonths": "6-Month · {{price}}/6 bulan",
+        "annual": "Tahunan · {{price}}/tahun"
+      },
+      "renews": "Perpanjang {{date}}",
+      "descPro": "Akses penuh: laporan PDF/Excel, scan nota, transaksi berulang, Money IQ, dan semua tema font.",
+      "descBasic": "Beberapa fitur dibatasi. Upgrade ke Pro untuk akses tanpa batas.",
+      "pricing": {
+        "monthly": "Monthly — {{price}}/bulan",
+        "sixMonths": "6-Month — {{price}}",
+        "annual": "Annual — {{price}}"
+      },
+      "save": "hemat {{percent}}%",
+      "manage": "Kelola Langganan",
+      "cancel": "Batalkan Langganan",
+      "cancelAlert": "Hubungi support untuk membatalkan langganan.",
+      "upgradeCta": "Upgrade ke Pro"
+    },
+    "restore": {
+      "idle": "Pulihkan Pembelian",
+      "loading": "Memeriksa...",
+      "success": "✓ Berhasil dipulihkan",
+      "noSubscription": "Tidak ada langganan untuk dipulihkan",
+      "error": "Gagal memeriksa — coba lagi",
+      "webOnly": "Upgrade lewat aplikasi Android"
+    },
+    "purchase": {
+      "offeringsFailed": "Gagal memuat paket — coba lagi.",
+      "offeringUnavailable": "Penawaran tidak tersedia saat ini.",
+      "packageNotFound": "Paket tidak ditemukan. Coba restart app.",
+      "success": "Selamat! Kamu kini pengguna Pro 🎉",
+      "failed": "Pembelian gagal. Coba lagi nanti."
+    }
+  },
   "auth": {
     "selamatDatang": "Selamat datang",
     "masukUntukLanjutkan": "Masuk untuk melanjutkan ke akunmu",

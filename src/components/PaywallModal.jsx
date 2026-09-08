@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { useScrollLock } from '../hooks/useScrollLock';
 
 // ── Paywall (Fitur Khusus Pro) ─────────────────────────────────────
@@ -7,14 +8,17 @@ import { useScrollLock } from '../hooks/useScrollLock';
 // sampai Google Play Billing diimplementasikan di fase berikutnya.
 //
 // Pakai lewat context supaya bisa dipicu dari mana saja (hook data,
-// halaman, modal) tanpa prop-drilling:
+// halaman, modal) tanpa prop-drilling. Nama fitur & pesan kustom WAJIB
+// dilewatkan lewat t() di sisi pemanggil supaya ikut berganti bahasa —
+// PaywallModal sendiri hanya merangkai kalimat pembungkusnya:
 //
 //   const { openPaywall } = usePaywall();
-//   openPaywall('Scan Nota');   // → "Scan Nota adalah fitur khusus Pro."
+//   const { t } = useTranslation();
+//   openPaywall(t('paywall.feature.scanNota'));   // → "Scan Nota adalah fitur khusus Pro."
 //
 // Untuk pesan kustom (mis. limit kuota tercapai) oper objek dengan
 // `message` — modal & visual tetap sama, hanya teks deskripsi diganti:
-//   openPaywall({ message: 'Penggunaan transaksi sudah maksimal bulan ini. ...' });
+//   openPaywall({ message: t('paywall.message.transaksiLimit') });
 
 const PaywallContext = React.createContext({
   openPaywall: () => {},
@@ -70,6 +74,7 @@ export function LockBadge() {
 // Modal presentational. Dark/light aware via CSS vars yang sudah ada.
 // Terima `open` (dipakai provider) atau `isOpen` (sesuai spec) — alias.
 export function PaywallModal({ open, isOpen, featureName, message, onClose }) {
+  const { t } = useTranslation();
   const visible = open ?? isOpen ?? false;
   useScrollLock(visible);
 
@@ -87,8 +92,8 @@ export function PaywallModal({ open, isOpen, featureName, message, onClose }) {
   const desc = message
     ? message
     : (featureName
-        ? `${featureName} adalah fitur khusus Pro.`
-        : 'Fitur ini khusus untuk pengguna Pro.');
+        ? t('paywall.descFeature', { feature: featureName })
+        : t('paywall.descGeneric'));
 
   return (
     <div
@@ -135,11 +140,11 @@ export function PaywallModal({ open, isOpen, featureName, message, onClose }) {
         </div>
 
         <div className="serif" style={{ fontSize: 24, letterSpacing: '-0.01em', color: 'var(--ink)' }}>
-          Fitur Khusus Pro
+          {t('paywall.title')}
         </div>
         <div style={{ fontSize: 13.5, color: 'var(--muted)', marginTop: 10, lineHeight: 1.55 }}>
           {desc}
-          {!message && <>{' '}Tingkatkan ke Pro untuk membuka fitur ini tanpa batas.</>}
+          {!message && <>{' '}{t('paywall.descSuffix')}</>}
         </div>
 
         <button
@@ -151,7 +156,7 @@ export function PaywallModal({ open, isOpen, featureName, message, onClose }) {
             cursor: 'pointer', fontFamily: 'inherit',
           }}
         >
-          Mengerti
+          {t('paywall.understand')}
         </button>
       </div>
     </div>

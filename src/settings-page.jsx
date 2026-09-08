@@ -277,7 +277,7 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub, s
   // ── Akun & Paket (Basic / Pro) ──────────────────────────────────
   const recurringEnabled = limits ? limits.recurringTransactionsEnabled : true;
   const openRecurring = () => {
-    if (!recurringEnabled) { openPaywall('Transaksi berulang'); return; }
+    if (!recurringEnabled) { openPaywall(tr('paywall.feature.transaksiBerulang')); return; }
     setShowRecurring(true);
   };
 
@@ -301,7 +301,7 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub, s
       // RevenueCat cuma jalan di Android — jangan panggil rc.getOfferings()/purchasePackage()
       // di web sama sekali (UpgradeModal sendiri sudah tidak menawarkan opsi ini di web,
       // guard ini jaga-jaga kalau handleSelectPlan terpanggil lewat jalur lain).
-      showPurchaseToast(false, 'Upgrade lewat aplikasi Android');
+      showPurchaseToast(false, tr('subscription.restore.webOnly'));
       return;
     }
     const pkgIdentifier = RC_PACKAGE_MAP[planId];
@@ -311,17 +311,17 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub, s
     try {
       const offerings = await rc.getOfferings?.();
       if (!offerings) {
-        showPurchaseToast(false, 'Gagal memuat paket — coba lagi.');
+        showPurchaseToast(false, tr('subscription.purchase.offeringsFailed'));
         return;
       }
       const offering = offerings.all?.['default'] || offerings.current;
       if (!offering) {
-        showPurchaseToast(false, 'Penawaran tidak tersedia saat ini.');
+        showPurchaseToast(false, tr('subscription.purchase.offeringUnavailable'));
         return;
       }
       const pkg = offering.availablePackages?.find(p => p.identifier === pkgIdentifier);
       if (!pkg) {
-        showPurchaseToast(false, 'Paket tidak ditemukan. Coba restart app.');
+        showPurchaseToast(false, tr('subscription.purchase.packageNotFound'));
         return;
       }
 
@@ -333,10 +333,10 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub, s
 
       setShowUpgradeModal(false);
       await sub.refresh?.();
-      showPurchaseToast(true, 'Selamat! Kamu kini pengguna Pro 🎉');
+      showPurchaseToast(true, tr('subscription.purchase.success'));
     } catch (err) {
       console.error('[handleSelectPlan] purchase error:', err);
-      showPurchaseToast(false, err?.message || 'Pembelian gagal. Coba lagi nanti.');
+      showPurchaseToast(false, err?.message || tr('subscription.purchase.failed'));
     } finally {
       setPurchaseBusy(false);
     }
@@ -346,7 +346,7 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub, s
     if (!Capacitor.isNativePlatform()) {
       // Guard langsung di depan panggilan rc.restorePurchases() — RestorePurchaseButton
       // sudah tidak memanggil onRestore di web, ini lapisan jaga-jaga tambahan.
-      throw new Error('Upgrade lewat aplikasi Android');
+      throw new Error(tr('subscription.restore.webOnly'));
     }
     const customerInfo = await rc.restorePurchases?.();
     const hasPro = customerInfo?.entitlements?.active?.['pro'] !== undefined;
@@ -409,13 +409,13 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub, s
 
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {/* Akun & Paket (Basic / Pro) */}
-        <SettingCard eyebrow="Langganan" title="Akun & Paket">
+        <SettingCard eyebrow={tr('subscription.section.eyebrow')} title={tr('subscription.section.title')}>
           <SubscriptionStatus
             isPro={isPro}
             billingCycle={sub.billingCycle}
             expiresAt={sub.expiresAt}
             onUpgrade={() => setShowUpgradeModal(true)}
-            onCancel={isPro ? () => alert('Hubungi support untuk membatalkan langganan.') : undefined}
+            onCancel={isPro ? () => alert(tr('subscription.status.cancelAlert')) : undefined}
           />
 
           {!isPro && (
@@ -428,7 +428,7 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub, s
             style={{ marginTop: 12, cursor: 'pointer', textAlign: 'center', fontSize: 12.5, color: 'var(--muted)', textDecoration: 'underline' }}
             onClick={() => setShowFeatureComparison(v => !v)}
           >
-            {showFeatureComparison ? 'Sembunyikan perbandingan fitur ▲' : 'Lihat perbandingan fitur Basic vs Pro ▼'}
+            {showFeatureComparison ? tr('subscription.compare.hideToggle') : tr('subscription.compare.showToggle')}
           </div>
 
           {showFeatureComparison && (
@@ -520,7 +520,7 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub, s
                 const active = (t.fontTheme || 'modern-tech') === ft.id;
                 const allowed = isFontThemeAllowed(ft.id, limits);
                 const onPick = () => {
-                  if (!allowed) { openPaywall('Tema font ini'); return; }
+                  if (!allowed) { openPaywall(tr('paywall.feature.temaFontIni')); return; }
                   setTweak('fontTheme', ft.id);
                 };
                 return (
@@ -659,7 +659,7 @@ export function SettingsPage({ t, setTweak, user, notifSubs, onToggleNotifSub, s
             {limits?.aiInsightsEnabled === false ? (
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ fontSize: 10, background: "color-mix(in oklch, var(--gold) 18%, var(--ivory))", color: "var(--gold)", border: "1px solid color-mix(in oklch, var(--gold) 40%, transparent)", borderRadius: 99, padding: "2px 8px", fontWeight: 600, letterSpacing: ".04em" }}>Pro</span>
-                <div onClick={() => openPaywall('Money IQ')} style={{ cursor: "pointer", opacity: 0.45, pointerEvents: "auto" }}>
+                <div onClick={() => openPaywall(tr('paywall.feature.moneyIq'))} style={{ cursor: "pointer", opacity: 0.45, pointerEvents: "auto" }}>
                   <Switch on={t.showAI !== false} onClick={() => {}} color="var(--gold)" />
                 </div>
               </div>

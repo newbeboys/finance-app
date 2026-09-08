@@ -379,7 +379,7 @@ export function InsightsCard({ transactions = [], customCategories = [], limits 
   // Fitur Pro: basic user melihat placeholder terkunci
   if (limits !== null && !limits.aiInsightsEnabled) {
     return (
-      <div className="card rise" onClick={() => openPaywall('Money IQ')}
+      <div className="card rise" onClick={() => openPaywall(tr('paywall.feature.moneyIq'))}
         style={{ padding: 22, cursor: "pointer", display: "flex", flexDirection: "column", gap: 10, minHeight: 180, justifyContent: "center" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontSize: 14 }}>🔒</span>

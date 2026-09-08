@@ -1,26 +1,33 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { fmt } from '../../data';
 import './FeatureComparison.css';
 
-const PLANS = [
-  { id: 'monthly', label: 'Monthly',  price: 30000,  perMonth: 30000, period: '/bulan', savePercent: null },
-  { id: '6months', label: '6 Bulan',  price: 140000, perMonth: 23333, period: '/6 bln', savePercent: 22 },
-  { id: 'annual',  label: 'Tahunan',  price: 270000, perMonth: 22500, period: '/tahun', savePercent: 25 },
-];
+function getPlans(t) {
+  return [
+    { id: 'monthly', label: t('subscription.compare.plan.monthly'), price: 30000,  perMonth: 30000, period: t('subscription.compare.period.monthly'),  savePercent: null },
+    { id: '6months', label: t('subscription.compare.plan.sixMonths'), price: 140000, perMonth: 23333, period: t('subscription.compare.period.sixMonths'), savePercent: 22 },
+    { id: 'annual',  label: t('subscription.compare.plan.annual'),   price: 270000, perMonth: 22500, period: t('subscription.compare.period.annual'),   savePercent: 25 },
+  ];
+}
 
-const FEATURES = [
-  { label: 'Transaksi',              basic: '75/bulan',      pro: 'Tak terbatas' },
-  { label: 'Custom kategori',        basic: 'Maks. 3',       pro: 'Tak terbatas' },
-  { label: 'Dompet',                 basic: '1 dompet',      pro: 'Tak terbatas' },
-  { label: 'Goals tabungan',         basic: 'Maks. 2',       pro: 'Tak terbatas' },
-  { label: 'Anggaran',               basic: 'Maks. 7',       pro: 'Tak terbatas' },
-  { label: 'Hutang/Piutang',         basic: 'Maks. 5 aktif', pro: 'Tak terbatas' },
-  { label: 'Transaksi berulang',     basic: false,            pro: true },
-  { label: 'Laporan PDF / Excel',    basic: 'Preview saja',  pro: true },
-  { label: 'Scan nota',              basic: false,            pro: true },
-  { label: 'Money IQ',               basic: false,            pro: true },
-  { label: 'Tema font premium',      basic: '2 tema',         pro: 'Semua tema' },
-  { label: 'Widget layar utama',     basic: false,            pro: true },
-];
+function getFeatures(t) {
+  const unlimited = t('subscription.compare.unlimited');
+  return [
+    { label: t('subscription.compare.feature.transaksi.label'),       basic: t('subscription.compare.feature.transaksi.basic'),       pro: unlimited },
+    { label: t('subscription.compare.feature.kustomKategori.label'),  basic: t('subscription.compare.feature.kustomKategori.basic'),  pro: unlimited },
+    { label: t('subscription.compare.feature.dompet.label'),          basic: t('subscription.compare.feature.dompet.basic'),          pro: unlimited },
+    { label: t('subscription.compare.feature.goalsTabungan.label'),   basic: t('subscription.compare.feature.goalsTabungan.basic'),   pro: unlimited },
+    { label: t('subscription.compare.feature.anggaran.label'),        basic: t('subscription.compare.feature.anggaran.basic'),        pro: unlimited },
+    { label: t('subscription.compare.feature.hutangPiutang.label'),   basic: t('subscription.compare.feature.hutangPiutang.basic'),   pro: unlimited },
+    { label: t('subscription.compare.feature.transaksiBerulang.label'), basic: false, pro: true },
+    { label: t('subscription.compare.feature.laporanPdfExcel.label'), basic: t('subscription.compare.feature.laporanPdfExcel.basic'), pro: true },
+    { label: t('subscription.compare.feature.scanNota.label'),        basic: false, pro: true },
+    { label: t('subscription.compare.feature.moneyIq.label'),         basic: false, pro: true },
+    { label: t('subscription.compare.feature.temaFontPremium.label'), basic: t('subscription.compare.feature.temaFontPremium.basic'), pro: t('subscription.compare.feature.temaFontPremium.pro') },
+    { label: t('subscription.compare.feature.widgetLayarUtama.label'), basic: false, pro: true },
+  ];
+}
 
 function Cell({ value }) {
   if (value === true)  return <span className="fc-check">✓</span>;
@@ -29,7 +36,10 @@ function Cell({ value }) {
 }
 
 export function FeatureComparison({ onSelectPlan, defaultPlan = 'annual' }) {
+  const { t } = useTranslation();
   const [selected, setSelected] = useState(defaultPlan);
+  const PLANS = getPlans(t);
+  const FEATURES = getFeatures(t);
   const active = PLANS.find(p => p.id === selected);
 
   return (
@@ -50,11 +60,11 @@ export function FeatureComparison({ onSelectPlan, defaultPlan = 'annual' }) {
       </div>
 
       <div className="fc-price-box">
-        <span className="fc-price serif">Rp {active.price.toLocaleString('id-ID')}</span>
+        <span className="fc-price serif">{fmt(active.price)}</span>
         <span className="fc-period">{active.period}</span>
         {active.perMonth !== active.price && (
           <span className="fc-per-month">
-            ≈ Rp {active.perMonth.toLocaleString('id-ID')}/bln
+            {t('subscription.compare.perMonthApprox', { price: fmt(active.perMonth) })}
           </span>
         )}
       </div>
@@ -62,7 +72,7 @@ export function FeatureComparison({ onSelectPlan, defaultPlan = 'annual' }) {
       <table className="fc-table">
         <thead>
           <tr>
-            <th className="fc-th fc-th-feat">Fitur</th>
+            <th className="fc-th fc-th-feat">{t('subscription.compare.table.feature')}</th>
             <th className="fc-th fc-th-tier">Basic</th>
             <th className="fc-th fc-th-tier fc-pro-col">Pro</th>
           </tr>
@@ -83,7 +93,7 @@ export function FeatureComparison({ onSelectPlan, defaultPlan = 'annual' }) {
           className="fc-cta"
           onClick={() => onSelectPlan(selected, active)}
         >
-          Mulai Pro — Rp {active.price.toLocaleString('id-ID')}{active.period}
+          {t('subscription.compare.cta', { price: fmt(active.price), period: active.period })}
         </button>
       )}
     </div>

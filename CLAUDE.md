@@ -74,4 +74,23 @@ Category values on `transactions`/`budgets` rows are either a built-in code (`fo
 
 ### i18n
 
-`react-i18next`, locale strings in `src/locales/{en,id}/translation.json`. Bahasa Indonesia is the default/primary language throughout the app.
+`react-i18next` (`src/i18n.js`), locale strings in `src/locales/{en,id}/translation.json`, Bahasa Indonesia is the default/primary language. Coverage is **partial, not app-wide** — a full-migration effort (branch `chore/i18n-full-migration`) is moving the remaining hardcoded clusters over one at a time:
+
+1. ✅ Hutang/Piutang — `debts-page.jsx`, `components/debts/AddDebtModal.jsx`, `components/debts/DebtDetailSheet.jsx`, `hooks/useDebts.js`.
+2. ✅ Paywall & Subscription — `components/PaywallModal.jsx`, `components/subscription/*` (`FeatureComparison.jsx`, `SubscriptionStatus.jsx`, `UpgradeModal.jsx`, `RestorePurchaseButton.jsx`), plus every `openPaywall()` call site (feature-name/message args) across `app.jsx`, `widgets.jsx`, `settings-page.jsx`, `savings-page.jsx`, `reports.jsx`, and the `useWallets`/`useTransactions`/`useSavings`/`useCustomCategories`/`useBudgets` hooks.
+3. ⬜ Category modals — `components/EditCategoryModal.jsx`, `components/DeleteCategoryModal.jsx`, `components/IconColorPicker.jsx`.
+4. ⬜ Report content — `buildReportDoc()` (PDF template, inside `reports.jsx`) and `report-excel.js` (Excel sheet/column labels).
+
+Outside this 4-cluster plan, `components/MonthYearPicker.jsx`, `components/SplashScreen.jsx`, `tweaks-panel.jsx`, and the built-in category/wallet-type labels in `data.jsx` are also still hardcoded Bahasa Indonesia and not currently scheduled.
+
+Don't assume a page is translated because most of the app is; check for `useTranslation`/`t()` in that specific file before relying on it.
+
+## Documentation maintenance
+
+Whenever you change architecture, the database schema, or add/change a feature — or discover a fact that contradicts what's written in this file or in a `teknis_*.md` file — update the relevant doc(s) before ending that work session, without waiting to be asked again:
+
+- Database/migration changes → update `teknis_arsitektur-database.md`.
+- Feature/tier/gating changes → update `teknis_fitur-dan-tier.md`.
+- Infrastructure/roadmap decisions → update `teknis_keputusan-infrastruktur-roadmap.md`.
+- If you find this CLAUDE.md itself stating something inaccurate (e.g. an overgeneralized claim that actually has exceptions), fix the sentence immediately — don't leave a false claim standing.
+- Keep it terse: 1-3 sentences per change, not a long report.

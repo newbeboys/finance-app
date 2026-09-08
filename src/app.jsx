@@ -648,20 +648,20 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
   // Wallet/goal: cek limit SEBELUM membuka form supaya form tak terbuka
   // sia-sia (hook tetap punya guard otoritatif sebagai jaring pengaman).
   const handleAddAcct = React.useCallback(() => {
-    if (accounts.length >= (limits?.maxWallets ?? Infinity)) { openPaywall('Wallet / Dompet tambahan'); return; }
+    if (accounts.length >= (limits?.maxWallets ?? Infinity)) { openPaywall(t('paywall.feature.walletTambahan')); return; }
     setAddAcct(true);
-  }, [accounts.length, limits, openPaywall]);
+  }, [accounts.length, limits, openPaywall, t]);
 
   const handleAddGoal = React.useCallback(() => {
-    if (goals.length >= (limits?.maxSavingsGoals ?? Infinity)) { openPaywall('Goals / Tabungan tambahan'); return; }
+    if (goals.length >= (limits?.maxSavingsGoals ?? Infinity)) { openPaywall(t('paywall.feature.goalsTambahan')); return; }
     setAddGoal(true);
-  }, [goals.length, limits, openPaywall]);
+  }, [goals.length, limits, openPaywall, t]);
 
   // Scan nota (OCR): Basic → PaywallModal, scanner tidak terbuka.
   const handleScan = React.useCallback(() => {
-    if (!limits?.receiptScanEnabled) { openPaywall('Scan Nota'); return; }
+    if (!limits?.receiptScanEnabled) { openPaywall(t('paywall.feature.scanNota')); return; }
     setScanOpen(true);
-  }, [limits, openPaywall]);
+  }, [limits, openPaywall, t]);
 
   // Deposit + deteksi goal mencapai 100% (dari belum tercapai) → overlay perayaan
   const handleDeposit = React.useCallback(async (id, amount) => {

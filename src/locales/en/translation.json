@@ -725,6 +725,121 @@
       "deleteFailed": "Failed to delete"
     }
   },
+  "paywall": {
+    "title": "Pro-Only Feature",
+    "descFeature": "{{feature}} is a Pro-only feature.",
+    "descGeneric": "This feature is exclusive to Pro users.",
+    "descSuffix": "Upgrade to Pro to unlock this feature without limits.",
+    "understand": "Got it",
+    "feature": {
+      "walletTambahan": "Additional wallets",
+      "goalsTambahan": "Additional savings goals",
+      "scanNota": "Receipt Scan",
+      "moneyIq": "Money IQ",
+      "transaksiBerulang": "Recurring transactions",
+      "temaFontIni": "This font theme",
+      "tabungan": "Savings",
+      "laporanUnduh": "Download PDF/Excel report",
+      "kategoriKustomTambahan": "Additional custom categories",
+      "hutangPiutangTanpaBatas": "Unlimited debts / receivables"
+    },
+    "message": {
+      "transaksiLimit": "You've reached this month's transaction limit. Upgrade to Pro for unlimited flexibility.",
+      "anggaranLimit": "You've reached the budget limit. Upgrade to Pro for unlimited flexibility."
+    }
+  },
+  "subscription": {
+    "section": {
+      "eyebrow": "Subscription",
+      "title": "Account & Plan"
+    },
+    "compare": {
+      "plan": {
+        "monthly": "Monthly",
+        "sixMonths": "6 Months",
+        "annual": "Annual"
+      },
+      "period": {
+        "monthly": "/mo",
+        "sixMonths": "/6mo",
+        "annual": "/yr"
+      },
+      "perMonthApprox": "≈ {{price}}/mo",
+      "table": {
+        "feature": "Feature"
+      },
+      "feature": {
+        "transaksi": { "label": "Transactions", "basic": "75/month" },
+        "kustomKategori": { "label": "Custom category", "basic": "Max. 3" },
+        "dompet": { "label": "Wallet", "basic": "1 wallet" },
+        "goalsTabungan": { "label": "Savings goals", "basic": "Max. 2" },
+        "anggaran": { "label": "Budget", "basic": "Max. 7" },
+        "hutangPiutang": { "label": "Debts/Receivables", "basic": "Max. 5 active" },
+        "transaksiBerulang": { "label": "Recurring transactions" },
+        "laporanPdfExcel": { "label": "PDF / Excel Report", "basic": "Preview only" },
+        "scanNota": { "label": "Receipt scan" },
+        "moneyIq": { "label": "Money IQ" },
+        "temaFontPremium": { "label": "Premium font theme", "basic": "2 themes", "pro": "All themes" },
+        "widgetLayarUtama": { "label": "Home screen widget" }
+      },
+      "unlimited": "Unlimited",
+      "cta": "Start Pro — {{price}}{{period}}",
+      "hideToggle": "Hide feature comparison ▲",
+      "showToggle": "See Basic vs Pro comparison ▼"
+    },
+    "upgrade": {
+      "title": "Upgrade to Pro",
+      "webOnlyDesc": "Upgrading to Pro is currently only available through the Android app.",
+      "downloadPlayStore": "Download on Play Store",
+      "later": "Maybe Later",
+      "limitUsed": "{{currentLimit}}/{{maxLimit}} used",
+      "period": {
+        "monthly": "/mo",
+        "sixMonths": "/6mo",
+        "annual": "/yr"
+      },
+      "saveBadge": "SAVE {{percent}}%",
+      "perMonthApprox": "≈ {{price}}/mo",
+      "confirm": "Upgrade Now",
+      "processing": "Processing...",
+      "terms": "Auto-renews per plan. Cancel anytime in Settings."
+    },
+    "status": {
+      "billing": {
+        "monthly": "Monthly · {{price}}/mo",
+        "sixMonths": "6-Month · {{price}}/6mo",
+        "annual": "Annual · {{price}}/yr"
+      },
+      "renews": "Renews {{date}}",
+      "descPro": "Full access: PDF/Excel reports, receipt scan, recurring transactions, Money IQ, and all font themes.",
+      "descBasic": "Some features are limited. Upgrade to Pro for unlimited access.",
+      "pricing": {
+        "monthly": "Monthly — {{price}}/mo",
+        "sixMonths": "6-Month — {{price}}",
+        "annual": "Annual — {{price}}"
+      },
+      "save": "save {{percent}}%",
+      "manage": "Manage Subscription",
+      "cancel": "Cancel Subscription",
+      "cancelAlert": "Contact support to cancel your subscription.",
+      "upgradeCta": "Upgrade to Pro"
+    },
+    "restore": {
+      "idle": "Restore Purchase",
+      "loading": "Checking...",
+      "success": "✓ Restored successfully",
+      "noSubscription": "No subscription to restore",
+      "error": "Check failed — try again",
+      "webOnly": "Upgrade via the Android app"
+    },
+    "purchase": {
+      "offeringsFailed": "Failed to load plans — please try again.",
+      "offeringUnavailable": "No offers available right now.",
+      "packageNotFound": "Package not found. Try restarting the app.",
+      "success": "Congratulations! You're now a Pro user 🎉",
+      "failed": "Purchase failed. Please try again later."
+    }
+  },
   "auth": {
     "selamatDatang": "Welcome back",
     "masukUntukLanjutkan": "Sign in to continue to your account",

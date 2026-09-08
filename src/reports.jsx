@@ -868,7 +868,7 @@ function ReportPreview({ previewMeta, transactions, customCategories, accounts, 
   const p = payload;
 
   const handleDownload = async () => {
-    if (!canExport) { openPaywall('Unduh laporan PDF/Excel'); return; }
+    if (!canExport) { openPaywall(tr('paywall.feature.laporanUnduh')); return; }
     setDownloading(true);
     try {
       if (selectedFormat === 'pdf') await downloadPdf(p);
@@ -1062,7 +1062,7 @@ export function ReportsPage({ transactions = [], customCategories = [], canExpor
   // Gate unduh laporan (PDF/Excel) — fitur khusus Pro. Basic → PaywallModal,
   // generator tidak pernah jalan.
   const requestDownload = (payload) => {
-    if (!canExport) { openPaywall('Unduh laporan PDF/Excel'); return; }
+    if (!canExport) { openPaywall(tr('paywall.feature.laporanUnduh')); return; }
     setDownloadTarget(payload);
   };
 
