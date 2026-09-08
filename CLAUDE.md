@@ -78,8 +78,8 @@ Category values on `transactions`/`budgets` rows are either a built-in code (`fo
 
 1. ✅ Hutang/Piutang — `debts-page.jsx`, `components/debts/AddDebtModal.jsx`, `components/debts/DebtDetailSheet.jsx`, `hooks/useDebts.js`.
 2. ✅ Paywall & Subscription — `components/PaywallModal.jsx`, `components/subscription/*` (`FeatureComparison.jsx`, `SubscriptionStatus.jsx`, `UpgradeModal.jsx`, `RestorePurchaseButton.jsx`), plus every `openPaywall()` call site (feature-name/message args) across `app.jsx`, `widgets.jsx`, `settings-page.jsx`, `savings-page.jsx`, `reports.jsx`, and the `useWallets`/`useTransactions`/`useSavings`/`useCustomCategories`/`useBudgets` hooks.
-3. ⬜ Category modals — `components/EditCategoryModal.jsx`, `components/DeleteCategoryModal.jsx`, `components/IconColorPicker.jsx`.
-4. ⬜ Report content — `buildReportDoc()` (PDF template, inside `reports.jsx`) and `report-excel.js` (Excel sheet/column labels).
+3. ✅ Category modals — `components/EditCategoryModal.jsx`, `components/DeleteCategoryModal.jsx`, `components/IconColorPicker.jsx`. Also fixed a mixed-language bug found during this migration: `EditCategoryModal.jsx`'s confirm button hardcoded the English string `'Confirm Edit'` inside an otherwise-Indonesian sentence; it now reads `category.edit.confirmButton`, which is a full Indonesian translation ("Konfirmasi Edit") in the `id` locale.
+4. ⬜ Report content — `buildReportDoc()` (PDF template, inside `reports.jsx`) and `report-excel.js` (Excel sheet/column labels). Last remaining cluster.
 
 Outside this 4-cluster plan, `components/MonthYearPicker.jsx`, `components/SplashScreen.jsx`, `tweaks-panel.jsx`, and the built-in category/wallet-type labels in `data.jsx` are also still hardcoded Bahasa Indonesia and not currently scheduled.
 

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '../supabase';
 import { useScrollLock } from '../hooks/useScrollLock';
 import { CUSTOM_COLORS } from '../category-field';
@@ -12,6 +13,7 @@ function fmtDate(d) {
 }
 
 export function EditCategoryModal({ open, category, userId, onClose }) {
+  const { t } = useTranslation();
   useScrollLock(open);
 
   const [name, setName] = React.useState('');
@@ -109,7 +111,7 @@ export function EditCategoryModal({ open, category, userId, onClose }) {
     }
 
     const nextDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    setToast(`Kategori berhasil diubah. Edit berikutnya bisa dilakukan setelah ${fmtDate(nextDate)}.`);
+    setToast(t('category.edit.successToast', { date: fmtDate(nextDate) }));
     setLoading(false);
 
     setTimeout(() => {
@@ -147,15 +149,15 @@ export function EditCategoryModal({ open, category, userId, onClose }) {
         }}
       >
         <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 8, letterSpacing: '.04em', textTransform: 'uppercase' }}>
-          Edit Kategori
+          {t('category.edit.eyebrow')}
         </div>
         <div className="serif" style={{ fontSize: 20, color: 'var(--ink)', marginBottom: 20, letterSpacing: '-0.01em' }}>
-          Ubah &ldquo;{category.label}&rdquo;
+          {t('category.edit.confirmTitle', { label: category.label })}
         </div>
 
         {/* Cooldown state */}
         {cooldown === null && (
-          <div style={{ fontSize: 13, color: 'var(--muted)', textAlign: 'center', padding: '16px 0' }}>Memeriksa…</div>
+          <div style={{ fontSize: 13, color: 'var(--muted)', textAlign: 'center', padding: '16px 0' }}>{t('category.edit.checking')}</div>
         )}
 
         {cooldown?.isOnCooldown && (
@@ -166,9 +168,9 @@ export function EditCategoryModal({ open, category, userId, onClose }) {
               border: '1px solid color-mix(in oklch, var(--gold) 30%, transparent)',
               borderRadius: 10, padding: '12px 14px', marginBottom: 20,
             }}>
-              Anda sudah edit kategori pada <strong>{fmtDate(cooldown.lastEditDate)}</strong>.<br />
-              Coba lagi setelah <strong>{cooldown.daysRemaining} hari</strong> ({fmtDate(cooldown.nextEditDate)}).<br /><br />
-              Butuh fleksibilitas lebih? Upgrade ke Pro untuk hapus &amp; buat kategori unlimited.
+              {t('category.edit.cooldownNotice.editedOn')} <strong>{fmtDate(cooldown.lastEditDate)}</strong>.<br />
+              {t('category.edit.cooldownNotice.retryAfter')} <strong>{t('category.edit.cooldownNotice.daysRemaining', { count: cooldown.daysRemaining })}</strong> ({fmtDate(cooldown.nextEditDate)}).<br /><br />
+              {t('category.edit.cooldownNotice.upgradeHint')}
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
               <button
@@ -179,7 +181,7 @@ export function EditCategoryModal({ open, category, userId, onClose }) {
                   fontSize: 14, color: 'var(--ink-2)', cursor: 'pointer', fontFamily: 'inherit',
                 }}
               >
-                Mengerti
+                {t('category.edit.understood')}
               </button>
             </div>
           </div>
@@ -193,42 +195,42 @@ export function EditCategoryModal({ open, category, userId, onClose }) {
               border: '1px solid color-mix(in oklch, var(--gold) 25%, transparent)',
               borderRadius: 8, padding: '8px 12px', marginBottom: 16,
             }}>
-              ⚠ Edit kategori punya cooldown 1 bulan setelah perubahan.
+              {t('category.edit.cooldownHint')}
             </div>
 
             <div style={{ display: 'grid', gap: 12 }}>
               <div>
                 <span style={{ display: 'block', fontSize: 11, color: 'var(--muted)', letterSpacing: '.05em', textTransform: 'uppercase', marginBottom: 6 }}>
-                  Nama Kategori
+                  {t('category.edit.nameLabel')}
                 </span>
                 <input
                   autoFocus
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Nama kategori"
+                  placeholder={t('category.edit.namePlaceholder')}
                   style={inputStyle}
                 />
               </div>
 
               <div>
                 <span style={{ display: 'block', fontSize: 11, color: 'var(--muted)', letterSpacing: '.05em', textTransform: 'uppercase', marginBottom: 6 }}>
-                  Jenis
+                  {t('category.edit.typeLabel')}
                 </span>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  {['expense', 'income'].map((t) => (
+                  {['expense', 'income'].map((opt) => (
                     <button
-                      key={t}
+                      key={opt}
                       type="button"
-                      onClick={() => setType(t)}
+                      onClick={() => setType(opt)}
                       style={{
                         flex: 1, padding: '10px', borderRadius: 10, fontSize: 13, fontFamily: 'inherit',
-                        cursor: 'pointer', border: type === t ? '2px solid var(--ink)' : '1px solid var(--line-soft)',
-                        background: type === t ? 'var(--ivory)' : 'var(--paper)',
-                        color: type === t ? 'var(--ink)' : 'var(--muted)',
-                        fontWeight: type === t ? 600 : 400,
+                        cursor: 'pointer', border: type === opt ? '2px solid var(--ink)' : '1px solid var(--line-soft)',
+                        background: type === opt ? 'var(--ivory)' : 'var(--paper)',
+                        color: type === opt ? 'var(--ink)' : 'var(--muted)',
+                        fontWeight: type === opt ? 600 : 400,
                       }}
                     >
-                      {t === 'expense' ? 'Pengeluaran' : 'Pemasukan'}
+                      {opt === 'expense' ? t('transaksi.pengeluaran') : t('transaksi.pemasukan')}
                     </button>
                   ))}
                 </div>
@@ -236,7 +238,7 @@ export function EditCategoryModal({ open, category, userId, onClose }) {
 
               <div>
                 <span style={{ display: 'block', fontSize: 11, color: 'var(--muted)', letterSpacing: '.05em', textTransform: 'uppercase', marginBottom: 6 }}>
-                  Ikon &amp; Warna
+                  {t('category.edit.iconColorLabel')}
                 </span>
                 <button
                   type="button"
@@ -254,7 +256,7 @@ export function EditCategoryModal({ open, category, userId, onClose }) {
                   }}>
                     <CatIcon kind={icon} size={14} />
                   </span>
-                  Ikon &amp; warna dipilih
+                  {t('kategori.ikonWarnaDipilih')}
                 </button>
 
                 <IconColorPicker
@@ -277,7 +279,7 @@ export function EditCategoryModal({ open, category, userId, onClose }) {
                   fontSize: 14, color: 'var(--ink-2)', cursor: 'pointer', fontFamily: 'inherit',
                 }}
               >
-                Batal
+                {t('umum.batal')}
               </button>
               <button
                 onClick={handleConfirm}
@@ -289,7 +291,7 @@ export function EditCategoryModal({ open, category, userId, onClose }) {
                   color: (loading || !name.trim()) ? 'var(--muted-2)' : 'var(--cream)',
                 }}
               >
-                {loading ? 'Menyimpan…' : 'Confirm Edit'}
+                {loading ? t('umum.menyimpan') : t('category.edit.confirmButton')}
               </button>
             </div>
           </div>

@@ -210,6 +210,36 @@
     "hutang": "Hutang",
     "hutang_bayar": "Pembayaran Hutang"
   },
+  "category": {
+    "icon": {
+      "pickTitle": "Pilih Ikon & Warna"
+    },
+    "delete": {
+      "eyebrow": "Hapus Kategori",
+      "confirmTitle": "Hapus “{{label}}”?",
+      "warning": "Transaksi lama yang memakai kategori ini tetap aman, tapi kategori tidak bisa dipilih untuk transaksi baru. Slot kuota akan terbuka kembali.",
+      "deleting": "Menghapus…"
+    },
+    "edit": {
+      "eyebrow": "Edit Kategori",
+      "confirmTitle": "Ubah “{{label}}”",
+      "checking": "Memeriksa…",
+      "cooldownNotice": {
+        "editedOn": "Anda sudah edit kategori pada",
+        "retryAfter": "Coba lagi setelah",
+        "daysRemaining": "{{count}} hari",
+        "upgradeHint": "Butuh fleksibilitas lebih? Upgrade ke Pro untuk hapus & buat kategori unlimited."
+      },
+      "understood": "Mengerti",
+      "cooldownHint": "⚠ Edit kategori punya cooldown 1 bulan setelah perubahan.",
+      "nameLabel": "Nama Kategori",
+      "namePlaceholder": "Nama kategori",
+      "typeLabel": "Jenis",
+      "iconColorLabel": "Ikon & Warna",
+      "confirmButton": "Konfirmasi Edit",
+      "successToast": "Kategori berhasil diubah. Edit berikutnya bisa dilakukan setelah {{date}}."
+    }
+  },
   "tabungan": {
     "target": "Target Tabungan",
     "tambah": "Tambah Tabungan",

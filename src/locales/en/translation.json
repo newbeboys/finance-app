@@ -210,6 +210,36 @@
     "hutang": "Debt",
     "hutang_bayar": "Debt Payment"
   },
+  "category": {
+    "icon": {
+      "pickTitle": "Choose Icon & Color"
+    },
+    "delete": {
+      "eyebrow": "Delete Category",
+      "confirmTitle": "Delete “{{label}}”?",
+      "warning": "Old transactions using this category remain safe, but it can no longer be selected for new transactions. The quota slot will open back up.",
+      "deleting": "Deleting…"
+    },
+    "edit": {
+      "eyebrow": "Edit Category",
+      "confirmTitle": "Edit “{{label}}”",
+      "checking": "Checking…",
+      "cooldownNotice": {
+        "editedOn": "You already edited this category on",
+        "retryAfter": "Try again after",
+        "daysRemaining": "{{count}} days",
+        "upgradeHint": "Need more flexibility? Upgrade to Pro to delete & create unlimited categories."
+      },
+      "understood": "Got it",
+      "cooldownHint": "⚠ Editing a category has a 1-month cooldown after each change.",
+      "nameLabel": "Category Name",
+      "namePlaceholder": "Category name",
+      "typeLabel": "Type",
+      "iconColorLabel": "Icon & Color",
+      "confirmButton": "Confirm Edit",
+      "successToast": "Category updated successfully. You can edit it again after {{date}}."
+    }
+  },
   "tabungan": {
     "target": "Savings Goal",
     "tambah": "Add Savings",

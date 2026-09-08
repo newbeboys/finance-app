@@ -1,7 +1,9 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { useScrollLock } from '../hooks/useScrollLock';
 
 export function DeleteCategoryModal({ open, category, onClose, onConfirm }) {
+  const { t } = useTranslation();
   useScrollLock(open);
   const [loading, setLoading] = React.useState(false);
 
@@ -42,14 +44,13 @@ export function DeleteCategoryModal({ open, category, onClose, onConfirm }) {
         }}
       >
         <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 12, letterSpacing: '.04em', textTransform: 'uppercase' }}>
-          Hapus Kategori
+          {t('category.delete.eyebrow')}
         </div>
         <div className="serif" style={{ fontSize: 20, color: 'var(--ink)', marginBottom: 12, letterSpacing: '-0.01em' }}>
-          Hapus &ldquo;{category.label}&rdquo;?
+          {t('category.delete.confirmTitle', { label: category.label })}
         </div>
         <div style={{ fontSize: 13.5, color: 'var(--muted)', lineHeight: 1.55 }}>
-          Transaksi lama yang memakai kategori ini tetap aman, tapi kategori tidak bisa dipilih untuk transaksi baru.
-          Slot kuota akan terbuka kembali.
+          {t('category.delete.warning')}
         </div>
 
         <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
@@ -62,7 +63,7 @@ export function DeleteCategoryModal({ open, category, onClose, onConfirm }) {
               fontSize: 14, color: 'var(--ink-2)', cursor: 'pointer', fontFamily: 'inherit',
             }}
           >
-            Batal
+            {t('umum.batal')}
           </button>
           <button
             onClick={handleConfirm}
@@ -74,7 +75,7 @@ export function DeleteCategoryModal({ open, category, onClose, onConfirm }) {
               opacity: loading ? 0.7 : 1,
             }}
           >
-            {loading ? 'Menghapus…' : 'Hapus'}
+            {loading ? t('category.delete.deleting') : t('umum.hapus')}
           </button>
         </div>
       </div>
