@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { fmt } from './data';
 import { IconPlus } from './icons';
 import { useIsMobile } from './use-mobile';
@@ -19,26 +20,28 @@ function plusDaysISO(n) {
 function daysBetween(fromISO, toISOstr) {
   return Math.round((new Date(toISOstr + 'T00:00:00') - new Date(fromISO + 'T00:00:00')) / 86400000);
 }
-function dueBadge(due_date, status) {
+// `t` dioper sebagai argumen (bukan dipanggil di sini via useTranslation) karena
+// ini fungsi biasa di luar komponen, bukan render function.
+function dueBadge(t, due_date, status) {
   if (!due_date || status === 'paid') return null;
   const today = todayISO();
-  if (due_date < today)           return { label: 'Lewat tempo', color: 'var(--terra)' };
-  if (due_date <= plusDaysISO(3)) return { label: 'Segera',      color: 'var(--gold)' };
+  if (due_date < today)           return { label: t('debts.badge.overdue'), color: 'var(--terra)' };
+  if (due_date <= plusDaysISO(3)) return { label: t('debts.badge.dueSoon'), color: 'var(--gold)' };
   return null;
 }
-
-const TABS = [
-  { id: 'receivable', label: 'Piutang' },
-  { id: 'payable',    label: 'Hutang' },
-  { id: 'paid',       label: 'Lunas' },
-];
 
 export default function DebtsPage({
   debts = [], loading,
   createDebt, addPayment, markPaid, deleteDebt, getPayments,
   wallets = [], isPro,
 }) {
+  const { t } = useTranslation();
   const isMobile = useIsMobile();
+  const TABS = [
+    { id: 'receivable', label: t('debts.badge.receivable') },
+    { id: 'payable',    label: t('debts.badge.payable') },
+    { id: 'paid',       label: t('debts.badge.paid') },
+  ];
   const [activeTab, setActiveTab] = React.useState('receivable');
   const [showAdd, setShowAdd] = React.useState(false);
   const [selectedId, setSelectedId] = React.useState(null);
@@ -89,14 +92,14 @@ export default function DebtsPage({
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 22 }}>
         <div>
           <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>
-            {activeDebts.length} catatan aktif
+            {t('debts.summary.activeCount', { count: activeDebts.length })}
           </div>
           <h2 className="serif" style={{ fontSize: isMobile ? 26 : 34, margin: "4px 0 0", letterSpacing: "-0.015em" }}>
-            Hutang &amp; Piutang
+            {t('debts.title')}
           </h2>
           {!isMobile && (
             <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 6, maxWidth: 540, lineHeight: 1.5 }}>
-              Catat uang yang kamu pinjamkan (piutang) dan yang kamu pinjam (hutang). Saldo dompet ikut menyesuaikan otomatis.
+              {t('debts.subtitle')}
             </div>
           )}
         </div>
@@ -105,7 +108,7 @@ export default function DebtsPage({
           onClick={() => setShowAdd(true)}
           style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, cursor: "pointer" }}
         >
-          <IconPlus size={15} /> Catatan Baru
+          <IconPlus size={15} /> {t('debts.action.newRecord')}
         </button>
       </div>
 
@@ -117,11 +120,11 @@ export default function DebtsPage({
             return (
               <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "12px 14px", background: "color-mix(in oklch, var(--terra) 10%, var(--paper))", border: "1px solid color-mix(in oklch, var(--terra) 30%, var(--line-soft))", borderRadius: 12 }}>
                 <span style={{ flex: "1 1 220px", fontSize: 13, color: "var(--ink)" }}>
-                  ⚠ Kamu telat membayar <strong>{d.person_name}</strong> {n} hari
+                  {t('debts.banner.late', { name: d.person_name, days: n })}
                 </span>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={() => openDetail(d.id, true)} style={{ padding: "7px 12px", background: "var(--terra)", color: "#fff", border: 0, borderRadius: 9, fontSize: 12.5, fontWeight: 500, cursor: "pointer" }}>Bayar sekarang</button>
-                  <button onClick={() => dismissBanner(d.id)} style={{ padding: "7px 12px", background: "transparent", border: "1px solid var(--line-soft)", borderRadius: 9, fontSize: 12.5, color: "var(--ink-2)", cursor: "pointer" }}>Nanti</button>
+                  <button onClick={() => openDetail(d.id, true)} style={{ padding: "7px 12px", background: "var(--terra)", color: "#fff", border: 0, borderRadius: 9, fontSize: 12.5, fontWeight: 500, cursor: "pointer" }}>{t('debts.action.payNow')}</button>
+                  <button onClick={() => dismissBanner(d.id)} style={{ padding: "7px 12px", background: "transparent", border: "1px solid var(--line-soft)", borderRadius: 9, fontSize: 12.5, color: "var(--ink-2)", cursor: "pointer" }}>{t('debts.action.later')}</button>
                 </div>
               </div>
             );
@@ -133,15 +136,15 @@ export default function DebtsPage({
       <div className="card rise" style={{ padding: isMobile ? 18 : 24, marginBottom: 20 }}>
         <div style={{ display: "flex", gap: isMobile ? 20 : 40, flexWrap: "wrap" }}>
           <div style={{ flex: "1 1 160px" }}>
-            <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Total Piutang</div>
+            <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{t('debts.summary.totalReceivable')}</div>
             <div className="serif tnum" style={{ fontSize: isMobile ? 24 : 30, letterSpacing: "-0.02em", marginTop: 4, color: "var(--sage)" }}>{fmt(totalReceivable)}</div>
-            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>Uang kamu di orang lain</div>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>{t('debts.summary.totalReceivableHint')}</div>
           </div>
           <div style={{ width: 1, background: "var(--line-soft)", alignSelf: "stretch" }} />
           <div style={{ flex: "1 1 160px" }}>
-            <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>Total Hutang</div>
+            <div style={{ fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{t('debts.summary.totalPayable')}</div>
             <div className="serif tnum" style={{ fontSize: isMobile ? 24 : 30, letterSpacing: "-0.02em", marginTop: 4, color: "var(--terra)" }}>{fmt(totalPayable)}</div>
-            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>Yang harus kamu bayar</div>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>{t('debts.summary.totalPayableHint')}</div>
           </div>
         </div>
       </div>
@@ -169,21 +172,21 @@ export default function DebtsPage({
 
       {/* ── List ── */}
       {loading ? (
-        <div style={{ padding: "48px 0", textAlign: "center", color: "var(--muted)", fontSize: 14 }}>Memuat…</div>
+        <div style={{ padding: "48px 0", textAlign: "center", color: "var(--muted)", fontSize: 14 }}>{t('umum.memuat')}</div>
       ) : list.length === 0 ? (
         <div className="card" style={{ padding: 40, textAlign: "center", color: "var(--muted)", fontSize: 13.5, lineHeight: 1.5 }}>
           {activeTab === 'paid'
-            ? 'Belum ada catatan yang lunas.'
+            ? t('debts.empty.paid')
             : activeTab === 'receivable'
-              ? 'Belum ada piutang. Tekan "Catatan Baru" untuk mencatat uang yang kamu pinjamkan.'
-              : 'Belum ada hutang. Tekan "Catatan Baru" untuk mencatat uang yang kamu pinjam.'}
+              ? t('debts.empty.receivable')
+              : t('debts.empty.payable')}
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {list.map(d => {
             // Catatan terkunci: sembunyikan badge jatuh tempo (tak ada urgensi
             // karena user tidak bisa aksi apapun) dan redupkan tampilannya.
-            const badge = d.is_locked ? null : dueBadge(d.due_date, d.status);
+            const badge = d.is_locked ? null : dueBadge(t, d.due_date, d.status);
             const pct = d.amount > 0 ? Math.min(d.paid / d.amount, 1) : 0;
             return (
               <div key={d.id} onClick={() => openDetail(d.id)} className="card rise" style={{ padding: 16, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", cursor: "pointer", opacity: d.is_locked ? 0.6 : 1 }}>
@@ -191,16 +194,16 @@ export default function DebtsPage({
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ fontSize: 15, fontWeight: 600 }}>{d.person_name}</span>
                     {d.is_locked && (
-                      <span style={{ fontSize: 10.5, fontWeight: 600, color: "#fff", background: "rgba(42,44,32,.72)", borderRadius: 99, padding: "2px 8px", display: "inline-flex", alignItems: "center", gap: 4 }}>🔒 Terkunci</span>
+                      <span style={{ fontSize: 10.5, fontWeight: 600, color: "#fff", background: "rgba(42,44,32,.72)", borderRadius: 99, padding: "2px 8px", display: "inline-flex", alignItems: "center", gap: 4 }}>{t('debts.badge.locked')}</span>
                     )}
                     {d.type === 'receivable' && !d.cash_disbursed_at_creation && (
-                      <span title="Uang belum berpindah — baru akan tercatat saat orangnya membayar" style={{ fontSize: 10.5, fontWeight: 600, color: "var(--gold)", border: "1px solid var(--gold)", borderRadius: 99, padding: "1px 8px", display: "inline-flex", alignItems: "center", gap: 4 }}>📋 Belum Ditagih</span>
+                      <span title={t('debts.badge.notYetBilledHint')} style={{ fontSize: 10.5, fontWeight: 600, color: "var(--gold)", border: "1px solid var(--gold)", borderRadius: 99, padding: "1px 8px", display: "inline-flex", alignItems: "center", gap: 4 }}>{t('debts.badge.notYetBilled')}</span>
                     )}
                     {badge && (
                       <span style={{ fontSize: 10.5, fontWeight: 600, color: "#fff", background: badge.color, borderRadius: 99, padding: "2px 8px" }}>{badge.label}</span>
                     )}
                     {d.status === 'paid' && (
-                      <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--sage)", border: "1px solid var(--sage)", borderRadius: 99, padding: "1px 8px" }}>Lunas</span>
+                      <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--sage)", border: "1px solid var(--sage)", borderRadius: 99, padding: "1px 8px" }}>{t('debts.badge.paid')}</span>
                     )}
                   </div>
                   {d.note && <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.note}</div>}
@@ -210,7 +213,7 @@ export default function DebtsPage({
                 </div>
                 <div style={{ textAlign: "right", flex: "0 0 auto" }}>
                   <div className="tnum" style={{ fontSize: 15, fontWeight: 600 }}>{fmt(d.remaining)}</div>
-                  <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>dari {fmt(d.amount)}</div>
+                  <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>{t('debts.list.ofTotal', { total: fmt(d.amount) })}</div>
                 </div>
               </div>
             );
