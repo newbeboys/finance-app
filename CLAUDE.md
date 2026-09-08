@@ -74,16 +74,32 @@ Category values on `transactions`/`budgets` rows are either a built-in code (`fo
 
 ### i18n
 
-`react-i18next` (`src/i18n.js`), locale strings in `src/locales/{en,id}/translation.json`, Bahasa Indonesia is the default/primary language. Coverage is **partial, not app-wide** — a full-migration effort (branch `chore/i18n-full-migration`) is moving the remaining hardcoded clusters over one at a time:
+`react-i18next` (`src/i18n.js`), locale strings in `src/locales/{en,id}/translation.json`, Bahasa Indonesia is the default/primary language. The 4-cluster full-migration effort (branch `chore/i18n-full-migration`) is **complete (4/4)**:
 
 1. ✅ Hutang/Piutang — `debts-page.jsx`, `components/debts/AddDebtModal.jsx`, `components/debts/DebtDetailSheet.jsx`, `hooks/useDebts.js`.
 2. ✅ Paywall & Subscription — `components/PaywallModal.jsx`, `components/subscription/*` (`FeatureComparison.jsx`, `SubscriptionStatus.jsx`, `UpgradeModal.jsx`, `RestorePurchaseButton.jsx`), plus every `openPaywall()` call site (feature-name/message args) across `app.jsx`, `widgets.jsx`, `settings-page.jsx`, `savings-page.jsx`, `reports.jsx`, and the `useWallets`/`useTransactions`/`useSavings`/`useCustomCategories`/`useBudgets` hooks.
 3. ✅ Category modals — `components/EditCategoryModal.jsx`, `components/DeleteCategoryModal.jsx`, `components/IconColorPicker.jsx`. Also fixed a mixed-language bug found during this migration: `EditCategoryModal.jsx`'s confirm button hardcoded the English string `'Confirm Edit'` inside an otherwise-Indonesian sentence; it now reads `category.edit.confirmButton`, which is a full Indonesian translation ("Konfirmasi Edit") in the `id` locale.
-4. ⬜ Report content — `buildReportDoc()` (PDF template, inside `reports.jsx`) and `report-excel.js` (Excel sheet/column labels). Last remaining cluster.
+4. ✅ Report content — `reports.jsx` (`buildPayload()`, `buildReportDoc()` PDF template, `downloadPdf()` native autotable pass, `ExcelPreviewRenderer`, `ReportPreview`, `FormatPicker`) and `report-excel.js` (worksheet names, column headers, row labels, canvas chart titles/legends). Both files are module-level (not React components), so labels resolve via `i18n.t()` directly — same pattern as `useDebts.js` — collected into one local `T = { … }` const per function rather than inline `t()` calls inside template literals. Month names (`laporan.doc.monthsFull`/`monthsAbbr`) and dates follow the UI language; `monthsIndex()` therefore takes `i18n.language` as a `useMemo` dependency in `ReportsPage`.
 
-Outside this 4-cluster plan, `components/MonthYearPicker.jsx`, `components/SplashScreen.jsx`, `tweaks-panel.jsx`, and the built-in category/wallet-type labels in `data.jsx` are also still hardcoded Bahasa Indonesia and not currently scheduled.
+   In `report-excel.js`, worksheet names and the `Pemasukan`/`Pengeluaran` type labels are resolved **once** into `refs.sheetNames` / `refs.typeLabels` in `buildWorkbook()`, then reused for `addWorksheet()`, the cross-sheet formula references, the `SUMIFS` criteria, and the sheet-order array. Never write those literals anywhere else: a translated sheet name or type label that does not match its formula's string silently produces `#REF!` or a 0 total instead of an error. `sheetName()` enforces Excel's 31-char / illegal-character limits on the final name, and `sheetRef()`/`crit()` quote them for formulas.
+
+5. ✅ Built-in category & wallet-type labels (follow-up di luar rencana 4 klaster). Label di `data.jsx` (`CATEGORIES`, `INCOME_CATEGORIES`, `DEBT_TX_CATEGORIES`, `ACCOUNT_TYPES`) **tetap hardcode Bahasa Indonesia dan sengaja tidak diubah** — dia sekarang berfungsi sebagai `defaultValue` fallback. Yang berubah adalah titik render: semuanya lewat resolver.
+   - Kategori: `categoryLabel(cat, t)` di `category-field.jsx` → key `kategori.<id>` (terjemahan id/en sudah ada sejak klaster 3). Dipakai di `transactions.jsx`, `transactions-page.jsx`, `wallets.jsx`, `widgets.jsx`, `category-field.jsx`, dan (baru) `analytics.jsx`. `charts.jsx` (label tengah donut) dan `reports.jsx` memakai key yang sama secara inline.
+   - `reports.jsx`: helper `catLabelOf()` di `aggregate()`/`withLabels()` adalah **satu-satunya** sumber label kategori untuk PDF, file .xlsx, dan pratinjau Excel sekaligus — jadi ketiganya dijamin identik. Ini wajib: label kategori dipakai sebagai kriteria SUMIFS lintas-sheet di `report-excel.js` (kolom A sheet kategori harus sama persis dengan kolom C sheet Detail).
+   - **Kategori kustom milik user tidak pernah diterjemahkan** — id-nya UUID, tidak punya key `kategori.<uuid>`, jadi `defaultValue` mengembalikan nama simpanan apa adanya.
+   - Dompet: `typeLabelI18n(id, t)` di `wallets.jsx` (key `dompet.rekeningBank`/`eWallet`/`tunai`/`investasi`). `typeLabel()` yang lama **sengaja dipertahankan** khusus untuk `institution: institution.trim() || typeLabel(type)` — nilai itu ditulis ke DB, jadi tidak boleh ikut bahasa UI (kalau ikut, dompet yang dibuat saat UI English tersimpan "Bank Account" dan saat UI Indonesia "Rekening Bank" → data tidak konsisten antar-baris).
+
+Outside this plan, `components/MonthYearPicker.jsx`, `components/SplashScreen.jsx`, `tweaks-panel.jsx`, and the text `lib/widgetSync.js` pushes to the Android home-screen widget (its own `MONTHS_FULL`/`MONTHS_SHORT` plus category names read from `data.jsx`) are still hardcoded Bahasa Indonesia and not currently scheduled.
 
 Don't assume a page is translated because most of the app is; check for `useTranslation`/`t()` in that specific file before relying on it.
+
+### Currency: single-currency by design — never follows the UI language
+
+This app is **deliberately single-currency**. Money is always rendered as Rupiah with `id-ID` grouping (`Rp 1.234.567`) in **every** context, including when the UI language is English. This is a settled decision, not unfinished i18n work — do not "fix" it, and do not re-open it without the user explicitly asking.
+
+Locked, intentionally, and not to be migrated: `fmt`, `fmtSigned`, `formatNominal`, `fmtShort` in `data.jsx` (used across 22+ files); the local `rupiah()` helpers in `reports.jsx` (`buildReportDoc`, `downloadPdf`, `ExcelPreviewRenderer`) and `report-excel.js`; `rupiahShort()` and its `rb`/`jt`/`M` suffixes; and the `RP_FMT`/`PCT_FMT` Excel number formats (the literal `"Rp"` inside `RP_FMT` included). The rationale: those four `data.jsx` helpers are already locked to `id-ID` everywhere, so switching only the report money would mix two currency renderings on one screen — worse than the inconsistency it would try to fix.
+
+What *does* follow the UI language is separate from currency: text labels, and **dates** (including month names) via `toLocaleDateString(i18n.language === 'en' ? 'en-US' : 'id-ID', …)` — see `SubscriptionStatus.jsx` and `dateLocale()`/`longDate()` in `reports.jsx`.
 
 ## Documentation maintenance
 

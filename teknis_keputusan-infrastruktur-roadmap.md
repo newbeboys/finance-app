@@ -150,6 +150,35 @@ Kolom sensitif (`plan`, `expires_at`, RC fields) **hanya bisa diupdate** oleh Ed
 
 ---
 
+### 1.13 Single-Currency — Nominal Tidak Pernah Ikut Bahasa UI (9 September 2026)
+
+**Keputusan:** Aplikasi ini **sengaja single-currency**. Nominal uang selalu Rupiah dengan pemisah `id-ID` (`Rp 1.234.567`) di **semua** bahasa, termasuk saat UI di-set English. Ini keputusan final, bukan pekerjaan i18n yang belum selesai.
+
+**Alasan:** Empat helper format uang di `data.jsx` (`fmt`, `fmtSigned`, `formatNominal`, `fmtShort`) sudah terkunci `id-ID` dan dipakai di 22+ file. Kalau hanya sebagian (mis. laporan) yang diubah ikut bahasa, satu layar yang sama akan menampilkan dua gaya mata uang sekaligus — lebih buruk daripada inkonsistensi yang mau diperbaiki. Mengubah semuanya berarti mengubah makna angka (Rp → USD?) yang bukan cakupan aplikasi ini.
+
+**Yang terkunci dan TIDAK boleh dimigrasi:**
+- `fmt`, `fmtSigned`, `formatNominal`, `fmtShort` di `data.jsx`
+- `rupiah()` lokal di `reports.jsx` (`buildReportDoc`, `downloadPdf`, `ExcelPreviewRenderer`) dan `report-excel.js`
+- `rupiahShort()` beserta sufiks `rb`/`jt`/`M`
+- Format angka Excel `RP_FMT`/`PCT_FMT` (termasuk literal `"Rp"` di dalamnya)
+
+**Yang TETAP ikut bahasa UI (beda urusan dengan currency):** semua teks label, dan **tanggal + nama bulan** via `toLocaleDateString(i18n.language === 'en' ? 'en-US' : 'id-ID', …)` — lihat `SubscriptionStatus.jsx` dan `dateLocale()`/`longDate()` di `reports.jsx`.
+
+---
+
+### 1.14 Label Kategori: `id` Kanonik di DB, Terjemahan Hanya di Lapisan Tampilan (9 September 2026)
+
+**Keputusan:** Kolom `category` di `transactions`/`budgets` menyimpan **kode** (`food`, `salary`, …) atau UUID kategori kustom — tidak pernah teks label. Terjemahan terjadi murni saat render lewat resolver `categoryLabel(cat, t)` (`src/category-field.jsx`) yang membaca key `kategori.<id>`.
+
+**Alasan:** Label jadi murni presentasi, sehingga ganti bahasa tidak butuh migrasi data sama sekali. Array di `data.jsx` sengaja **tidak diubah** — label Indonesia di sana sekarang berfungsi sebagai `defaultValue` fallback, jadi titik render yang belum disambungkan tetap menampilkan teks lama (aman), bukan kosong/error.
+
+**Aturan turunan:**
+- **Kategori kustom milik user tidak pernah diterjemahkan** — id-nya UUID, tidak punya key `kategori.<uuid>`, jadi `defaultValue` mengembalikan nama simpanan apa adanya.
+- **Teks apa pun yang ditulis ke DB harus bebas bahasa UI.** Contoh nyata: `wallets.jsx` mengisi kolom `bank` dengan `typeLabel(type)` (Indonesia mentah), BUKAN `typeLabelI18n()` — lihat `teknis_arsitektur-database.md` tabel `wallets`.
+- Di `reports.jsx`, helper `catLabelOf()` di `aggregate()`/`withLabels()` adalah **satu-satunya** sumber label kategori untuk PDF, file .xlsx, dan pratinjau Excel — supaya ketiganya identik. Ini wajib karena label kategori dipakai sebagai kriteria SUMIFS lintas-sheet di `report-excel.js`.
+
+---
+
 ## 2. Hal yang Diketahui Belum Sempurna / TODO
 
 ### 2.1 Kolom `spent` dan `enabled` di Tabel `budgets` Tidak Dipakai
@@ -512,6 +541,12 @@ REVOKE EXECUTE ON FUNCTION public.set_plan_for_testing(uuid, text, timestamptz, 
 | 23 Juli | Migration `20260723010000_harden_functions_search_path_and_grants.sql` dibuat — fix search_path mutable, revoke/grant execute beberapa RPC, **fix blocker kritis `set_plan_for_testing`** | ❌ Belum di-push | Claude Code |
 | 23 Juli | Migration `20260723020000_revoke_rls_auto_enable_execute.sql` dibuat — hygiene revoke execute event trigger function | ❌ Belum di-push | Claude Code |
 | 23 Juli | Dokumentasi teknis diperbarui (arsitektur-database.md, keputusan-infrastruktur-roadmap.md, fitur-dan-tier.md) untuk mencatat investigasi & 3 migration baru di atas | ✅ Completed | Claude Code |
+| 8 Sep | Migrasi i18n klaster 1–3 (Hutang/Piutang, Paywall & Subscription, modal Kategori) di branch `chore/i18n-full-migration` | ✅ Pushed | Claude Code |
+| 9 Sep | **Klaster 4** — konten laporan: `reports.jsx` (buildPayload, buildReportDoc, downloadPdf, ExcelPreviewRenderer) + `report-excel.js` (nama sheet, header kolom, judul chart). Tanggal & nama bulan ikut bahasa UI | ✅ Committed | Claude Code |
+| 9 Sep | Keputusan §1.13: **single-currency final** — nominal selalu `Rp`/`id-ID` di semua bahasa. Rencana awal ganti "Rp"→"IDR" saat English DIBATALKAN | ✅ Documented | Boss Ali |
+| 9 Sep | **Klaster 5** — label kategori & tipe dompet bawaan disambungkan ke resolver yang sudah ada (`analytics.jsx` 4 titik, `charts.jsx` donut, `reports.jsx` `catLabelOf()`, `wallets.jsx` `typeLabelI18n()`). `data.jsx` 0 perubahan | ✅ Committed | Claude Code |
+| 9 Sep | Fix: key `beranda.wawasanAiProDesc` dipanggil kode tapi tidak ada di kedua locale (selalu fallback Indonesia) + CTA Money IQ hardcode → ditambahkan/diterjemahkan | ✅ Committed | Claude Code |
+| 9 Sep | Verifikasi Excel: workbook ID & EN dibuka di Microsoft Excel (COM), `CalculateFullRebuild` + edit baris data → SUMIFS lintas-sheet tetap benar, 0 sel error di kedua bahasa | ✅ Verified | Claude Code |
 
 ### Versi-Versi Sebelumnya
 - v2.5.6 (1 Juli): Deadline date picker & goal sorting

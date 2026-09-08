@@ -84,6 +84,7 @@
     "belumAdaPengeluaran": "No spending data yet",
     "pengeluaranMuncul": "Start adding transactions to see the breakdown by category",
     "kategoriLagi": "+ {{count}} more categories",
+    "wawasanAi": "Money IQ",
     "wawasanAiCounter": "Money IQ · {{idx}} of {{total}}",
     "belumAdaWawasan": "No Money IQ yet",
     "wawasanMuncul": "Add transactions and budgets so Money IQ can analyze your financial patterns",
@@ -97,7 +98,9 @@
     "aturAnggaran": "Set up budget",
     "diAtasAnggaran": "{{jumlah}} over budget",
     "ringkasanMingguan": "Weekly summary",
-    "mingguLalu": "Last week"
+    "mingguLalu": "Last week",
+    "wawasanAiProDesc": "Smart advice cards — spending analysis, saving tips, and forecasts for your finances.",
+    "wawasanAiProCta": "Tap to learn more →"
   },
   "insight": {
     "pengeluaranTerbesar": "Biggest expense: {{kategori}}",

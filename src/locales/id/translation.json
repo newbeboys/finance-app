@@ -84,6 +84,7 @@
     "belumAdaPengeluaran": "Belum ada data pengeluaran",
     "pengeluaranMuncul": "Mulai tambahkan transaksi untuk melihat rincian per kategori",
     "kategoriLagi": "+ {{count}} kategori lagi",
+    "wawasanAi": "Money IQ",
     "wawasanAiCounter": "Money IQ · {{idx}} dari {{total}}",
     "belumAdaWawasan": "Money IQ belum tersedia",
     "wawasanMuncul": "Tambahkan transaksi dan anggaran agar Money IQ bisa menganalisis pola keuanganmu",
@@ -97,7 +98,9 @@
     "aturAnggaran": "Atur anggaran",
     "diAtasAnggaran": "{{jumlah}} di atas anggaran",
     "ringkasanMingguan": "Ringkasan mingguan",
-    "mingguLalu": "Minggu lalu"
+    "mingguLalu": "Minggu lalu",
+    "wawasanAiProDesc": "Kartu saran cerdas — analisis pengeluaran, tips menabung, dan prediksi keuangan kamu.",
+    "wawasanAiProCta": "Tap untuk mengetahui lebih lanjut →"
   },
   "insight": {
     "pengeluaranTerbesar": "Pengeluaran terbesar: {{kategori}}",

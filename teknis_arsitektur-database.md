@@ -200,7 +200,7 @@ created_at      timestamptz     Auto-set
 id              uuid            PRIMARY KEY
 user_id         uuid            NOT NULL, FK → auth.users
 name            text            Nama dompet (tampil di UI)
-bank            text            Nama bank/institusi
+bank            text            Nama bank/institusi (field klien: `institution`)
 balance         numeric         Saldo — diupdate manual via adjustBalance()
 type            text            'bank' | 'ewallet' | 'cash' | 'investment'
 is_primary      boolean         Maksimal satu per user
@@ -209,6 +209,8 @@ last4           text            4 digit terakhir kartu (default '—')
 is_locked       boolean         true saat Basic user melebihi limit
 created_at      timestamptz
 ```
+
+⚠️ **Kolom `bank` tidak boleh diisi teks yang ikut bahasa UI.** Saat user tidak mengisi nama bank, `wallets.jsx` memakai `typeLabel(type)` — label tipe dompet versi **Bahasa Indonesia mentah** dari `ACCOUNT_TYPES`, BUKAN `typeLabelI18n()`. Kalau ikut bahasa UI, dompet yang dibuat saat UI English tersimpan `"Bank Account"` dan saat UI Indonesia `"Rekening Bank"` → nilai tidak konsisten antar-baris di database. Berlaku umum: **teks apa pun yang ditulis ke DB harus bebas bahasa UI.**
 
 **Saldo bukan dihitung:** Saldo **tidak** otomatis dari transaksi — tidak ada trigger Supabase. Diupdate client-side via `adjustBalance(walletId, delta)` setiap transaksi dibuat/diedit/dihapus. Atomik-safe: baca saldo dari state React (sudah realtime sync), hitung di client, tulis ke Supabase sekaligus.
 

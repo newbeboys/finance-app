@@ -159,7 +159,7 @@ export function SpendingDonut({ data, active, onHover, fmtFn = fmtShort }) {
       ))}
       <circle cx={cx} cy={cy} r={r - 1} fill="var(--ivory)" pointerEvents="none" />
       <text x={cx} y={cy - 6} textAnchor="middle" fontSize="10.5" fill="var(--muted)" fontFamily="Geist, sans-serif" letterSpacing="0.05em">
-        {top ? top.label.toUpperCase() : t('beranda.bulanIni').toUpperCase()}
+        {top ? t('kategori.' + top.id, { defaultValue: top.label }).toUpperCase() : t('beranda.bulanIni').toUpperCase()}
       </text>
       <text x={cx} y={cy + 18} textAnchor="middle" fontFamily="'Instrument Serif', serif" fontSize="24" fill="var(--ink)">
         {fmtFn(top ? top.amount : total)}

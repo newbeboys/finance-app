@@ -1,6 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { CATEGORIES, INCOME_CATEGORIES, fmtShort, formatNominal, nominalFontSize } from './data';
+import { categoryLabel } from './category-field';
 import { IconArrowDown } from './icons';
 import { SpendingDonut } from './charts';
 import { useScrollLock } from './hooks/useScrollLock';
@@ -367,7 +368,7 @@ export function AnalyticsPage({ transactions = [], customCategories = [], accoun
                     {incomeCats.slice(0, 6).map((c, i) => (
                       <span key={c.id} onMouseEnter={() => setHoverIncomeCat(i)} onMouseLeave={() => setHoverIncomeCat(null)}
                         style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "var(--ink-2)", cursor: "default" }}>
-                        <span style={{ width: 9, height: 9, borderRadius: 3, background: c.color }} /> {c.label}
+                        <span style={{ width: 9, height: 9, borderRadius: 3, background: c.color }} /> {categoryLabel(c, t)}
                       </span>
                     ))}
                   </div>
@@ -395,7 +396,7 @@ export function AnalyticsPage({ transactions = [], customCategories = [], accoun
                             style={{ background: hoverIncomeCat === i ? "var(--paper)" : "transparent" }}>
                             <td style={{ padding: "10px 0", borderBottom: i < incomeCats.length - 1 ? "1px solid var(--line-soft)" : 0 }}>
                               <span style={{ display: "inline-flex", alignItems: "center", gap: 9 }}>
-                                <span style={{ width: 9, height: 9, borderRadius: 3, background: c.color }} /> {c.label}
+                                <span style={{ width: 9, height: 9, borderRadius: 3, background: c.color }} /> {categoryLabel(c, t)}
                               </span>
                             </td>
                             <td className="tnum" style={{ textAlign: "right", padding: "10px 0", borderBottom: i < incomeCats.length - 1 ? "1px solid var(--line-soft)" : 0, fontWeight: 500 }}>{fmtShort(c.amount)}</td>
@@ -438,7 +439,7 @@ export function AnalyticsPage({ transactions = [], customCategories = [], accoun
                       {cats.slice(0, 6).map((c, i) => (
                         <span key={c.id} onMouseEnter={() => setHoverCat(i)} onMouseLeave={() => setHoverCat(null)}
                           style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "var(--ink-2)", cursor: "default" }}>
-                          <span style={{ width: 9, height: 9, borderRadius: 3, background: c.color }} /> {c.label}
+                          <span style={{ width: 9, height: 9, borderRadius: 3, background: c.color }} /> {categoryLabel(c, t)}
                         </span>
                       ))}
                     </div>
@@ -469,7 +470,7 @@ export function AnalyticsPage({ transactions = [], customCategories = [], accoun
                             style={{ background: hoverCat === i ? "var(--paper)" : "transparent" }}>
                             <td style={{ padding: "10px 0", borderBottom: i < cats.length - 1 ? "1px solid var(--line-soft)" : 0 }}>
                               <span style={{ display: "inline-flex", alignItems: "center", gap: 9 }}>
-                                <span style={{ width: 9, height: 9, borderRadius: 3, background: c.color }} /> {c.label}
+                                <span style={{ width: 9, height: 9, borderRadius: 3, background: c.color }} /> {categoryLabel(c, t)}
                               </span>
                             </td>
                             <td className="tnum" style={{ textAlign: "right", padding: "10px 0", borderBottom: i < cats.length - 1 ? "1px solid var(--line-soft)" : 0, fontWeight: 500 }}>{fmtShort(c.amount)}</td>
