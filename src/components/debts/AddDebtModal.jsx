@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { fmt } from '../../data';
 import { IconClose, IconCalendar } from '../../icons';
 import { DatePickerPopup } from '../../transactions';
@@ -22,6 +23,7 @@ const input = { width: '100%', padding: '11px 12px', background: 'var(--paper)',
 // Form tambah catatan piutang/hutang. onCreate = createDebt(input) dari useDebts,
 // mengembalikan { error, debtId, limitReached, cooldownBlocked, cooldownUntilDate }.
 export default function AddDebtModal({ open, onClose, onCreate, wallets = [] }) {
+  const { t } = useTranslation();
   useScrollLock(open);
   const { openPaywall } = usePaywall();
   const primaryId = React.useMemo(
@@ -74,10 +76,10 @@ export default function AddDebtModal({ open, onClose, onCreate, wallets = [] }) 
       cash_disbursed_at_creation: isReceivable ? cashDisbursed : true,
     });
     setSubmitting(false);
-    if (!res) { setErrorMsg('Gagal menyimpan catatan'); return; }
+    if (!res) { setErrorMsg(t('debts.error.saveFailed')); return; }
     if (res.limitReached) { onClose(); return; }        // paywall sudah dibuka oleh hook
     if (res.cooldownBlocked) { setCooldown({ date: res.cooldownUntilDate }); return; }
-    if (res.error) { setErrorMsg(res.error.message || 'Gagal menyimpan catatan'); return; }
+    if (res.error) { setErrorMsg(res.error.message || t('debts.error.saveFailed')); return; }
     onClose();
   };
 
@@ -88,8 +90,8 @@ export default function AddDebtModal({ open, onClose, onCreate, wallets = [] }) 
       <div className="card modal-sheet" onClick={e => e.stopPropagation()} style={{ width: 'min(480px, 100%)', maxHeight: '92vh', overflowY: 'auto', padding: 26, animation: 'rise .3s ease-out', boxShadow: '0 30px 80px -20px rgba(42,44,32,.4)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <div style={{ fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--muted)' }}>Catatan Baru</div>
-            <div className="serif" style={{ fontSize: 26, marginTop: 4, letterSpacing: '-0.01em' }}>Hutang &amp; Piutang</div>
+            <div style={{ fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--muted)' }}>{t('debts.action.newRecord')}</div>
+            <div className="serif" style={{ fontSize: 26, marginTop: 4, letterSpacing: '-0.01em' }}>{t('debts.title')}</div>
           </div>
           <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 10, border: '1px solid var(--line-soft)', background: 'var(--paper)', display: 'grid', placeItems: 'center', color: 'var(--ink-2)' }}>
             <IconClose size={14} />
@@ -98,7 +100,7 @@ export default function AddDebtModal({ open, onClose, onCreate, wallets = [] }) 
 
         {/* Toggle tipe */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, padding: 3, background: 'var(--paper)', border: '1px solid var(--line-soft)', borderRadius: 12, marginTop: 18 }}>
-          {[{ id: 'receivable', label: 'Piutang', hint: 'Meminjamkan' }, { id: 'payable', label: 'Hutang', hint: 'Meminjam' }].map(opt => {
+          {[{ id: 'receivable', label: t('debts.badge.receivable'), hint: t('debts.mode.lending') }, { id: 'payable', label: t('debts.badge.payable'), hint: t('debts.mode.borrowing') }].map(opt => {
             const on = type === opt.id;
             return (
               <button key={opt.id} onClick={() => setType(opt.id)}
@@ -114,8 +116,8 @@ export default function AddDebtModal({ open, onClose, onCreate, wallets = [] }) 
         {isReceivable && (
           <div style={{ marginTop: 14, padding: '2px 14px', background: 'var(--paper)', border: '1px solid var(--line-soft)', borderRadius: 12 }}>
             {[
-              { val: true,  label: 'Saya sudah kasih uang/barang duluan', desc: 'Transaksi & saldo dompet langsung disesuaikan sekarang.' },
-              { val: false, label: 'Ini baru tagihan, uang belum berpindah', desc: 'Saldo dompet baru disesuaikan saat orangnya membayar.' },
+              { val: true,  label: t('debts.mode.disbursedNowLabel'), desc: t('debts.mode.disbursedNowDesc') },
+              { val: false, label: t('debts.mode.billOnlyLabel'), desc: t('debts.mode.billOnlyDesc') },
             ].map((opt, i) => {
               const checked = cashDisbursed === opt.val;
               return (
@@ -145,12 +147,12 @@ export default function AddDebtModal({ open, onClose, onCreate, wallets = [] }) 
 
         <div style={{ display: 'grid', gap: 14, marginTop: 18 }}>
           <label>
-            <span style={fieldLabel}>{isReceivable ? 'Dipinjamkan ke' : 'Dipinjam dari'}</span>
-            <input value={personName} onChange={e => setPerson(e.target.value)} placeholder="Nama orang" style={input} />
+            <span style={fieldLabel}>{isReceivable ? t('debts.field.lentTo') : t('debts.field.borrowedFrom')}</span>
+            <input value={personName} onChange={e => setPerson(e.target.value)} placeholder={t('debts.field.personNamePlaceholder')} style={input} />
           </label>
 
           <label>
-            <span style={fieldLabel}>Jumlah</span>
+            <span style={fieldLabel}>{t('transaksi.jumlah')}</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, ...input, padding: 0, paddingLeft: 12 }}>
               <span style={{ color: 'var(--muted)', fontSize: 14 }}>Rp</span>
               <input value={amount ? num(amount).toLocaleString('id-ID') : ''} onChange={e => setAmount(e.target.value)} placeholder="0" inputMode="numeric"
@@ -160,7 +162,7 @@ export default function AddDebtModal({ open, onClose, onCreate, wallets = [] }) 
 
           {wallets.length > 0 && (
             <label>
-              <span style={fieldLabel}>Dompet</span>
+              <span style={fieldLabel}>{t('transaksi.dompet')}</span>
               <select value={walletId || ''} onChange={e => setWalletId(e.target.value)} style={input}>
                 {wallets.map(w => (
                   <option key={w.id} value={w.id}>{w.name} — {fmt(w.balance)}</option>
@@ -172,7 +174,7 @@ export default function AddDebtModal({ open, onClose, onCreate, wallets = [] }) 
           {/* Tanggal + jatuh tempo */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
-              <span style={fieldLabel}>Tanggal</span>
+              <span style={fieldLabel}>{t('transaksi.tanggal')}</span>
               <div style={{ position: 'relative' }}>
                 <button type="button" onClick={() => { setShowDate(v => !v); setShowDue(false); }}
                   style={{ ...input, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -186,12 +188,12 @@ export default function AddDebtModal({ open, onClose, onCreate, wallets = [] }) 
               </div>
             </div>
             <div>
-              <span style={fieldLabel}>Jatuh tempo</span>
+              <span style={fieldLabel}>{t('debts.field.dueDate')}</span>
               <div style={{ display: 'flex', gap: 6 }}>
                 <div style={{ position: 'relative', flex: 1 }}>
                   <button type="button" onClick={() => { setShowDue(v => !v); setShowDate(false); }}
                     style={{ ...input, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: dueISO ? 'var(--ink)' : 'var(--muted)' }}>
-                    <span>{dueISO ? fmtDateLabel(dueISO) : 'Opsional'}</span><IconCalendar size={15} />
+                    <span>{dueISO ? fmtDateLabel(dueISO) : t('debts.field.dueDateEmpty')}</span><IconCalendar size={15} />
                   </button>
                   {showDue && (
                     <DatePickerPopup valueISO={dueISO || dateISO}
@@ -200,7 +202,7 @@ export default function AddDebtModal({ open, onClose, onCreate, wallets = [] }) 
                   )}
                 </div>
                 {dueISO && (
-                  <button type="button" onClick={() => setDueISO(null)} title="Bersihkan"
+                  <button type="button" onClick={() => setDueISO(null)} title={t('debts.field.clearDueDate')}
                     style={{ flex: '0 0 auto', padding: '0 12px', background: 'var(--paper)', border: '1px solid var(--line-soft)', borderRadius: 10, color: 'var(--ink-2)', display: 'grid', placeItems: 'center', cursor: 'pointer' }}>
                     <IconClose size={13} />
                   </button>
@@ -210,8 +212,8 @@ export default function AddDebtModal({ open, onClose, onCreate, wallets = [] }) 
           </div>
 
           <label>
-            <span style={fieldLabel}>Keterangan (opsional)</span>
-            <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} placeholder="mis. pinjam buat servis motor"
+            <span style={fieldLabel}>{t('debts.field.noteOptional')}</span>
+            <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} placeholder={t('debts.field.notePlaceholder')}
               style={{ ...input, resize: 'vertical', minHeight: 44 }} />
           </label>
         </div>
@@ -220,11 +222,15 @@ export default function AddDebtModal({ open, onClose, onCreate, wallets = [] }) 
         {cooldown && (
           <div style={{ marginTop: 16, padding: 14, background: 'color-mix(in oklch, var(--gold) 12%, var(--paper))', border: '1px solid var(--line-soft)', borderRadius: 12 }}>
             <div style={{ fontSize: 13, color: 'var(--ink)', lineHeight: 1.5 }}>
-              Kamu sudah mencapai batas 5 catatan dalam 50 hari. Bisa buat lagi mulai <strong>{fmtDateLabel(cooldown.date) || cooldown.date}</strong>.
+              {t('debts.cooldown.message', { date: fmtDateLabel(cooldown.date) || cooldown.date })}
             </div>
+            {/* Nama fitur ini sengaja TIDAK dilewatkan lewat t() — kalimat pembungkusnya
+                di PaywallModal.jsx (klaster Paywall, belum di-i18n-kan) masih hardcode
+                Bahasa Indonesia; menerjemahkan cuma nama fiturnya akan bikin kalimat
+                campur bahasa. Akan dirapikan bareng saat klaster Paywall dikerjakan. */}
             <button onClick={() => openPaywall('Hutang / Piutang tanpa batas')}
               style={{ marginTop: 10, padding: '9px 14px', background: 'var(--ink)', color: 'var(--cream)', border: 0, borderRadius: 10, fontSize: 12.5, fontWeight: 500, cursor: 'pointer' }}>
-              Upgrade ke Pro
+              {t('debts.action.upgradeToPro')}
             </button>
           </div>
         )}
@@ -235,10 +241,10 @@ export default function AddDebtModal({ open, onClose, onCreate, wallets = [] }) 
         )}
 
         <div className="modal-actions" style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-          <button onClick={onClose} style={{ flex: 1, padding: '12px', background: 'var(--paper)', border: '1px solid var(--line-soft)', borderRadius: 12, fontSize: 14, color: 'var(--ink-2)', cursor: 'pointer', fontFamily: 'inherit' }}>Batal</button>
+          <button onClick={onClose} style={{ flex: 1, padding: '12px', background: 'var(--paper)', border: '1px solid var(--line-soft)', borderRadius: 12, fontSize: 14, color: 'var(--ink-2)', cursor: 'pointer', fontFamily: 'inherit' }}>{t('umum.batal')}</button>
           <button onClick={submit} disabled={!valid || submitting}
             style={{ flex: 2, padding: '12px', background: (valid && !submitting) ? 'var(--ink)' : 'var(--line-soft)', color: (valid && !submitting) ? 'var(--cream)' : 'var(--muted)', border: 0, borderRadius: 12, fontSize: 14, fontWeight: 500, cursor: (valid && !submitting) ? 'pointer' : 'default', fontFamily: 'inherit' }}>
-            {submitting ? 'Menyimpan…' : 'Simpan Catatan'}
+            {submitting ? t('umum.menyimpan') : t('debts.action.saveRecord')}
           </button>
         </div>
       </div>

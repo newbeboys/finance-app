@@ -625,6 +625,106 @@
     "buatdompet": "Buat dompet",
     "rekBankEwallet": "Rekening bank, e-wallet, tunai, atau investasi"
   },
+  "debts": {
+    "title": "Hutang & Piutang",
+    "subtitle": "Catat uang yang kamu pinjamkan (piutang) dan yang kamu pinjam (hutang). Saldo dompet ikut menyesuaikan otomatis.",
+    "badge": {
+      "receivable": "Piutang",
+      "payable": "Hutang",
+      "paid": "Lunas",
+      "locked": "🔒 Terkunci",
+      "notYetBilled": "📋 Belum Ditagih",
+      "notYetBilledHint": "Uang belum berpindah — baru akan tercatat saat orangnya membayar",
+      "overdue": "Lewat tempo",
+      "dueSoon": "Segera"
+    },
+    "summary": {
+      "activeCount": "{{count}} catatan aktif",
+      "totalReceivable": "Total Piutang",
+      "totalReceivableHint": "Uang kamu di orang lain",
+      "totalPayable": "Total Hutang",
+      "totalPayableHint": "Yang harus kamu bayar"
+    },
+    "banner": {
+      "late": "⚠ Kamu telat membayar {{name}} {{days}} hari"
+    },
+    "action": {
+      "newRecord": "Catatan Baru",
+      "payNow": "Bayar sekarang",
+      "later": "Nanti",
+      "saveRecord": "Simpan Catatan",
+      "receivePayment": "Terima Cicilan",
+      "makePayment": "Bayar Cicilan",
+      "markPaid": "Tandai Lunas",
+      "savePayment": "Simpan Cicilan",
+      "processing": "Memproses…",
+      "confirmMarkPaid": "Ya, Lunas",
+      "deleting": "Menghapus…",
+      "deleteRecord": "Hapus Catatan",
+      "upgradeToPro": "Upgrade ke Pro"
+    },
+    "list": {
+      "ofTotal": "dari {{total}}"
+    },
+    "empty": {
+      "paid": "Belum ada catatan yang lunas.",
+      "receivable": "Belum ada piutang. Tekan \"Catatan Baru\" untuk mencatat uang yang kamu pinjamkan.",
+      "payable": "Belum ada hutang. Tekan \"Catatan Baru\" untuk mencatat uang yang kamu pinjam."
+    },
+    "mode": {
+      "lending": "Meminjamkan",
+      "borrowing": "Meminjam",
+      "disbursedNowLabel": "Saya sudah kasih uang/barang duluan",
+      "disbursedNowDesc": "Transaksi & saldo dompet langsung disesuaikan sekarang.",
+      "billOnlyLabel": "Ini baru tagihan, uang belum berpindah",
+      "billOnlyDesc": "Saldo dompet baru disesuaikan saat orangnya membayar."
+    },
+    "field": {
+      "lentTo": "Dipinjamkan ke",
+      "borrowedFrom": "Dipinjam dari",
+      "personNamePlaceholder": "Nama orang",
+      "dueDate": "Jatuh tempo",
+      "dueDateEmpty": "Opsional",
+      "clearDueDate": "Bersihkan",
+      "noteOptional": "Keterangan (opsional)",
+      "notePlaceholder": "mis. pinjam buat servis motor",
+      "dueDateValue": "Jatuh tempo: {{date}}"
+    },
+    "cooldown": {
+      "message": "Kamu sudah mencapai batas 5 catatan dalam 50 hari. Bisa buat lagi mulai {{date}}."
+    },
+    "confirm": {
+      "markPaid": "Tandai catatan ini lunas? Sisa {{amount}} akan dicatat sebagai satu cicilan pelunasan.",
+      "deleteWarning": "Hapus catatan ini? Transaksi terkait akan dihapus dan saldo dikoreksi balik.",
+      "deleteCooldownWarning": "⚠️ Membatalkan hutang ini tidak membebaskan kuota cooldown 50 hari — tetap tidak bisa membuat catatan baru sampai jendela waktu berlalu."
+    },
+    "history": {
+      "title": "Riwayat Cicilan",
+      "empty": "Belum ada cicilan."
+    },
+    "toast": {
+      "paidOff": "Lunas 🎉"
+    },
+    "payment": {
+      "payoffNote": "Pelunasan"
+    },
+    "notice": {
+      "locked": "Catatan ini terkunci. Upgrade ke Pro untuk mengelola catatan ini kembali."
+    },
+    "error": {
+      "locked": "Catatan ini terkunci. Upgrade ke Pro untuk mengelolanya kembali.",
+      "saveFailed": "Gagal menyimpan catatan",
+      "amountRequired": "Jumlah harus lebih dari 0",
+      "personNameRequired": "Nama orang wajib diisi",
+      "createFailed": "Gagal membuat catatan",
+      "paymentAmountRequired": "Jumlah cicilan harus lebih dari 0",
+      "paymentExceedsRemaining": "Cicilan melebihi sisa hutang",
+      "paymentSaveFailed": "Gagal menyimpan cicilan",
+      "notFound": "Catatan tidak ditemukan",
+      "markPaidFailed": "Gagal menandai lunas",
+      "deleteFailed": "Gagal menghapus"
+    }
+  },
   "auth": {
     "selamatDatang": "Selamat datang",
     "masukUntukLanjutkan": "Masuk untuk melanjutkan ke akunmu",

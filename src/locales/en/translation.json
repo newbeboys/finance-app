@@ -625,6 +625,106 @@
     "buatdompet": "Create wallet",
     "rekBankEwallet": "Bank account, e-wallet, cash, or investment"
   },
+  "debts": {
+    "title": "Debts & Receivables",
+    "subtitle": "Track money you've lent (receivables) and borrowed (debts). Your wallet balance adjusts automatically.",
+    "badge": {
+      "receivable": "Receivable",
+      "payable": "Debt",
+      "paid": "Paid",
+      "locked": "🔒 Locked",
+      "notYetBilled": "📋 Not Yet Billed",
+      "notYetBilledHint": "Money hasn't changed hands yet — it'll only be recorded once they pay",
+      "overdue": "Overdue",
+      "dueSoon": "Due soon"
+    },
+    "summary": {
+      "activeCount": "{{count}} active records",
+      "totalReceivable": "Total Receivables",
+      "totalReceivableHint": "Money others owe you",
+      "totalPayable": "Total Debts",
+      "totalPayableHint": "What you need to pay"
+    },
+    "banner": {
+      "late": "⚠ You're {{days}} days late paying {{name}}"
+    },
+    "action": {
+      "newRecord": "New Record",
+      "payNow": "Pay now",
+      "later": "Later",
+      "saveRecord": "Save Record",
+      "receivePayment": "Receive Payment",
+      "makePayment": "Make Payment",
+      "markPaid": "Mark as Paid",
+      "savePayment": "Save Payment",
+      "processing": "Processing…",
+      "confirmMarkPaid": "Yes, Paid",
+      "deleting": "Deleting…",
+      "deleteRecord": "Delete Record",
+      "upgradeToPro": "Upgrade to Pro"
+    },
+    "list": {
+      "ofTotal": "of {{total}}"
+    },
+    "empty": {
+      "paid": "No paid-off records yet.",
+      "receivable": "No receivables yet. Tap \"New Record\" to log money you've lent.",
+      "payable": "No debts yet. Tap \"New Record\" to log money you've borrowed."
+    },
+    "mode": {
+      "lending": "Lending",
+      "borrowing": "Borrowing",
+      "disbursedNowLabel": "I already gave the money/item first",
+      "disbursedNowDesc": "The transaction & wallet balance are adjusted right away.",
+      "billOnlyLabel": "This is just a bill, money hasn't changed hands yet",
+      "billOnlyDesc": "The wallet balance only adjusts once they pay."
+    },
+    "field": {
+      "lentTo": "Lent to",
+      "borrowedFrom": "Borrowed from",
+      "personNamePlaceholder": "Person's name",
+      "dueDate": "Due date",
+      "dueDateEmpty": "Optional",
+      "clearDueDate": "Clear",
+      "noteOptional": "Note (optional)",
+      "notePlaceholder": "e.g. borrowed for a motorbike repair",
+      "dueDateValue": "Due date: {{date}}"
+    },
+    "cooldown": {
+      "message": "You've reached the limit of 5 records in 50 days. You can create another one starting {{date}}."
+    },
+    "confirm": {
+      "markPaid": "Mark this record as paid? The remaining {{amount}} will be recorded as one payoff installment.",
+      "deleteWarning": "Delete this record? The related transaction will be removed and the balance corrected back.",
+      "deleteCooldownWarning": "⚠️ Cancelling this debt doesn't free up the 50-day cooldown quota — you still can't create a new record until the time window passes."
+    },
+    "history": {
+      "title": "Payment History",
+      "empty": "No payments yet."
+    },
+    "toast": {
+      "paidOff": "Paid off 🎉"
+    },
+    "payment": {
+      "payoffNote": "Payoff"
+    },
+    "notice": {
+      "locked": "This record is locked. Upgrade to Pro to manage it again."
+    },
+    "error": {
+      "locked": "This record is locked. Upgrade to Pro to manage it again.",
+      "saveFailed": "Failed to save record",
+      "amountRequired": "Amount must be greater than 0",
+      "personNameRequired": "Person's name is required",
+      "createFailed": "Failed to create record",
+      "paymentAmountRequired": "Payment amount must be greater than 0",
+      "paymentExceedsRemaining": "Payment exceeds the remaining balance",
+      "paymentSaveFailed": "Failed to save payment",
+      "notFound": "Record not found",
+      "markPaidFailed": "Failed to mark as paid",
+      "deleteFailed": "Failed to delete"
+    }
+  },
   "auth": {
     "selamatDatang": "Welcome back",
     "masukUntukLanjutkan": "Sign in to continue to your account",

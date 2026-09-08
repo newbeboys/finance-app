@@ -2,6 +2,7 @@ import React from 'react';
 import { supabase } from '../supabase';
 import { usePaywall } from '../components/PaywallModal';
 import { logError } from '../lib/errorLogger';
+import i18n from '../i18n';
 
 // ════════════════════════════════════════════════════════════════════
 //  useDebts — logic layer fitur Catatan Hutang & Piutang
@@ -31,7 +32,9 @@ import { logError } from '../lib/errorLogger';
 // pada baris transactions. (Registrasi label/warna di data.jsx = pekerjaan
 // layer UI / Phase berikutnya; di sini cukup id string yang stabil.)
 // Pesan saat mencoba mengelola catatan yang terkunci (sisa downgrade Pro→Basic).
-const LOCKED_MSG = 'Catatan ini terkunci. Upgrade ke Pro untuk mengelolanya kembali.';
+// i18n: fungsi di bawah bukan komponen React (tidak bisa pakai useTranslation()),
+// jadi pesan-pesan ini di-resolve lewat i18n.t() langsung di titik pemakaian —
+// bukan konstanta modul-level — supaya tetap ikut bahasa aktif saat dipanggil.
 
 export const DEBT_CATEGORIES = {
   receivablePrincipal: 'piutang',        // meminjamkan uang  → expense
@@ -247,8 +250,8 @@ export function useDebts(userId, limits, ledger = {}) {
     }
 
     const absAmount = Math.abs(Number(input.amount) || 0);
-    if (absAmount <= 0) return { error: new Error('Jumlah harus lebih dari 0') };
-    if (!input.person_name?.trim()) return { error: new Error('Nama orang wajib diisi') };
+    if (absAmount <= 0) return { error: new Error(i18n.t('debts.error.amountRequired')) };
+    if (!input.person_name?.trim()) return { error: new Error(i18n.t('debts.error.personNameRequired')) };
 
     // Toggle mode pencatatan HANYA berlaku utk piutang (type='receivable').
     // Hutang (payable) selalu dianggap uang sudah berpindah saat dibuat — tidak
@@ -278,7 +281,7 @@ export function useDebts(userId, limits, ledger = {}) {
 
     if (dErr || !debtRow) {
       console.error('[useDebts] createDebt insert FAILED:', dErr?.code, dErr?.message);
-      return { error: dErr || new Error('Gagal membuat catatan') };
+      return { error: dErr || new Error(i18n.t('debts.error.createFailed')) };
     }
 
     // Piutang berupa tagihan yang belum dibayar: TIDAK ada uang yang berpindah
@@ -330,14 +333,14 @@ export function useDebts(userId, limits, ledger = {}) {
   // Output: { error, paymentId, isPaidOff }
   async function addPayment(debtId, payment) {
     const debt = debts.find(d => d.id === debtId);
-    if (!debt) return { error: new Error('Catatan tidak ditemukan') };
-    if (debt.is_locked) return { error: new Error(LOCKED_MSG) };
+    if (!debt) return { error: new Error(i18n.t('debts.error.notFound')) };
+    if (debt.is_locked) return { error: new Error(i18n.t('debts.error.locked')) };
 
     const absAmount = Math.abs(Number(payment.amount) || 0);
-    if (absAmount <= 0) return { error: new Error('Jumlah cicilan harus lebih dari 0') };
+    if (absAmount <= 0) return { error: new Error(i18n.t('debts.error.paymentAmountRequired')) };
     const remaining = debt.amount - debt.paid;
     if (absAmount > remaining + 1e-6) {
-      return { error: new Error('Cicilan melebihi sisa hutang') };
+      return { error: new Error(i18n.t('debts.error.paymentExceedsRemaining')) };
     }
 
     // 1) Transaksi cicilan tertaut
@@ -374,7 +377,7 @@ export function useDebts(userId, limits, ledger = {}) {
       // Rollback transaksi (state + DB) agar tak ada transaksi menggantung
       console.error('[useDebts] insert payment FAILED, rolling back tx:', pErr?.message);
       if (txId) await deleteTransaction?.(txId);
-      return { error: pErr || new Error('Gagal menyimpan cicilan') };
+      return { error: pErr || new Error(i18n.t('debts.error.paymentSaveFailed')) };
     }
 
     // 3) Update paid + status di DB
@@ -429,8 +432,8 @@ export function useDebts(userId, limits, ledger = {}) {
   // ── Tandai Lunas: buat satu cicilan sebesar sisa ──────────────────
   async function markPaid(debtId) {
     const debt = debts.find(d => d.id === debtId);
-    if (!debt) return { error: new Error('Catatan tidak ditemukan') };
-    if (debt.is_locked) return { error: new Error(LOCKED_MSG) };
+    if (!debt) return { error: new Error(i18n.t('debts.error.notFound')) };
+    if (debt.is_locked) return { error: new Error(i18n.t('debts.error.locked')) };
     const remaining = debt.amount - debt.paid;
     if (remaining <= 1e-6) {
       // Sudah lunas secara nilai — cukup pastikan status paid.
@@ -440,14 +443,14 @@ export function useDebts(userId, limits, ledger = {}) {
     }
     const today = new Date();
     const todayISO = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-    return addPayment(debtId, { amount: remaining, date: todayISO, note: 'Pelunasan' });
+    return addPayment(debtId, { amount: remaining, date: todayISO, note: i18n.t('debts.payment.payoffNote') });
   }
 
   // ── Hapus (soft delete) + balik semua efek transaksi & saldo ──────
   async function deleteDebt(debtId) {
     const debt = debts.find(d => d.id === debtId);
-    if (!debt) return { error: new Error('Catatan tidak ditemukan') };
-    if (debt.is_locked) return { error: new Error(LOCKED_MSG) };
+    if (!debt) return { error: new Error(i18n.t('debts.error.notFound')) };
+    if (debt.is_locked) return { error: new Error(i18n.t('debts.error.locked')) };
 
     // Balikkan tiap transaksi tertaut: koreksi saldo lalu hapus transaksinya.
     // Menghapus transaksi otomatis meng-cascade debt_payments (FK transaction_id).
