@@ -3,6 +3,12 @@
 // chart images. Pulls everything from a `payload` derived from real
 // Supabase transactions (see buildPayload in reports.jsx).
 
+// i18n: file ini bukan komponen React (tidak bisa pakai useTranslation()),
+// jadi label di-resolve lewat i18n.t() langsung — pola sama useDebts.js.
+// CATATAN CURRENCY: format uang (rupiah/rupiahShort/RP_FMT) SENGAJA tetap
+// terkunci id-ID + "Rp" di semua bahasa — app ini single-currency.
+import i18n from './i18n';
+
 // CSS custom-property → hex, so colors resolve outside the DOM (canvas + xlsx).
 const COLOR_VARS = {
   '--ink': '#2A2C20', '--muted': '#6E6B58', '--line': '#D8D2BE', '--paper': '#FBF8EE',
@@ -33,6 +39,17 @@ const safeText = (v) => {
   return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
 };
 
+// Excel: nama worksheet maks 31 karakter dan tanpa : \ / ? * [ ]. Nama hasil
+// i18n dinormalisasi SEKALI di sini agar string yang dipakai untuk
+// wb.addWorksheet(), referensi formula, dan urutan sheet selalu identik.
+const sheetName = (s) => String(s).replace(/[:\\/?*[\]]/g, ' ').slice(0, 31).trim();
+
+// Sheet name → referensi formula ('Detail Transaksi'!A1). Apostrof digandakan.
+const sheetRef = (name) => "'" + String(name).replace(/'/g, "''") + "'";
+
+// Nilai teks → kriteria literal SUMIFS ("Pemasukan"). Kutip ganda digandakan.
+const crit = (v) => '"' + String(v).replace(/"/g, '""') + '"';
+
 const rupiah = (n) => 'Rp ' + new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(Math.round(n || 0));
 const rupiahShort = (n) => {
   const a = Math.abs(n);
@@ -61,8 +78,8 @@ function barChartPNG(income, expense) {
   const { c, ctx, w, h } = makeCanvas(440, 240);
   ctx.fillStyle = '#FBF8EE'; ctx.fillRect(0, 0, w, h);
   const items = [
-    { label: 'Pemasukan', value: income, color: resolveColor('var(--sage)') },
-    { label: 'Pengeluaran', value: expense, color: resolveColor('var(--terra)') },
+    { label: i18n.t('laporan.xlsx.colIncome'), value: income, color: resolveColor('var(--sage)') },
+    { label: i18n.t('laporan.xlsx.colExpense'), value: expense, color: resolveColor('var(--terra)') },
   ];
   const pad = { t: 24, r: 20, b: 44, l: 56 };
   const innerW = w - pad.l - pad.r, innerH = h - pad.t - pad.b;
@@ -149,9 +166,9 @@ function lineChartPNG(months) {
   // legend
   ctx.textAlign = 'left';
   ctx.fillStyle = resolveColor('var(--sage)'); ctx.fillRect(pad.l, 8, 10, 10);
-  ctx.fillStyle = INK; ctx.font = '11px sans-serif'; ctx.fillText('Pemasukan', pad.l + 16, 14);
+  ctx.fillStyle = INK; ctx.font = '11px sans-serif'; ctx.fillText(i18n.t('laporan.xlsx.colIncome'), pad.l + 16, 14);
   ctx.fillStyle = resolveColor('var(--terra)'); ctx.fillRect(pad.l + 110, 8, 10, 10);
-  ctx.fillStyle = INK; ctx.fillText('Pengeluaran', pad.l + 126, 14);
+  ctx.fillStyle = INK; ctx.fillText(i18n.t('laporan.xlsx.colExpense'), pad.l + 126, 14);
   return c.toDataURL('image/png');
 }
 
@@ -188,7 +205,7 @@ function autoWidth(ws, mins = {}) {
 
 // ── Sheet builders ─────────────────────────────────────────────────
 function buildSummarySheet(wb, p, refs) {
-  const ws = wb.addWorksheet('Ringkasan', { properties: { tabColor: { argb: argb(INK) } }, views: [{ showGridLines: false }] });
+  const ws = wb.addWorksheet(refs.sheetNames.summary, { properties: { tabColor: { argb: argb(INK) } }, views: [{ showGridLines: false }] });
   ws.columns = [{ width: 26 }, { width: 22 }, { width: 4 }, { width: 16 }, { width: 16 }, { width: 16 }];
 
   ws.mergeCells('A1:F1');
@@ -200,29 +217,30 @@ function buildSummarySheet(wb, p, refs) {
 
   ws.mergeCells('A2:F2');
   const t2 = ws.getCell('A2');
-  t2.value = `Laporan Keuangan — ${p.periodLabel}`;
+  t2.value = i18n.t('laporan.xlsx.titleReport', { periode: p.periodLabel });
   t2.font = { size: 13, color: { argb: argb('--muted') } };
 
   ws.mergeCells('A3:F3');
-  ws.getCell('A3').value = 'Less spending · More living';
+  ws.getCell('A3').value = i18n.t('laporan.doc.tagline');
   ws.getCell('A3').font = { italic: true, size: 10, color: { argb: argb('--muted') } };
 
   ws.mergeCells('A4:F4');
   const t4 = ws.getCell('A4');
-  t4.value = `Dompet: ${p.walletLabel || 'Semua Dompet'}`;
+  t4.value = i18n.t('laporan.doc.walletLine', { dompet: p.walletLabel || i18n.t('laporan.doc.allWallets') });
   t4.font = { italic: true, size: 10, color: { argb: argb('--muted') } };
 
   // KPI table (rows 5–8) with live formulas referencing the Detail sheet
   const dn = refs.detailLast; // last detail data row
   const hasData = dn >= 2;
-  const incomeF = hasData ? `SUMIFS('Detail Transaksi'!$F$2:$F$${dn},'Detail Transaksi'!$E$2:$E$${dn},"Pemasukan")` : '0';
-  const expenseF = hasData ? `SUMIFS('Detail Transaksi'!$F$2:$F$${dn},'Detail Transaksi'!$E$2:$E$${dn},"Pengeluaran")` : '0';
+  const D = sheetRef(refs.sheetNames.detail);
+  const incomeF = hasData ? `SUMIFS(${D}!$F$2:$F$${dn},${D}!$E$2:$E$${dn},${crit(refs.typeLabels.income)})` : '0';
+  const expenseF = hasData ? `SUMIFS(${D}!$F$2:$F$${dn},${D}!$E$2:$E$${dn},${crit(refs.typeLabels.expense)})` : '0';
 
   const rows = [
-    ['Total Pemasukan', { formula: incomeF, result: p.income }],
-    ['Total Pengeluaran', { formula: expenseF, result: p.expense }],
-    ['Selisih Bersih', { formula: 'B5-B6', result: p.net }],
-    ['Tingkat Menabung', { formula: 'IF(B5=0,0,B7/B5)', result: p.income ? p.net / p.income : 0 }],
+    [i18n.t('laporan.xlsx.rowTotalIncome'), { formula: incomeF, result: p.income }],
+    [i18n.t('laporan.xlsx.rowTotalExpense'), { formula: expenseF, result: p.expense }],
+    [i18n.t('laporan.xlsx.rowNet'), { formula: 'B5-B6', result: p.net }],
+    [i18n.t('laporan.xlsx.rowSavingsRate'), { formula: 'IF(B5=0,0,B7/B5)', result: p.income ? p.net / p.income : 0 }],
   ];
   let r = 5;
   rows.forEach(([label, val]) => {
@@ -239,15 +257,18 @@ function buildSummarySheet(wb, p, refs) {
   });
 
   // Bar chart image — Pemasukan vs Pengeluaran
-  ws.getCell('A10').value = 'Diagram batang — Pemasukan vs Pengeluaran';
+  ws.getCell('A10').value = i18n.t('laporan.xlsx.chartBar');
   ws.getCell('A10').font = { bold: true, size: 12, color: { argb: argb(INK) } };
   const img = wb.addImage({ base64: barChartPNG(p.income, p.expense).split(',')[1], extension: 'png' });
   ws.addImage(img, { tl: { col: 0, row: 10 }, ext: { width: 440, height: 240 } });
 }
 
 function buildDetailSheet(wb, p, refs) {
-  const ws = wb.addWorksheet('Detail Transaksi', { views: [{ showGridLines: false, state: 'frozen', ySplit: 1 }] });
-  const headers = ['No', 'Tanggal', 'Kategori', 'Keterangan', 'Tipe', 'Jumlah'];
+  const ws = wb.addWorksheet(refs.sheetNames.detail, { views: [{ showGridLines: false, state: 'frozen', ySplit: 1 }] });
+  const headers = [
+    i18n.t('laporan.xlsx.colNo'), i18n.t('laporan.xlsx.colDate'), i18n.t('laporan.xlsx.colCategory'),
+    i18n.t('laporan.xlsx.colDescription'), i18n.t('laporan.xlsx.colType'), i18n.t('laporan.xlsx.colAmount'),
+  ];
   const hr = ws.addRow(headers);
   hr.eachCell(styleHeaderCell);
   hr.height = 22;
@@ -262,7 +283,7 @@ function buildDetailSheet(wb, p, refs) {
       d || t.date,
       safeText(t.catLabel),
       safeText(ket),
-      isIncome ? 'Pemasukan' : 'Pengeluaran',
+      isIncome ? refs.typeLabels.income : refs.typeLabels.expense,
       Math.abs(t.amount),
     ]);
     row.getCell(1).alignment = { horizontal: 'center' };
@@ -279,10 +300,10 @@ function buildDetailSheet(wb, p, refs) {
 
   // Totals — live SUMIFS by type
   const blank = ws.addRow([]); // spacer
-  const totIn = ws.addRow(['', '', '', '', 'TOTAL PEMASUKAN',
-    txs.length ? { formula: `SUMIFS($F$2:$F$${dn},$E$2:$E$${dn},"Pemasukan")`, result: p.income } : 0]);
-  const totEx = ws.addRow(['', '', '', '', 'TOTAL PENGELUARAN',
-    txs.length ? { formula: `SUMIFS($F$2:$F$${dn},$E$2:$E$${dn},"Pengeluaran")`, result: p.expense } : 0]);
+  const totIn = ws.addRow(['', '', '', '', i18n.t('laporan.xlsx.totalIncomeCaps'),
+    txs.length ? { formula: `SUMIFS($F$2:$F$${dn},$E$2:$E$${dn},${crit(refs.typeLabels.income)})`, result: p.income } : 0]);
+  const totEx = ws.addRow(['', '', '', '', i18n.t('laporan.xlsx.totalExpenseCaps'),
+    txs.length ? { formula: `SUMIFS($F$2:$F$${dn},$E$2:$E$${dn},${crit(refs.typeLabels.expense)})`, result: p.expense } : 0]);
   [totIn, totEx].forEach(row => {
     row.getCell(5).font = { bold: true, color: { argb: argb(INK) } };
     row.getCell(5).alignment = { horizontal: 'right' };
@@ -296,18 +317,19 @@ function buildDetailSheet(wb, p, refs) {
 }
 
 function buildCategorySheet(wb, p, refs) {
-  const ws = wb.addWorksheet('Per Kategori', { views: [{ showGridLines: false }] });
-  const hr = ws.addRow(['Kategori', 'Total', 'Persentase']);
+  const ws = wb.addWorksheet(refs.sheetNames.category, { views: [{ showGridLines: false }] });
+  const hr = ws.addRow([i18n.t('laporan.xlsx.colCategory'), i18n.t('laporan.xlsx.colTotal'), i18n.t('laporan.xlsx.colPercent')]);
   hr.eachCell(styleHeaderCell);
   hr.height = 22;
 
   const dn = refs.detailLast;
+  const D = sheetRef(refs.sheetNames.detail);
   const cats = p.cats; // sorted desc already
   const firstRow = 2;
   cats.forEach((cat, i) => {
     const rowIdx = firstRow + i;
     const totalF = dn >= 2
-      ? { formula: `SUMIFS('Detail Transaksi'!$F$2:$F$${dn},'Detail Transaksi'!$C$2:$C$${dn},A${rowIdx},'Detail Transaksi'!$E$2:$E$${dn},"Pengeluaran")`, result: cat.amount }
+      ? { formula: `SUMIFS(${D}!$F$2:$F$${dn},${D}!$C$2:$C$${dn},A${rowIdx},${D}!$E$2:$E$${dn},${crit(refs.typeLabels.expense)})`, result: cat.amount }
       : cat.amount;
     const row = ws.addRow([safeText(cat.label), totalF, null]);
     row.getCell(2).numFmt = RP_FMT;
@@ -320,7 +342,7 @@ function buildCategorySheet(wb, p, refs) {
 
   // Total row
   const totalRowIdx = firstRow + cats.length;
-  const tr = ws.addRow(['Total Pengeluaran',
+  const tr = ws.addRow([i18n.t('laporan.xlsx.rowTotalExpense'),
     cats.length ? { formula: `SUM(B${firstRow}:B${totalRowIdx - 1})`, result: p.expense } : 0,
     cats.length ? { formula: `SUM(C${firstRow}:C${totalRowIdx - 1})`, result: 1 } : 1]);
   tr.getCell(1).font = { bold: true };
@@ -333,7 +355,7 @@ function buildCategorySheet(wb, p, refs) {
   // Pie chart image
   if (cats.length) {
     const anchorRow = totalRowIdx + 2;
-    ws.getCell(`A${anchorRow}`).value = 'Diagram lingkaran — komposisi pengeluaran';
+    ws.getCell(`A${anchorRow}`).value = i18n.t('laporan.xlsx.chartPieExpense');
     ws.getCell(`A${anchorRow}`).font = { bold: true, size: 12, color: { argb: argb(INK) } };
     const img = wb.addImage({ base64: pieChartPNG(cats).split(',')[1], extension: 'png' });
     ws.addImage(img, { tl: { col: 0, row: anchorRow }, ext: { width: 460, height: 260 } });
@@ -341,18 +363,19 @@ function buildCategorySheet(wb, p, refs) {
 }
 
 function buildIncomeCategorySheet(wb, p, refs) {
-  const ws = wb.addWorksheet('Pemasukan per Kategori', { views: [{ showGridLines: false }] });
-  const hr = ws.addRow(['Kategori', 'Total', 'Persentase']);
+  const ws = wb.addWorksheet(refs.sheetNames.incomeCategory, { views: [{ showGridLines: false }] });
+  const hr = ws.addRow([i18n.t('laporan.xlsx.colCategory'), i18n.t('laporan.xlsx.colTotal'), i18n.t('laporan.xlsx.colPercent')]);
   hr.eachCell(styleHeaderCell);
   hr.height = 22;
 
   const dn = refs.detailLast;
+  const D = sheetRef(refs.sheetNames.detail);
   const incomeCats = p.incomeCats || [];
   const firstRow = 2;
   incomeCats.forEach((cat, i) => {
     const rowIdx = firstRow + i;
     const totalF = dn >= 2
-      ? { formula: `SUMIFS('Detail Transaksi'!$F$2:$F$${dn},'Detail Transaksi'!$C$2:$C$${dn},A${rowIdx},'Detail Transaksi'!$E$2:$E$${dn},"Pemasukan")`, result: cat.amount }
+      ? { formula: `SUMIFS(${D}!$F$2:$F$${dn},${D}!$C$2:$C$${dn},A${rowIdx},${D}!$E$2:$E$${dn},${crit(refs.typeLabels.income)})`, result: cat.amount }
       : cat.amount;
     const row = ws.addRow([safeText(cat.label), totalF, null]);
     row.getCell(2).numFmt = RP_FMT;
@@ -364,7 +387,7 @@ function buildIncomeCategorySheet(wb, p, refs) {
   });
 
   const totalRowIdx = firstRow + incomeCats.length;
-  const tr = ws.addRow(['Total Pemasukan',
+  const tr = ws.addRow([i18n.t('laporan.xlsx.rowTotalIncome'),
     incomeCats.length ? { formula: `SUM(B${firstRow}:B${totalRowIdx - 1})`, result: p.income } : 0,
     incomeCats.length ? { formula: `SUM(C${firstRow}:C${totalRowIdx - 1})`, result: 1 } : 1]);
   tr.getCell(1).font = { bold: true, color: { argb: argb('--sage') } };
@@ -376,16 +399,19 @@ function buildIncomeCategorySheet(wb, p, refs) {
 
   if (incomeCats.length) {
     const anchorRow = totalRowIdx + 2;
-    ws.getCell(`A${anchorRow}`).value = 'Diagram lingkaran — komposisi pemasukan';
+    ws.getCell(`A${anchorRow}`).value = i18n.t('laporan.xlsx.chartPieIncome');
     ws.getCell(`A${anchorRow}`).font = { bold: true, size: 12, color: { argb: argb(INK) } };
     const img = wb.addImage({ base64: pieChartPNG(incomeCats).split(',')[1], extension: 'png' });
     ws.addImage(img, { tl: { col: 0, row: anchorRow }, ext: { width: 460, height: 260 } });
   }
 }
 
-function buildTrendSheet(wb, p) {
-  const ws = wb.addWorksheet('Tren Bulanan', { views: [{ showGridLines: false }] });
-  const hr = ws.addRow(['Bulan', 'Pemasukan', 'Pengeluaran', 'Selisih']);
+function buildTrendSheet(wb, p, refs) {
+  const ws = wb.addWorksheet(refs.sheetNames.trend, { views: [{ showGridLines: false }] });
+  const hr = ws.addRow([
+    i18n.t('laporan.xlsx.colMonth'), i18n.t('laporan.xlsx.colIncome'),
+    i18n.t('laporan.xlsx.colExpense'), i18n.t('laporan.xlsx.colDifference'),
+  ]);
   hr.eachCell(styleHeaderCell);
   hr.height = 22;
 
@@ -402,7 +428,7 @@ function buildTrendSheet(wb, p) {
   });
 
   const lastRow = firstRow + months.length - 1;
-  const tr = ws.addRow(['Total',
+  const tr = ws.addRow([i18n.t('laporan.xlsx.rowTotal'),
     { formula: `SUM(B${firstRow}:B${lastRow})`, result: months.reduce((s, m) => s + m.income, 0) },
     { formula: `SUM(C${firstRow}:C${lastRow})`, result: months.reduce((s, m) => s + m.expense, 0) },
     { formula: `SUM(D${firstRow}:D${lastRow})`, result: months.reduce((s, m) => s + (m.income - m.expense), 0) }]);
@@ -414,7 +440,7 @@ function buildTrendSheet(wb, p) {
 
   // Line chart image
   const anchorRow = lastRow + 3;
-  ws.getCell(`A${anchorRow}`).value = 'Grafik garis — tren bulanan';
+  ws.getCell(`A${anchorRow}`).value = i18n.t('laporan.xlsx.chartLine');
   ws.getCell(`A${anchorRow}`).font = { bold: true, size: 12, color: { argb: argb(INK) } };
   const img = wb.addImage({ base64: lineChartPNG(months).split(',')[1], extension: 'png' });
   ws.addImage(img, { tl: { col: 0, row: anchorRow }, ext: { width: 620, height: 280 } });
@@ -427,17 +453,37 @@ async function buildWorkbook(p) {
   wb.creator = 'FinanceApp';
   wb.created = new Date();
 
-  const refs = { detailLast: 1 };
+  // Grup atomik i18n: nama sheet & label tipe transaksi di-resolve SEKALI di
+  // sini, lalu dipakai bersama oleh addWorksheet(), kriteria SUMIFS, dan
+  // urutan sheet. Jangan menulis literalnya lagi di tempat lain — string yang
+  // berbeda = formula #REF!/hasil 0 tanpa error yang terlihat.
+  const refs = {
+    detailLast: 1,
+    sheetNames: {
+      summary: sheetName(i18n.t('laporan.xlsx.sheetSummary')),
+      detail: sheetName(i18n.t('laporan.xlsx.sheetDetail')),
+      incomeCategory: sheetName(i18n.t('laporan.xlsx.sheetIncomeCategory')),
+      category: sheetName(i18n.t('laporan.xlsx.sheetCategory')),
+      trend: sheetName(i18n.t('laporan.xlsx.sheetTrend')),
+    },
+    typeLabels: {
+      income: i18n.t('laporan.xlsx.typeIncome'),
+      expense: i18n.t('laporan.xlsx.typeExpense'),
+    },
+  };
   // Detail first so its row count is known to formula refs on other sheets…
   buildDetailSheet(wb, p, refs);
   buildSummarySheet(wb, p, refs);
   buildIncomeCategorySheet(wb, p, refs);
   buildCategorySheet(wb, p, refs);
-  if (p.kind === 'year' && p.months && p.months.length) buildTrendSheet(wb, p);
+  if (p.kind === 'year' && p.months && p.months.length) buildTrendSheet(wb, p, refs);
 
-  // …then reorder so Ringkasan opens first (Excel honors worksheet order)
+  // …then reorder so the summary sheet opens first (Excel honors worksheet order)
   wb.worksheets.forEach((ws, i) => { ws.orderNo = i; });
-  const order = ['Ringkasan', 'Detail Transaksi', 'Pemasukan per Kategori', 'Per Kategori', 'Tren Bulanan'];
+  const order = [
+    refs.sheetNames.summary, refs.sheetNames.detail, refs.sheetNames.incomeCategory,
+    refs.sheetNames.category, refs.sheetNames.trend,
+  ];
   wb.worksheets.sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name))
     .forEach((ws, i) => { ws.orderNo = i; });
 
@@ -474,7 +520,7 @@ export async function downloadExcel(p) {
       await Share.share({
         title: filename,
         url: uri,
-        dialogTitle: 'Simpan atau bagikan laporan',
+        dialogTitle: i18n.t('laporan.doc.shareDialogTitle'),
       });
     } catch (err) {
       // User menutup dialog bagikan — bukan kegagalan.

@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import i18n from './i18n';
 import { ALL_CATEGORIES, fmtShort } from './data';
 import { IconReport, IconArrowDown, IconClose } from './icons';
 import { downloadExcel } from './report-excel';
@@ -10,14 +11,40 @@ import { usePaywall } from './components/PaywallModal';
 // Generates monthly & yearly financial reports as downloadable, print-ready
 // documents (standalone HTML → "Save as PDF").
 
-const ID_MONTHS_FULL = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
-const ID_MONTHS_ABBR = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+// i18n: buildPayload / buildReportDoc / downloadPdf bukan komponen React
+// (tidak bisa pakai useTranslation()), jadi labelnya di-resolve lewat i18n.t()
+// langsung — pola sama useDebts.js.
+//
+// CATATAN CURRENCY: rupiah() di bawah SENGAJA tetap hardcode "Rp" + id-ID di
+// bahasa apapun. App ini single-currency; lihat CLAUDE.md → "Currency".
+//
+// Nama bulan & tanggal MENGIKUTI bahasa UI. Dibaca lewat fungsi (bukan
+// konstanta modul) supaya ganti bahasa langsung terpakai tanpa reload.
+const monthsFull = () => i18n.t('laporan.doc.monthsFull', { returnObjects: true });
+const monthsAbbr = () => i18n.t('laporan.doc.monthsAbbr', { returnObjects: true });
+
+// Locale tanggal mengikuti bahasa UI — pola sama SubscriptionStatus.jsx.
+const dateLocale = () => (i18n.language === 'en' ? 'en-US' : 'id-ID');
+const longDate = (d = new Date()) =>
+  d.toLocaleDateString(dateLocale(), { day: 'numeric', month: 'long', year: 'numeric' });
 
 // Escape teks yang berasal dari user (mis. nama kategori kustom) sebelum
 // disisipkan ke string HTML laporan — cegah HTML/script injection (self-XSS).
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
 ));
+
+// Nama kategori mengikuti bahasa UI: kategori BAWAAN punya key `kategori.<id>`
+// di locale (pola sama categoryLabel() di category-field.jsx). Kategori KUSTOM
+// milik user tidak punya key → defaultValue memakai nama tersimpan apa adanya,
+// sesuai aturan "data user tidak diterjemahkan".
+// Satu titik ini memasok label ke PDF, file .xlsx, DAN pratinjau Excel sekaligus,
+// jadi ketiganya dijamin memakai teks yang identik (penting: label kategori
+// dipakai sebagai kriteria SUMIFS lintas-sheet di report-excel.js).
+function catLabelOf(cat, id, fallback = '—') {
+  if (!id) return cat?.label || fallback;
+  return i18n.t('kategori.' + id, { defaultValue: cat?.label || id });
+}
 
 // Aggregate transactions → income / expense / net + expense-by-category.
 // `catList` mencakup kategori bawaan + kustom (dari Supabase) agar nama
@@ -31,11 +58,11 @@ function aggregate(txs, catList = ALL_CATEGORIES) {
   });
   const cats = Object.entries(catMap).map(([id, amount]) => {
     const c = catList.find(x => x.id === id);
-    return { id, label: c?.label || id, color: c?.color || '#8C7B5C', amount };
+    return { id, label: catLabelOf(c, id), color: c?.color || '#8C7B5C', amount };
   }).sort((a, b) => b.amount - a.amount);
   const incomeCats = Object.entries(incomeMap).map(([id, amount]) => {
     const c = catList.find(x => x.id === id);
-    return { id, label: c?.label || id, color: c?.color || '#5C6B4C', amount };
+    return { id, label: catLabelOf(c, id), color: c?.color || '#5C6B4C', amount };
   }).sort((a, b) => b.amount - a.amount);
   return { income, expense, net: income - expense, cats, incomeCats };
 }
@@ -44,7 +71,7 @@ function aggregate(txs, catList = ALL_CATEGORIES) {
 function withLabels(txs, catList = ALL_CATEGORIES) {
   return txs.map(t => {
     const c = catList.find(x => x.id === t.category);
-    return { ...t, catLabel: c?.label || t.category || '—' };
+    return { ...t, catLabel: catLabelOf(c, t.category) };
   });
 }
 
@@ -66,10 +93,11 @@ function monthsIndex(transactions) {
     if (t.amount >= 0) map[k].income += t.amount;
     else map[k].expense += -t.amount;
   });
+  const mFull = monthsFull(), mAbbr = monthsAbbr();
   return Object.keys(map).sort().reverse().map(k => {
     const year = +k.slice(0, 4), month = +k.slice(5, 7) - 1;
     const { income, expense } = map[k];
-    return { key: k, year, month, abbr: ID_MONTHS_ABBR[month], full: ID_MONTHS_FULL[month], income, expense, net: income - expense };
+    return { key: k, year, month, abbr: mAbbr[month], full: mFull[month], income, expense, net: income - expense };
   });
 }
 
@@ -94,7 +122,7 @@ function sanitizeFilename(name) {
 }
 
 // Full payload consumed by BOTH the PDF (buildReportDoc) and Excel (downloadExcel).
-// `walletLabel` — null means "Semua Dompet", a string means a specific wallet name.
+// `walletLabel` — null means "all wallets", a string means a specific wallet name.
 function buildPayload(transactions, kind, key, customCategories = [], walletLabel = null) {
   const catList = [...ALL_CATEGORIES, ...customCategories];
   const walletSuffix = walletLabel ? `_${sanitizeFilename(walletLabel)}` : '';
@@ -102,11 +130,12 @@ function buildPayload(transactions, kind, key, customCategories = [], walletLabe
     const periodTx = sortDesc(transactions.filter(t => (t.dateRaw || '').slice(0, 7) === key));
     const { income, expense, net, cats, incomeCats } = aggregate(periodTx, catList);
     const year = +key.slice(0, 4), month = +key.slice(5, 7) - 1;
+    const monthName = monthsFull()[month];
     return {
-      kind, title: "Laporan Bulanan",
-      periodLabel: `${ID_MONTHS_FULL[month]} ${year}`,
-      filename: `Laporan-${ID_MONTHS_FULL[month]}-${year}${walletSuffix}`,
-      excelFilename: `FinanceApp_Laporan_${ID_MONTHS_FULL[month]}_${year}${walletSuffix}.xlsx`,
+      kind, title: i18n.t('laporan.laporanBulanan'),
+      periodLabel: `${monthName} ${year}`,
+      filename: `${i18n.t('laporan.doc.filenameMonthly')}-${monthName}-${year}${walletSuffix}`,
+      excelFilename: `${i18n.t('laporan.doc.excelFilePrefix')}_${monthName}_${year}${walletSuffix}.xlsx`,
       income, expense, net, cats, incomeCats, months: null,
       transactions: withLabels(periodTx, catList),
       walletLabel,
@@ -118,10 +147,10 @@ function buildPayload(transactions, kind, key, customCategories = [], walletLabe
   const { income, expense, net, cats, incomeCats } = aggregate(periodTx, catList);
   const months = monthsIndex(periodTx).filter(m => m.year === y).sort((a, b) => a.month - b.month);
   return {
-    kind, title: "Laporan Tahunan",
-    periodLabel: `Tahun ${y}`,
-    filename: `Laporan-Tahunan-${y}${walletSuffix}`,
-    excelFilename: `FinanceApp_Laporan_${y}${walletSuffix}.xlsx`,
+    kind, title: i18n.t('laporan.laporanTahunan'),
+    periodLabel: i18n.t('laporan.tahun', { tahun: y }),
+    filename: `${i18n.t('laporan.doc.filenameYearly')}-${y}${walletSuffix}`,
+    excelFilename: `${i18n.t('laporan.doc.excelFilePrefix')}_${y}${walletSuffix}.xlsx`,
     income, expense, net, cats, incomeCats, months,
     transactions: withLabels(periodTx, catList),
     walletLabel,
@@ -178,7 +207,47 @@ function reportCatBarSVG(cats, expense) {
 // ── Build the standalone report document (returns an HTML string) ──
 function buildReportDoc({ title, periodLabel, income, expense, net, cats, months, incomeCats = [], transactions = [], walletLabel = null }) {
   const savingsRate = income ? Math.round((net / income) * 100) : 0;
+  // Currency SENGAJA terkunci id-ID/"Rp" — tidak ikut bahasa UI (single-currency).
   const rupiah = (n) => "Rp " + new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(Math.round(n));
+  // Semua label statis di-resolve sekali di sini, bukan inline di template.
+  const T = {
+    lang: i18n.language === 'en' ? 'en' : 'id',
+    tagline: i18n.t('laporan.doc.tagline'),
+    createdOn: i18n.t('laporan.doc.createdOn', { tanggal: longDate() }),
+    reportTitle: i18n.t('laporan.judul'),
+    walletLine: i18n.t('laporan.doc.walletLine', { dompet: esc(walletLabel || i18n.t('laporan.doc.allWallets')) }),
+    emptyWallet: i18n.t('laporan.doc.emptyWallet'),
+    kpiIncome: i18n.t('laporan.doc.kpiIncome'),
+    kpiExpense: i18n.t('laporan.doc.kpiExpense'),
+    kpiNet: i18n.t('laporan.doc.kpiNet'),
+    savingsRate: i18n.t('laporan.doc.savingsRate'),
+    chartBarMonthly: i18n.t('laporan.doc.chartBarMonthly'),
+    chartBarCategory: i18n.t('laporan.doc.chartBarCategory'),
+    chartPieIncome: i18n.t('laporan.doc.chartPieIncome'),
+    chartPieExpense: i18n.t('laporan.doc.chartPieExpense'),
+    tableIncomeByCategory: i18n.t('laporan.doc.tableIncomeByCategory'),
+    tableExpenseByCategory: i18n.t('laporan.doc.tableExpenseByCategory'),
+    tableMonthlyBreakdown: i18n.t('laporan.doc.tableMonthlyBreakdown'),
+    colCategory: i18n.t('laporan.doc.colCategory'),
+    colAmount: i18n.t('laporan.doc.colAmount'),
+    colPctIncome: i18n.t('laporan.doc.colPctIncome'),
+    colPctExpense: i18n.t('laporan.doc.colPctExpense'),
+    colMonth: i18n.t('laporan.doc.colMonth'),
+    colIn: i18n.t('laporan.doc.colIn'),
+    colOut: i18n.t('laporan.doc.colOut'),
+    colNet: i18n.t('laporan.doc.colNet'),
+    colDate: i18n.t('laporan.doc.colDate'),
+    colName: i18n.t('laporan.doc.colName'),
+    totalIncome: i18n.t('laporan.doc.totalIncome'),
+    totalExpense: i18n.t('laporan.doc.totalExpense'),
+    sectionTransactions: i18n.t('laporan.doc.sectionTransactions'),
+    incomeTransactions: i18n.t('laporan.doc.incomeTransactions'),
+    expenseTransactions: i18n.t('laporan.doc.expenseTransactions'),
+    totalIncomeCaps: i18n.t('laporan.doc.totalIncomeCaps'),
+    totalExpenseCaps: i18n.t('laporan.doc.totalExpenseCaps'),
+    autoFooter: i18n.t('laporan.doc.autoFooter'),
+    disclaimer: i18n.t('laporan.doc.disclaimer'),
+  };
   const catRows = cats.map(c => {
     const pct = expense ? Math.round((c.amount / expense) * 100) : 0;
     return `<tr><td><span class="dot" style="background:${c.color.startsWith('var') ? '#8C7B5C' : c.color}"></span>${esc(c.label)}</td><td class="num">${rupiah(c.amount)}</td><td class="num muted">${pct}%</td></tr>`;
@@ -202,7 +271,7 @@ function buildReportDoc({ title, periodLabel, income, expense, net, cats, months
   const incomeTxRows = transactions.filter(t => t.amount >= 0).map(mkTxRow).join("");
   const expenseTxRows = transactions.filter(t => t.amount < 0).map(mkTxRow).join("");
 
-  return `<!doctype html><html lang="id"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  return `<!doctype html><html lang="${T.lang}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>${title} — FinanceApp</title>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <style>
@@ -273,72 +342,72 @@ function buildReportDoc({ title, periodLabel, income, expense, net, cats, months
 </style></head><body>
 <div class="page">
   <div class="top">
-    <div class="brand"><div class="mark">F</div><div><h1>FinanceApp</h1><div class="tag">Less spending · More living</div></div></div>
-    <div class="meta">Dibuat ${new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}<br/>FinanceApp</div>
+    <div class="brand"><div class="mark">F</div><div><h1>FinanceApp</h1><div class="tag">${T.tagline}</div></div></div>
+    <div class="meta">${T.createdOn}<br/>FinanceApp</div>
   </div>
   <div class="eyebrow">${title}</div>
-  <div class="serif title">Laporan Keuangan</div>
+  <div class="serif title">${T.reportTitle}</div>
   <div class="period">${periodLabel}</div>
-  <div class="wallet-line">Dompet: ${esc(walletLabel || 'Semua Dompet')}</div>
+  <div class="wallet-line">${T.walletLine}</div>
 
   <div class="kpis">
-    <div class="kpi"><div class="l">Pemasukan</div><div class="v pos">${rupiah(income)}</div></div>
-    <div class="kpi"><div class="l">Pengeluaran</div><div class="v neg">${rupiah(expense)}</div></div>
-    <div class="kpi net"><div class="l">Selisih bersih</div><div class="v">${rupiah(net)}</div></div>
+    <div class="kpi"><div class="l">${T.kpiIncome}</div><div class="v pos">${rupiah(income)}</div></div>
+    <div class="kpi"><div class="l">${T.kpiExpense}</div><div class="v neg">${rupiah(expense)}</div></div>
+    <div class="kpi net"><div class="l">${T.kpiNet}</div><div class="v">${rupiah(net)}</div></div>
   </div>
-  <div class="net-strip"><span>Tingkat menabung (savings rate)</span><strong>${savingsRate}%</strong></div>
+  <div class="net-strip"><span>${T.savingsRate}</span><strong>${savingsRate}%</strong></div>
 
   ${walletLabel !== null && income === 0 && expense === 0 && transactions.length === 0 ? `
   <div style="background:rgba(178,106,74,.08);border:1px solid rgba(178,106,74,.2);border-radius:10px;padding:14px 18px;margin-bottom:24px;font-size:13px;color:var(--muted)">
-    Tidak ada transaksi pada periode ini untuk dompet yang dipilih.
+    ${T.emptyWallet}
   </div>
   ` : ''}
 
-  ${(months && months.length > 0) ? `<section class="block"><h2 class="sec">Diagram batang — pemasukan vs pengeluaran</h2><div class="chart-legend"><span><span class="sq" style="background:var(--sage)"></span>Pemasukan</span><span><span class="sq" style="background:var(--terra)"></span>Pengeluaran</span></div>${reportBarSVG(months)}</section>` : `<section class="block"><h2 class="sec">Diagram batang — pengeluaran per kategori</h2>${reportCatBarSVG(cats, expense)}</section>`}
+  ${(months && months.length > 0) ? `<section class="block"><h2 class="sec">${T.chartBarMonthly}</h2><div class="chart-legend"><span><span class="sq" style="background:var(--sage)"></span>${T.kpiIncome}</span><span><span class="sq" style="background:var(--terra)"></span>${T.kpiExpense}</span></div>${reportBarSVG(months)}</section>` : `<section class="block"><h2 class="sec">${T.chartBarCategory}</h2>${reportCatBarSVG(cats, expense)}</section>`}
 
   ${incomeCats.length ? `
   <section class="block">
-    <h2 class="sec">Diagram lingkaran — komposisi pemasukan</h2>
+    <h2 class="sec">${T.chartPieIncome}</h2>
     ${reportPieSVG(incomeCats, income)}
   </section>
   ` : ''}
 
   <section class="block">
-    <h2 class="sec">Diagram lingkaran — komposisi pengeluaran</h2>
+    <h2 class="sec">${T.chartPieExpense}</h2>
     ${reportPieSVG(cats, expense)}
   </section>
 
   ${incomeCats.length ? `
-  <h2 class="sec">Tabel — pemasukan per kategori</h2>
-  <table><thead><tr><th>Kategori</th><th class="num">Jumlah</th><th class="num">% dari pemasukan</th></tr></thead>
+  <h2 class="sec">${T.tableIncomeByCategory}</h2>
+  <table><thead><tr><th>${T.colCategory}</th><th class="num">${T.colAmount}</th><th class="num">${T.colPctIncome}</th></tr></thead>
   <tbody>${incomeRows}</tbody>
-  <tfoot><tr><td>Total pemasukan</td><td class="num pos">${rupiah(income)}</td><td class="num">100%</td></tr></tfoot></table>
+  <tfoot><tr><td>${T.totalIncome}</td><td class="num pos">${rupiah(income)}</td><td class="num">100%</td></tr></tfoot></table>
   ` : ''}
 
-  <h2 class="sec">Tabel — pengeluaran per kategori</h2>
-  <table><thead><tr><th>Kategori</th><th class="num">Jumlah</th><th class="num">% dari pengeluaran</th></tr></thead>
+  <h2 class="sec">${T.tableExpenseByCategory}</h2>
+  <table><thead><tr><th>${T.colCategory}</th><th class="num">${T.colAmount}</th><th class="num">${T.colPctExpense}</th></tr></thead>
   <tbody>${catRows}</tbody>
-  <tfoot><tr><td>Total pengeluaran</td><td class="num">${rupiah(expense)}</td><td class="num">100%</td></tr></tfoot></table>
+  <tfoot><tr><td>${T.totalExpense}</td><td class="num">${rupiah(expense)}</td><td class="num">100%</td></tr></tfoot></table>
 
-  ${monthRows ? `<h2 class="sec">Tabel — rincian bulanan</h2><table><thead><tr><th>Bulan</th><th class="num">Masuk</th><th class="num">Keluar</th><th class="num">Bersih</th></tr></thead><tbody>${monthRows}</tbody></table>` : ""}
+  ${monthRows ? `<h2 class="sec">${T.tableMonthlyBreakdown}</h2><table><thead><tr><th>${T.colMonth}</th><th class="num">${T.colIn}</th><th class="num">${T.colOut}</th><th class="num">${T.colNet}</th></tr></thead><tbody>${monthRows}</tbody></table>` : ""}
 
   ${transactions.length ? `
-  <h2 class="sec">Bagian 4 — Rincian Transaksi</h2>
+  <h2 class="sec">${T.sectionTransactions}</h2>
   ${incomeTxRows ? `
-  <h2 class="sec" style="font-size:18px">Transaksi Pemasukan</h2>
-  <table><thead><tr><th>Tanggal</th><th>Nama</th><th>Kategori</th><th class="num">Jumlah</th></tr></thead>
+  <h2 class="sec" style="font-size:18px">${T.incomeTransactions}</h2>
+  <table><thead><tr><th>${T.colDate}</th><th>${T.colName}</th><th>${T.colCategory}</th><th class="num">${T.colAmount}</th></tr></thead>
   <tbody>${incomeTxRows}</tbody>
-  <tfoot><tr><td colspan="3">Total Pemasukan</td><td class="num pos">${rupiah(income)}</td></tr></tfoot></table>
+  <tfoot><tr><td colspan="3">${T.totalIncomeCaps}</td><td class="num pos">${rupiah(income)}</td></tr></tfoot></table>
   ` : ''}
   ${expenseTxRows ? `
-  <h2 class="sec" style="font-size:18px">Transaksi Pengeluaran</h2>
-  <table><thead><tr><th>Tanggal</th><th>Nama</th><th>Kategori</th><th class="num">Jumlah</th></tr></thead>
+  <h2 class="sec" style="font-size:18px">${T.expenseTransactions}</h2>
+  <table><thead><tr><th>${T.colDate}</th><th>${T.colName}</th><th>${T.colCategory}</th><th class="num">${T.colAmount}</th></tr></thead>
   <tbody>${expenseTxRows}</tbody>
-  <tfoot><tr><td colspan="3">Total Pengeluaran</td><td class="num neg">${rupiah(expense)}</td></tr></tfoot></table>
+  <tfoot><tr><td colspan="3">${T.totalExpenseCaps}</td><td class="num neg">${rupiah(expense)}</td></tr></tfoot></table>
   ` : ''}
   ` : ''}
 
-  <div class="foot"><span>FinanceApp — Laporan dibuat otomatis</span><span>Dokumen ini bersifat informatif, bukan dokumen pajak resmi.</span></div>
+  <div class="foot"><span>${T.autoFooter}</span><span>${T.disclaimer}</span></div>
 </div></body></html>`;
 }
 
@@ -443,6 +512,7 @@ async function downloadPdf(p) {
     }
 
     // ── Bagian 2: tabel native via autotable (header kolom berulang otomatis) ──
+    // Currency SENGAJA terkunci id-ID/"Rp" — tidak ikut bahasa UI.
     const rupiah = (n) => "Rp " + new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(Math.round(n));
     const fmtDay = (iso) => { const a = (iso || '').split('-'); return a[2] && a[1] ? `${a[2]}/${a[1]}` : '—'; };
     const txName = (t) => [t.merchant, t.note].filter(Boolean).join(' · ') || '—';
@@ -457,6 +527,37 @@ async function downloadPdf(p) {
       if (c.startsWith('#')) return hexToRgb(c);
       return hexToRgb(fb);
     };
+
+    // Semua label statis di-resolve sekali di sini, bukan inline berulang.
+    const T = {
+      tableIncomeByCategory: i18n.t('laporan.doc.tableIncomeByCategory'),
+      tableExpenseByCategory: i18n.t('laporan.doc.tableExpenseByCategory'),
+      tableMonthlyBreakdown: i18n.t('laporan.doc.tableMonthlyBreakdown'),
+      colCategory: i18n.t('laporan.doc.colCategory'),
+      colAmount: i18n.t('laporan.doc.colAmount'),
+      colPctIncome: i18n.t('laporan.doc.colPctIncome'),
+      colPctExpense: i18n.t('laporan.doc.colPctExpense'),
+      colMonth: i18n.t('laporan.doc.colMonth'),
+      colIn: i18n.t('laporan.doc.colIn'),
+      colOut: i18n.t('laporan.doc.colOut'),
+      colNet: i18n.t('laporan.doc.colNet'),
+      colDate: i18n.t('laporan.doc.colDate'),
+      colName: i18n.t('laporan.doc.colName'),
+      totalIncome: i18n.t('laporan.doc.totalIncome'),
+      totalExpense: i18n.t('laporan.doc.totalExpense'),
+      sectionTransactions: i18n.t('laporan.doc.sectionTransactions'),
+      incomeTransactions: i18n.t('laporan.doc.incomeTransactions'),
+      expenseTransactions: i18n.t('laporan.doc.expenseTransactions'),
+      totalIncomeCaps: i18n.t('laporan.doc.totalIncomeCaps'),
+      totalExpenseCaps: i18n.t('laporan.doc.totalExpenseCaps'),
+      closing: i18n.t('laporan.doc.closing'),
+      disclaimer: i18n.t('laporan.doc.disclaimer'),
+      generatedBy: i18n.t('laporan.doc.generatedBy', { tanggal: longDate() }),
+      headerRight: i18n.t('laporan.doc.headerRight', { periode: p.periodLabel }),
+      autoFooter: i18n.t('laporan.doc.autoFooter'),
+      shareDialogTitle: i18n.t('laporan.doc.shareDialogTitle'),
+    };
+    const U = (s) => String(s).toUpperCase();   // header kolom autotable
 
     let cursorY = HEADER_MM;
     const fillPaper = () => { pdf.setFillColor(...PAPER); pdf.rect(0, 0, pdfW, pdfH, 'F'); };
@@ -529,11 +630,11 @@ async function downloadPdf(p) {
 
     // Tabel pemasukan per kategori
     if (p.incomeCats?.length) {
-      drawTitle('Tabel — Pemasukan per kategori');
+      drawTitle(T.tableIncomeByCategory);
       runTable({
-        head: [['KATEGORI', 'JUMLAH', '% DARI PEMASUKAN']],
+        head: [[U(T.colCategory), U(T.colAmount), U(T.colPctIncome)]],
         body: p.incomeCats.map(c => [c.label, rupiah(c.amount), (p.income ? Math.round(c.amount / p.income * 100) : 0) + '%']),
-        foot: [['Total pemasukan', rupiah(p.income), '100%']],
+        foot: [[T.totalIncome, rupiah(p.income), '100%']],
         columnStyles: catCols,
         colors: p.incomeCats.map(c => resolveColor(c.color, '#5C6B4C')),
       });
@@ -541,11 +642,11 @@ async function downloadPdf(p) {
 
     // Tabel pengeluaran per kategori
     if (p.cats?.length) {
-      drawTitle('Tabel — Pengeluaran per kategori');
+      drawTitle(T.tableExpenseByCategory);
       runTable({
-        head: [['KATEGORI', 'JUMLAH', '% DARI PENGELUARAN']],
+        head: [[U(T.colCategory), U(T.colAmount), U(T.colPctExpense)]],
         body: p.cats.map(c => [c.label, rupiah(c.amount), (p.expense ? Math.round(c.amount / p.expense * 100) : 0) + '%']),
-        foot: [['Total pengeluaran', rupiah(p.expense), '100%']],
+        foot: [[T.totalExpense, rupiah(p.expense), '100%']],
         columnStyles: catCols,
         colors: p.cats.map(c => resolveColor(c.color, '#8C7B5C')),
       });
@@ -553,9 +654,9 @@ async function downloadPdf(p) {
 
     // Tabel rincian bulanan (hanya laporan tahunan)
     if (p.months?.length) {
-      drawTitle('Tabel — Rincian bulanan');
+      drawTitle(T.tableMonthlyBreakdown);
       runTable({
-        head: [['BULAN', 'MASUK', 'KELUAR', 'BERSIH']],
+        head: [[U(T.colMonth), U(T.colIn), U(T.colOut), U(T.colNet)]],
         body: p.months.map(m => [`${m.full} ${m.year}`, rupiah(m.income), rupiah(m.expense), rupiah(m.net)]),
         columnStyles: moCols,
       });
@@ -565,22 +666,23 @@ async function downloadPdf(p) {
     const incomeTx  = (p.transactions || []).filter(t => t.amount >= 0);
     const expenseTx = (p.transactions || []).filter(t => t.amount < 0);
     if (incomeTx.length || expenseTx.length) {
-      drawTitle('Bagian 4 — Rincian Transaksi', true);
+      drawTitle(T.sectionTransactions, true);
+      const txHead = [[U(T.colDate), U(T.colName), U(T.colCategory), U(T.colAmount)]];
       if (incomeTx.length) {
-        drawTitle('Transaksi Pemasukan');
+        drawTitle(T.incomeTransactions);
         runTable({
-          head: [['TANGGAL', 'NAMA', 'KATEGORI', 'JUMLAH']],
+          head: txHead,
           body: incomeTx.map(t => [fmtDay(t.dateRaw), txName(t), t.catLabel || '—', rupiah(Math.abs(t.amount))]),
-          foot: [[{ content: 'Total Pemasukan', colSpan: 3, styles: { halign: 'right' } }, rupiah(p.income)]],
+          foot: [[{ content: T.totalIncomeCaps, colSpan: 3, styles: { halign: 'right' } }, rupiah(p.income)]],
           columnStyles: txCols,
         });
       }
       if (expenseTx.length) {
-        drawTitle('Transaksi Pengeluaran');
+        drawTitle(T.expenseTransactions);
         runTable({
-          head: [['TANGGAL', 'NAMA', 'KATEGORI', 'JUMLAH']],
+          head: txHead,
           body: expenseTx.map(t => [fmtDay(t.dateRaw), txName(t), t.catLabel || '—', rupiah(Math.abs(t.amount))]),
-          foot: [[{ content: 'Total Pengeluaran', colSpan: 3, styles: { halign: 'right' } }, rupiah(p.expense)]],
+          foot: [[{ content: T.totalExpenseCaps, colSpan: 3, styles: { halign: 'right' } }, rupiah(p.expense)]],
           columnStyles: txCols,
         });
       }
@@ -593,13 +695,13 @@ async function downloadPdf(p) {
     pdf.line(SIDE_MM, cursorY, pdfW - SIDE_MM, cursorY);
     cursorY += 7;
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.setTextColor(...INK);
-    pdf.text('Penutup', SIDE_MM, cursorY); cursorY += 6;
+    pdf.text(T.closing, SIDE_MM, cursorY); cursorY += 6;
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(...MUTED);
-    pdf.text('Dokumen ini bersifat informatif, bukan dokumen pajak resmi.', SIDE_MM, cursorY); cursorY += 5;
-    pdf.text(`Laporan dibuat otomatis oleh FinanceApp pada ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}.`, SIDE_MM, cursorY);
+    pdf.text(T.disclaimer, SIDE_MM, cursorY); cursorY += 5;
+    pdf.text(T.generatedBy, SIDE_MM, cursorY);
 
     // ── Header + footer + nomor halaman di SETIAP halaman (pass terakhir) ──
-    const headerRight = `Laporan ${p.periodLabel}`;
+    const headerRight = T.headerRight;
     const total = pdf.getNumberOfPages();
     for (let i = 1; i <= total; i++) {
       pdf.setPage(i);
@@ -622,8 +724,8 @@ async function downloadPdf(p) {
       pdf.setFont('helvetica', 'normal');
       pdf.setFontSize(8.5);
       pdf.setTextColor(...MUTED);
-      pdf.text('FinanceApp — Laporan dibuat otomatis', SIDE_MM, pdfH - 5);
-      pdf.text(`Hal. ${i} dari ${total}`, pdfW - SIDE_MM, pdfH - 5, { align: 'right' });
+      pdf.text(T.autoFooter, SIDE_MM, pdfH - 5);
+      pdf.text(i18n.t('laporan.doc.pageOf', { n: i, total }), pdfW - SIDE_MM, pdfH - 5, { align: 'right' });
     }
 
     if (isAndroid) {
@@ -644,7 +746,7 @@ async function downloadPdf(p) {
         await Share.share({
           title: filename,
           url: uri,
-          dialogTitle: 'Simpan atau bagikan laporan',
+          dialogTitle: T.shareDialogTitle,
         });
       } catch (err) {
         // User menutup dialog bagikan — bukan kegagalan.
@@ -669,8 +771,10 @@ function printReport(p) {
 
 // ── Excel preview — HTML table representation of the report data ───
 function ExcelPreviewRenderer({ payload }) {
+  const { t: tr } = useTranslation();
   const { income, expense, net, cats, incomeCats, transactions, months, periodLabel, walletLabel = null } = payload;
   const savingsRate = income ? Math.round((net / income) * 100) : 0;
+  // Currency SENGAJA terkunci id-ID/"Rp" — tidak ikut bahasa UI.
   const rupiah = (n) => 'Rp ' + new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(Math.round(n || 0));
   const fmtDay = (iso) => { const parts = (iso || '').split('-'); return parts[2] && parts[1] ? `${parts[2]}/${parts[1]}/${parts[0]}` : '—'; };
   const resolveDotColor = (color, fallback) => color && !color.startsWith('var') ? color : fallback;
@@ -689,35 +793,35 @@ function ExcelPreviewRenderer({ payload }) {
   return (
     <div style={{ fontFamily: "'Geist', -apple-system, sans-serif", maxWidth: 760, margin: '0 auto', paddingBottom: 16 }}>
       <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase', color: '#6E6B58', marginBottom: 4 }}>FinanceApp — Pratinjau Excel</div>
-        <div style={{ fontSize: 20, fontWeight: 600, color: '#2A2C20', letterSpacing: '-.01em' }}>Laporan Keuangan</div>
+        <div style={{ fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase', color: '#6E6B58', marginBottom: 4 }}>{tr('laporan.doc.excelPreviewEyebrow')}</div>
+        <div style={{ fontSize: 20, fontWeight: 600, color: '#2A2C20', letterSpacing: '-.01em' }}>{tr('laporan.judul')}</div>
         <div style={{ fontSize: 13, color: '#6E6B58', marginTop: 2 }}>{periodLabel}</div>
-        <div style={{ fontSize: 12, color: '#6E6B58', marginTop: 2 }}>Dompet: {walletLabel || 'Semua Dompet'}</div>
+        <div style={{ fontSize: 12, color: '#6E6B58', marginTop: 2 }}>{tr('laporan.doc.walletLine', { dompet: walletLabel || tr('laporan.doc.allWallets') })}</div>
       </div>
 
       {walletLabel !== null && income === 0 && expense === 0 && transactions.length === 0 && (
         <div style={{ padding: '12px 16px', background: 'rgba(178,106,74,.08)', border: '1px solid rgba(178,106,74,.2)', borderRadius: 10, fontSize: 13, color: '#6E6B58', marginBottom: 20 }}>
-          Tidak ada transaksi pada periode ini untuk dompet yang dipilih.
+          {tr('laporan.doc.emptyWallet')}
         </div>
       )}
 
       <div style={{ marginBottom: 28 }}>
-        {sectionHead('Ringkasan')}
+        {sectionHead(tr('laporan.xlsx.sheetSummary'))}
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <tbody>
-            <tr><td style={TD}>Total Pemasukan</td><td style={{ ...TDR, color: '#5C6B4C', fontWeight: 600 }}>{rupiah(income)}</td></tr>
-            <tr><td style={TD}>Total Pengeluaran</td><td style={{ ...TDR, color: '#B26A4A', fontWeight: 600 }}>{rupiah(expense)}</td></tr>
-            <tr><td style={TDF}>Selisih Bersih</td><td style={TDFR}>{rupiah(net)}</td></tr>
-            <tr><td style={TD}>Tingkat Menabung</td><td style={TDR}>{savingsRate}%</td></tr>
+            <tr><td style={TD}>{tr('laporan.xlsx.rowTotalIncome')}</td><td style={{ ...TDR, color: '#5C6B4C', fontWeight: 600 }}>{rupiah(income)}</td></tr>
+            <tr><td style={TD}>{tr('laporan.xlsx.rowTotalExpense')}</td><td style={{ ...TDR, color: '#B26A4A', fontWeight: 600 }}>{rupiah(expense)}</td></tr>
+            <tr><td style={TDF}>{tr('laporan.xlsx.rowNet')}</td><td style={TDFR}>{rupiah(net)}</td></tr>
+            <tr><td style={TD}>{tr('laporan.xlsx.rowSavingsRate')}</td><td style={TDR}>{savingsRate}%</td></tr>
           </tbody>
         </table>
       </div>
 
       {months && months.length > 0 && (
         <div style={{ marginBottom: 28 }}>
-          {sectionHead('Tren Bulanan')}
+          {sectionHead(tr('laporan.xlsx.sheetTrend'))}
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr><th style={TH}>Bulan</th><th style={THR}>Pemasukan</th><th style={THR}>Pengeluaran</th><th style={THR}>Selisih</th></tr></thead>
+            <thead><tr><th style={TH}>{tr('laporan.xlsx.colMonth')}</th><th style={THR}>{tr('laporan.xlsx.colIncome')}</th><th style={THR}>{tr('laporan.xlsx.colExpense')}</th><th style={THR}>{tr('laporan.xlsx.colDifference')}</th></tr></thead>
             <tbody>
               {months.map((m, i) => (
                 <tr key={i}>
@@ -728,16 +832,16 @@ function ExcelPreviewRenderer({ payload }) {
                 </tr>
               ))}
             </tbody>
-            <tfoot><tr><td style={TDF}>Total</td><td style={{ ...TDFR, color: '#5C6B4C' }}>{rupiah(income)}</td><td style={{ ...TDFR, color: '#B26A4A' }}>{rupiah(expense)}</td><td style={TDFR}>{rupiah(net)}</td></tr></tfoot>
+            <tfoot><tr><td style={TDF}>{tr('laporan.xlsx.rowTotal')}</td><td style={{ ...TDFR, color: '#5C6B4C' }}>{rupiah(income)}</td><td style={{ ...TDFR, color: '#B26A4A' }}>{rupiah(expense)}</td><td style={TDFR}>{rupiah(net)}</td></tr></tfoot>
           </table>
         </div>
       )}
 
       {incomeCats && incomeCats.length > 0 && (
         <div style={{ marginBottom: 28 }}>
-          {sectionHead('Pemasukan per Kategori')}
+          {sectionHead(tr('laporan.xlsx.sheetIncomeCategory'))}
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr><th style={TH}>Kategori</th><th style={THR}>Total</th><th style={THR}>%</th></tr></thead>
+            <thead><tr><th style={TH}>{tr('laporan.xlsx.colCategory')}</th><th style={THR}>{tr('laporan.xlsx.colTotal')}</th><th style={THR}>%</th></tr></thead>
             <tbody>
               {incomeCats.map((cat, i) => (
                 <tr key={i}>
@@ -750,16 +854,16 @@ function ExcelPreviewRenderer({ payload }) {
                 </tr>
               ))}
             </tbody>
-            <tfoot><tr><td style={TDF}>Total Pemasukan</td><td style={{ ...TDFR, color: '#5C6B4C' }}>{rupiah(income)}</td><td style={TDFR}>100%</td></tr></tfoot>
+            <tfoot><tr><td style={TDF}>{tr('laporan.xlsx.rowTotalIncome')}</td><td style={{ ...TDFR, color: '#5C6B4C' }}>{rupiah(income)}</td><td style={TDFR}>100%</td></tr></tfoot>
           </table>
         </div>
       )}
 
       {cats && cats.length > 0 && (
         <div style={{ marginBottom: 28 }}>
-          {sectionHead('Pengeluaran per Kategori')}
+          {sectionHead(tr('laporan.xlsx.previewExpenseCategory'))}
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr><th style={TH}>Kategori</th><th style={THR}>Total</th><th style={THR}>%</th></tr></thead>
+            <thead><tr><th style={TH}>{tr('laporan.xlsx.colCategory')}</th><th style={THR}>{tr('laporan.xlsx.colTotal')}</th><th style={THR}>%</th></tr></thead>
             <tbody>
               {cats.map((cat, i) => (
                 <tr key={i}>
@@ -772,23 +876,23 @@ function ExcelPreviewRenderer({ payload }) {
                 </tr>
               ))}
             </tbody>
-            <tfoot><tr><td style={TDF}>Total Pengeluaran</td><td style={{ ...TDFR, color: '#B26A4A' }}>{rupiah(expense)}</td><td style={TDFR}>100%</td></tr></tfoot>
+            <tfoot><tr><td style={TDF}>{tr('laporan.xlsx.rowTotalExpense')}</td><td style={{ ...TDFR, color: '#B26A4A' }}>{rupiah(expense)}</td><td style={TDFR}>100%</td></tr></tfoot>
           </table>
         </div>
       )}
 
       {transactions && transactions.length > 0 && (
         <div style={{ marginBottom: 28 }}>
-          {sectionHead('Detail Transaksi')}
+          {sectionHead(tr('laporan.xlsx.sheetDetail'))}
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
-                <th style={{ ...TH, width: 36 }}>No</th>
-                <th style={TH}>Tanggal</th>
-                <th style={TH}>Kategori</th>
-                <th style={TH}>Keterangan</th>
-                <th style={TH}>Tipe</th>
-                <th style={THR}>Jumlah</th>
+                <th style={{ ...TH, width: 36 }}>{tr('laporan.xlsx.colNo')}</th>
+                <th style={TH}>{tr('laporan.xlsx.colDate')}</th>
+                <th style={TH}>{tr('laporan.xlsx.colCategory')}</th>
+                <th style={TH}>{tr('laporan.xlsx.colDescription')}</th>
+                <th style={TH}>{tr('laporan.xlsx.colType')}</th>
+                <th style={THR}>{tr('laporan.xlsx.colAmount')}</th>
               </tr>
             </thead>
             <tbody>
@@ -802,7 +906,7 @@ function ExcelPreviewRenderer({ payload }) {
                     <td style={{ ...TD, background: rowBg }}>{fmtDay(t.dateRaw)}</td>
                     <td style={{ ...TD, background: rowBg }}>{t.catLabel || '—'}</td>
                     <td style={{ ...TD, background: rowBg, maxWidth: 200, wordBreak: 'break-word' }}>{ket}</td>
-                    <td style={{ ...TD, background: rowBg, textAlign: 'center' }}>{isIncome ? 'Pemasukan' : 'Pengeluaran'}</td>
+                    <td style={{ ...TD, background: rowBg, textAlign: 'center' }}>{isIncome ? tr('laporan.xlsx.typeIncome') : tr('laporan.xlsx.typeExpense')}</td>
                     <td style={{ ...TDR, background: rowBg, color: isIncome ? '#5C6B4C' : '#B26A4A' }}>{rupiah(Math.abs(t.amount))}</td>
                   </tr>
                 );
@@ -874,7 +978,7 @@ function ReportPreview({ previewMeta, transactions, customCategories, accounts, 
       if (selectedFormat === 'pdf') await downloadPdf(p);
       else await downloadExcel(p);
     } catch (e) {
-      alert("Gagal membuat file: " + (e?.message || e));
+      alert(tr('laporan.doc.buildFailed', { pesan: e?.message || e }));
     } finally {
       setDownloading(false);
     }
@@ -909,7 +1013,7 @@ function ReportPreview({ previewMeta, transactions, customCategories, accounts, 
                 flexShrink: 0,
               }}
             >
-              <option value="all">Semua Dompet</option>
+              <option value="all">{tr('laporan.doc.allWallets')}</option>
               {accounts.map(a => (
                 <option key={a.id} value={a.id}>{a.name}</option>
               ))}
@@ -959,7 +1063,7 @@ function ReportPreview({ previewMeta, transactions, customCategories, accounts, 
         {/* Upgrade hint — shown only for Basic users */}
         {!canExport && (
           <div style={{ padding: "10px 20px", textAlign: "center", fontSize: 12.5, color: "var(--muted)", borderTop: "1px solid var(--line-soft)", background: "var(--paper)" }}>
-            Upgrade ke Pro untuk download laporan.
+            {tr('laporan.doc.upgradeHint')}
           </div>
         )}
       </div>
@@ -993,7 +1097,7 @@ function FormatPicker({ payload, onClose }) {
       await fn(payload);
       onClose();
     } catch (e) {
-      alert("Gagal membuat file: " + (e?.message || e));
+      alert(tr('laporan.doc.buildFailed', { pesan: e?.message || e }));
     } finally {
       setBusy(null);
     }
@@ -1049,13 +1153,15 @@ function Spinner() {
 
 // ── Reports page ───────────────────────────────────────────────────
 export function ReportsPage({ transactions = [], customCategories = [], canExport = true, accounts = [] }) {
-  const { t: tr } = useTranslation();
+  const { t: tr, i18n: i18nInst } = useTranslation();
   const { openPaywall } = usePaywall();
   const [scope, setScope] = React.useState("month"); // month | year
   const [preview, setPreview] = React.useState(null); // { kind, key } — raw meta only
   const [downloadTarget, setDownloadTarget] = React.useState(null);
 
-  const months = React.useMemo(() => monthsIndex(transactions), [transactions]);
+  // i18nInst.language ikut jadi dependency: nama bulan (m.full/m.abbr) berasal
+  // dari i18n, jadi kartu laporan harus dihitung ulang saat bahasa diganti.
+  const months = React.useMemo(() => monthsIndex(transactions), [transactions, i18nInst.language]);
   const years = React.useMemo(() => yearsIndex(months), [months]);
   const empty = transactions.length === 0;
 

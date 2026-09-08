@@ -84,7 +84,6 @@
     "belumAdaPengeluaran": "Belum ada data pengeluaran",
     "pengeluaranMuncul": "Mulai tambahkan transaksi untuk melihat rincian per kategori",
     "kategoriLagi": "+ {{count}} kategori lagi",
-    "wawasanAi": "Money IQ",
     "wawasanAiCounter": "Money IQ · {{idx}} dari {{total}}",
     "belumAdaWawasan": "Money IQ belum tersedia",
     "wawasanMuncul": "Tambahkan transaksi dan anggaran agar Money IQ bisa menganalisis pola keuanganmu",
@@ -352,7 +351,117 @@
     "pilihFormat": "Pilih format",
     "pdfDesc": "Dokumen siap cetak — rapi & ringkas",
     "excelDesc": "5 sheet, formula aktif, grafik & warna",
-    "tahun": "Tahun {{tahun}}"
+    "tahun": "Tahun {{tahun}}",
+    "doc": {
+      "tagline": "Less spending · More living",
+      "createdOn": "Dibuat {{tanggal}}",
+      "walletLine": "Dompet: {{dompet}}",
+      "allWallets": "Semua Dompet",
+      "emptyWallet": "Tidak ada transaksi pada periode ini untuk dompet yang dipilih.",
+      "kpiIncome": "Pemasukan",
+      "kpiExpense": "Pengeluaran",
+      "kpiNet": "Selisih bersih",
+      "savingsRate": "Tingkat menabung (savings rate)",
+      "chartBarMonthly": "Diagram batang — pemasukan vs pengeluaran",
+      "chartBarCategory": "Diagram batang — pengeluaran per kategori",
+      "chartPieIncome": "Diagram lingkaran — komposisi pemasukan",
+      "chartPieExpense": "Diagram lingkaran — komposisi pengeluaran",
+      "tableIncomeByCategory": "Tabel — pemasukan per kategori",
+      "tableExpenseByCategory": "Tabel — pengeluaran per kategori",
+      "tableMonthlyBreakdown": "Tabel — rincian bulanan",
+      "colCategory": "Kategori",
+      "colAmount": "Jumlah",
+      "colPctIncome": "% dari pemasukan",
+      "colPctExpense": "% dari pengeluaran",
+      "colMonth": "Bulan",
+      "colIn": "Masuk",
+      "colOut": "Keluar",
+      "colNet": "Bersih",
+      "colDate": "Tanggal",
+      "colName": "Nama",
+      "totalIncome": "Total pemasukan",
+      "totalExpense": "Total pengeluaran",
+      "sectionTransactions": "Bagian 4 — Rincian Transaksi",
+      "incomeTransactions": "Transaksi Pemasukan",
+      "expenseTransactions": "Transaksi Pengeluaran",
+      "totalIncomeCaps": "Total Pemasukan",
+      "totalExpenseCaps": "Total Pengeluaran",
+      "autoFooter": "FinanceApp — Laporan dibuat otomatis",
+      "disclaimer": "Dokumen ini bersifat informatif, bukan dokumen pajak resmi.",
+      "closing": "Penutup",
+      "generatedBy": "Laporan dibuat otomatis oleh FinanceApp pada {{tanggal}}.",
+      "headerRight": "Laporan {{periode}}",
+      "pageOf": "Hal. {{n}} dari {{total}}",
+      "shareDialogTitle": "Simpan atau bagikan laporan",
+      "buildFailed": "Gagal membuat file: {{pesan}}",
+      "upgradeHint": "Upgrade ke Pro untuk download laporan.",
+      "excelPreviewEyebrow": "FinanceApp — Pratinjau Excel",
+      "filenameMonthly": "Laporan",
+      "filenameYearly": "Laporan-Tahunan",
+      "excelFilePrefix": "FinanceApp_Laporan",
+      "monthsFull": [
+        "Januari",
+        "Februari",
+        "Maret",
+        "April",
+        "Mei",
+        "Juni",
+        "Juli",
+        "Agustus",
+        "September",
+        "Oktober",
+        "November",
+        "Desember"
+      ],
+      "monthsAbbr": [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "Mei",
+        "Jun",
+        "Jul",
+        "Agu",
+        "Sep",
+        "Okt",
+        "Nov",
+        "Des"
+      ]
+    },
+    "xlsx": {
+      "sheetSummary": "Ringkasan",
+      "sheetDetail": "Detail Transaksi",
+      "sheetCategory": "Per Kategori",
+      "sheetIncomeCategory": "Pemasukan per Kategori",
+      "sheetTrend": "Tren Bulanan",
+      "typeIncome": "Pemasukan",
+      "typeExpense": "Pengeluaran",
+      "titleReport": "Laporan Keuangan — {{periode}}",
+      "rowTotalIncome": "Total Pemasukan",
+      "rowTotalExpense": "Total Pengeluaran",
+      "rowNet": "Selisih Bersih",
+      "rowSavingsRate": "Tingkat Menabung",
+      "rowTotal": "Total",
+      "chartBar": "Diagram batang — Pemasukan vs Pengeluaran",
+      "chartPieExpense": "Diagram lingkaran — komposisi pengeluaran",
+      "chartPieIncome": "Diagram lingkaran — komposisi pemasukan",
+      "chartLine": "Grafik garis — tren bulanan",
+      "colNo": "No",
+      "colDate": "Tanggal",
+      "colCategory": "Kategori",
+      "colDescription": "Keterangan",
+      "colType": "Tipe",
+      "colAmount": "Jumlah",
+      "colTotal": "Total",
+      "colPercent": "Persentase",
+      "colMonth": "Bulan",
+      "colIncome": "Pemasukan",
+      "colExpense": "Pengeluaran",
+      "colDifference": "Selisih",
+      "totalIncomeCaps": "TOTAL PEMASUKAN",
+      "totalExpenseCaps": "TOTAL PENGELUARAN",
+      "previewExpenseCategory": "Pengeluaran per Kategori"
+    }
   },
   "pengaturan": {
     "judul": "Pengaturan",
@@ -799,18 +908,51 @@
         "feature": "Fitur"
       },
       "feature": {
-        "transaksi": { "label": "Transaksi", "basic": "75/bulan" },
-        "kustomKategori": { "label": "Custom kategori", "basic": "Maks. 3" },
-        "dompet": { "label": "Dompet", "basic": "1 dompet" },
-        "goalsTabungan": { "label": "Goals tabungan", "basic": "Maks. 2" },
-        "anggaran": { "label": "Anggaran", "basic": "Maks. 7" },
-        "hutangPiutang": { "label": "Hutang/Piutang", "basic": "Maks. 5 aktif" },
-        "transaksiBerulang": { "label": "Transaksi berulang" },
-        "laporanPdfExcel": { "label": "Laporan PDF / Excel", "basic": "Preview saja" },
-        "scanNota": { "label": "Scan nota" },
-        "moneyIq": { "label": "Money IQ" },
-        "temaFontPremium": { "label": "Tema font premium", "basic": "2 tema", "pro": "Semua tema" },
-        "widgetLayarUtama": { "label": "Widget layar utama" }
+        "transaksi": {
+          "label": "Transaksi",
+          "basic": "75/bulan"
+        },
+        "kustomKategori": {
+          "label": "Custom kategori",
+          "basic": "Maks. 3"
+        },
+        "dompet": {
+          "label": "Dompet",
+          "basic": "1 dompet"
+        },
+        "goalsTabungan": {
+          "label": "Goals tabungan",
+          "basic": "Maks. 2"
+        },
+        "anggaran": {
+          "label": "Anggaran",
+          "basic": "Maks. 7"
+        },
+        "hutangPiutang": {
+          "label": "Hutang/Piutang",
+          "basic": "Maks. 5 aktif"
+        },
+        "transaksiBerulang": {
+          "label": "Transaksi berulang"
+        },
+        "laporanPdfExcel": {
+          "label": "Laporan PDF / Excel",
+          "basic": "Preview saja"
+        },
+        "scanNota": {
+          "label": "Scan nota"
+        },
+        "moneyIq": {
+          "label": "Money IQ"
+        },
+        "temaFontPremium": {
+          "label": "Tema font premium",
+          "basic": "2 tema",
+          "pro": "Semua tema"
+        },
+        "widgetLayarUtama": {
+          "label": "Widget layar utama"
+        }
       },
       "unlimited": "Tak terbatas",
       "cta": "Mulai Pro — {{price}}{{period}}",
