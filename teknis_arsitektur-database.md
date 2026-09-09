@@ -1,6 +1,6 @@
 # FinanceApp — Arsitektur Sistem & Database Schema
 
-> **Dibuat:** 2026-06-28 | **Terakhir diperbarui:** 2026-07-23 | **Versi App:** 2.6.0  
+> **Dibuat:** 2026-06-28 | **Terakhir diperbarui:** 2026-09-09 | **Versi App:** 2.6.0  
 > **Tujuan:** Dokumentasi teknis struktur project, data flow, dan database schema untuk developer.
 
 ---
@@ -257,6 +257,7 @@ user_id         uuid            NOT NULL
 name            text            Nama kategori (case-insensitive unique per user)
 color           text            Warna hex
 type            text            'income' | 'expense' (default 'expense')
+icon            text            NOT NULL DEFAULT 'other'   — kind icon dari CatIcon (src/icons.jsx), dipilih saat buat/edit (edit tunduk cooldown 30 hari)
 is_deleted      boolean         Soft delete — tidak pernah hard delete
 is_locked       boolean         true saat Basic melebihi limit
 created_at      timestamptz
@@ -281,6 +282,7 @@ due_date        date            Jatuh tempo, opsional
 status          text            'active' | 'paid'
 is_deleted      boolean         Soft delete (created_at tetap terhitung untuk cooldown 50 hari)
 is_locked       boolean         true saat Basic melebihi limit 5 aktif
+cash_disbursed_at_creation boolean NOT NULL DEFAULT true   — hanya bermakna untuk type='receivable'; false = belum dibayar (tagihan), true = uang sudah berpindah
 created_at      timestamptz
 updated_at      timestamptz
 
@@ -353,6 +355,29 @@ window_start            timestamptz     Awal jendela 60 detik
 **Fungsi RPC:** `check_chat_rate_limit(p_max_requests=8, p_window_seconds=60) SECURITY DEFINER`
 - Returns jsonb: `{allowed: boolean, remaining: int, reset_at: timestamptz}`
 - Atomic UPDATE via SELECT FOR UPDATE untuk serialize per-user
+
+### Tabel `chat_unanswered_log` (Analitik Pola Pertanyaan Gagal Money IQ — Sejak 17 Juli 2026)
+```sql
+id              uuid            PRIMARY KEY
+question        text            NOT NULL — teks pertanyaan asli user
+reason          text            NOT NULL — 'level1_blocked' | 'level2_blocked' | 'level3_declined' | 'data_kurang'
+created_at      timestamptz     NOT NULL
+```
+
+**Privasi (final, bukan opsional):** Tabel **TIDAK menyimpan user_id** atau identitas apa pun — hanya teks pertanyaan + alasan gagal + waktu. Jangan pernah menambah `user_id`, email, atau kolom identitas ke tabel ini.
+
+**Penulis:** HANYA Edge Function `financial-chat` via `service_role` (insert langsung, bypass RLS). BUKAN via RPC — karena kita tidak mau `auth.uid()` ikut tercatat.
+
+**Pembaca:** Hanya Boss Ali via SQL Editor (`service_role`). User biasa tidak bisa membaca (RLS aktif, TANPA policy SELECT apa pun).
+
+**Tujuan:** Analitik pola pertanyaan yang diblok keyword filter Level 1 — untuk memperbaiki filter. **INI BUKAN error logging teknis** (itu tabel terpisah `error_logs`).
+
+**Retensi:** MANUAL berkala (tidak ada cron otomatis). Query untuk hapus data >30 hari: 
+```sql
+DELETE FROM public.chat_unanswered_log WHERE created_at < now() - interval '30 days';
+```
+
+**Migration:** `supabase/migrations/20260717000000_add_chat_unanswered_log.sql` (created 17 Juli 2026, executed).
 
 ---
 
