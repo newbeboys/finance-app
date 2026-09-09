@@ -727,7 +727,7 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
           </div>
         )}
 
-        {active === "budgets" && <BudgetsPage transactions={transactions} budgets={budgets} onAdd={createBudget} onUpdate={updateBudget} onDelete={deleteBudget} customCategories={customCategories} onCreateCustom={addCustomCategory} onDeleteCustom={handleDeleteCustomCategory} isPro={subscription.isPro} isBasicAtMax={isBasicAtMax} userId={session.user.id} />}
+        {active === "budgets" && <BudgetsPage transactions={transactions} budgets={budgets} onAdd={createBudget} onUpdate={updateBudget} onDelete={deleteBudget} customCategories={customCategories} onCreateCustom={addCustomCategory} onDeleteCustom={handleDeleteCustomCategory} isPro={subscription.isPro} isBasicAtMax={isBasicAtMax} userId={session.user.id} accounts={accounts} />}
 
         {active === "wallets" && (
           <WalletsPage accounts={accounts} onAdd={handleAddAcct} onSetPrimary={setPrimary} onDelete={deleteAccount} transactions={transactions} addLocked={walletAddLocked} customCategories={customCategories} />

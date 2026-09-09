@@ -330,7 +330,9 @@
     "periodeLabel": "Period",
     "menyimpan": "Saving…",
     "dari": "of",
-    "over": "over!"
+    "over": "over!",
+    "labelDompet": "Wallet",
+    "gabunganBeberapaDompet": "Combined across wallets"
   },
   "laporan": {
     "judul": "Financial Report",
