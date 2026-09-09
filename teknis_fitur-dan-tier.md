@@ -1,6 +1,6 @@
 # FinanceApp — Fitur-Fitur Aplikasi & Sistem Tier
 
-> **Dibuat:** 2026-06-28 | **Terakhir diperbarui:** 2026-07-23 | **Versi App:** 2.6.0  
+> **Dibuat:** 2026-06-28 | **Terakhir diperbarui:** 2026-09-09 | **Versi App:** 2.6.0  
 > **Tujuan:** Dokumentasi lengkap semua fitur, tier system, dan gating mechanism.
 
 ---
@@ -131,14 +131,17 @@ t.wallet_id === account.id ||
 
 ## 4. Kategori Kustom
 
-**Lokasi kode:** `src/hooks/useCustomCategories.js` + `src/category-field.jsx`
+**Lokasi kode:** `src/hooks/useCustomCategories.js` + `src/category-field.jsx` + `src/components/EditCategoryModal.jsx`
 
 - Tipe: Pengeluaran atau Pemasukan (terpisah)
 - Warna: 8 preset saat pembuatan
+- **Ikon:** Dipilih dari `CUSTOM_CATEGORY_ICONS` di `src/icons.jsx` (10+ pilihan: shopping, bills, food, travel, health, education, entertainment, transport, gadget, other) — dipilih saat pembuatan kategori di `CategoryField`, atau saat edit di `EditCategoryModal`
 - Nama: unik per user (case-insensitive); duplikat → return kategori yang sudah ada
 - Soft delete: `is_deleted = true`, tidak pernah hard delete
 
-**Cooldown edit (Basic only):** 30 hari setelah edit nama/warna. Pro tidak ada cooldown.
+**Icon picker:** Muncul saat buat kategori baru (tidak ada ikon yang dipilih = fallback `'other'` sementara) dan saat edit kategori (tunduk cooldown 30 hari yang sama dengan edit nama/warna). Ikon tertanam di kolom `custom_categories.icon` sejak migration 20260903000000 — baca langsung oleh `resolveCategory()`/`CatIcon` di semua tempat kategori kustom ditampilkan (Transaksi, Dompet, Anggaran).
+
+**Cooldown edit (Basic only):** 30 hari setelah edit nama/warna/ikon. Pro tidak ada cooldown.
 
 **Batas:** Basic = 3 aktif, Pro = unlimited
 
@@ -465,6 +468,18 @@ t.wallet_id === account.id ||
 
 **Dompet dihapus:** Catatan tetap ada; `wallet_id` → `NULL` (FK `ON DELETE SET NULL`)
 
+### Toggle Mode Piutang: "Kas Keluar" vs "Tagihan" (added 2 September 2026)
+
+**Lokasi:** Toggle muncul di `AddDebtModal.jsx` **HANYA untuk type='receivable'** (piutang)
+
+**Pilihan:**
+1. **Kas Keluar (default):** `cash_disbursed_at_creation = true` — uang sudah berpindah saat catatan dibuat → `createDebt()` bikin transaksi pokok + koreksi saldo dompet (perilaku lama)
+2. **Tagihan:** `cash_disbursed_at_creation = false` — catatan berupa tagihan yang belum dibayar (mis. iuran bulanan, kontrakan) → `createDebt()` TIDAK bikin transaksi pokok/saldo; uang baru dicatat saat pembayaran masuk lewat `addPayment()`
+
+**Indikator di card:** Badge "📋 Belum Ditagih" muncul di `DebtDetailSheet.jsx` saat `cash_disbursed_at_creation === false`, mengingatkan user ini baru tagihan.
+
+**Untuk type='payable'** (hutang): Toggle tidak ada, selalu `cash_disbursed_at_creation = true` (uang sudah keluar saat buat hutang).
+
 ---
 
 ## 18. Sistem Error Logging Terpusat
@@ -575,6 +590,13 @@ User Question
 - Cek atomik via RPC `check_chat_rate_limit()` SECURITY DEFINER
 - Status 200 (bukan 429) dengan `source:"rate_limit"` supaya pesan friendly ditampilkan
 - **Update 23 Juli 2026:** Migration `20260723010000_harden_functions_search_path_and_grants.sql` (dibuat lokal, **belum di-push**) merencanakan revoke execute `check_chat_rate_limit()` dari `public, anon` — hanya `authenticated` yang boleh panggil. Lihat `teknis_keputusan-infrastruktur-roadmap.md` bagian 1.12.
+
+**Logging pertanyaan gagal (added 17 Juli 2026):**
+- Tabel `chat_unanswered_log` menyimpan pola pertanyaan yang DIBLOK di Level 1, 2, atau 3, atau tidak cukup data
+- **PRIVASI:** Tabel **TIDAK menyimpan user_id atau identitas apapun** — hanya teks pertanyaan + alasan gagal + waktu. Lihat `teknis_arsitektur-database.md` bagian "Tabel `chat_unanswered_log`" untuk lengkap
+- Tujuan: Analitik untuk memperbaiki keyword filter Level 1
+- Penulisan: Insert langsung via `service_role` dari index.ts (~baris 85)
+- Pembacaan: Hanya Boss Ali via SQL Editor, tidak ada user biasa yang bisa membaca
 
 ### Frontend — React Integration
 

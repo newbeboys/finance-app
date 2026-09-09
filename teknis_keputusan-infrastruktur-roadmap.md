@@ -1,6 +1,6 @@
 # FinanceApp — Keputusan Arsitektur, Infrastruktur, & Roadmap
 
-> **Dibuat:** 2026-06-28 | **Terakhir diperbarui:** 2026-07-23 | **Versi App:** 2.6.0  
+> **Dibuat:** 2026-06-28 | **Terakhir diperbarui:** 2026-09-09 | **Versi App:** 2.6.0  
 > **Tujuan:** Dokumentasi keputusan teknis, infrastruktur, status project, dan roadmap pengembangan.
 
 ---
@@ -472,7 +472,9 @@ REVOKE EXECUTE ON FUNCTION public.set_plan_for_testing(uuid, text, timestamptz, 
    - ✅ `20260705000000` (add_is_locked to debts) — EXECUTED (status terverifikasi)
    - ⏳ `20260706000000` (add_error_logs) — BELUM DIKONFIRMASI, perlu verifikasi di SQL Editor
    - ⏳ `20260716000000` (add_chat_rate_limits) — BELUM DIKONFIRMASI, perlu verifikasi di SQL Editor
-   - ⏳ `20260717000000` (add_chat_unanswered_log) — BELUM DIKONFIRMASI, perlu verifikasi di SQL Editor
+   - ✅ `20260717000000` (add_chat_unanswered_log) — EXECUTED (dikonfirmasi dari kode financial-chat/index.ts yang insert ke tabel ini di production)
+   - ✅ `20260902000000` (add_cash_disbursed_flag_to_debts) — EXECUTED
+   - ✅ `20260903000000` (add_icon_to_custom_categories) — EXECUTED
    - ❌ `20260723000000` (document_user_summary_view) — BARU DIBUAT, BELUM DI-PUSH sama sekali
    - ❌ `20260723010000` (harden_functions_search_path_and_grants) — BARU DIBUAT, BELUM DI-PUSH sama sekali. **Berisi fix blocker kritis `set_plan_for_testing` (lihat item 0 di atas)**
    - ❌ `20260723020000` (revoke_rls_auto_enable_execute) — BARU DIBUAT, BELUM DI-PUSH sama sekali
@@ -551,6 +553,8 @@ REVOKE EXECUTE ON FUNCTION public.set_plan_for_testing(uuid, text, timestamptz, 
 | 9 Sep | **Klaster 5** — label kategori & tipe dompet bawaan disambungkan ke resolver yang sudah ada (`analytics.jsx` 4 titik, `charts.jsx` donut, `reports.jsx` `catLabelOf()`, `wallets.jsx` `typeLabelI18n()`). `data.jsx` 0 perubahan | ✅ Committed | Claude Code |
 | 9 Sep | Fix: key `beranda.wawasanAiProDesc` dipanggil kode tapi tidak ada di kedua locale (selalu fallback Indonesia) + CTA Money IQ hardcode → ditambahkan/diterjemahkan | ✅ Committed | Claude Code |
 | 9 Sep | Verifikasi Excel: workbook ID & EN dibuka di Microsoft Excel (COM), `CalculateFullRebuild` + edit baris data → SUMIFS lintas-sheet tetap benar, 0 sel error di kedua bahasa | ✅ Verified | Claude Code |
+| 2 Sep | Migration `20260902000000_add_cash_disbursed_flag_to_debts.sql` → kolom `debts.cash_disbursed_at_creation` (boolean, DEFAULT true), hanya bermakna type='receivable'. false = tagihan belum dibayar (skip transaksi pokok sampai pembayaran pertama). | ✅ Executed | Boss Ali |
+| 3 Sep | Migration `20260903000000_add_icon_to_custom_categories.sql` → kolom `custom_categories.icon` (text, DEFAULT 'other'), icon picker di CategoryField/EditCategoryModal (cooldown 30 hari sama nama/warna). | ✅ Executed | Boss Ali |
 
 ### Versi-Versi Sebelumnya
 - v2.5.6 (1 Juli): Deadline date picker & goal sorting
