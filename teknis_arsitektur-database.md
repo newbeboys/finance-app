@@ -224,10 +224,13 @@ limit           numeric         Batas pengeluaran (Rupiah)
 spent           numeric         ⚠️ Ada di DB tapi TIDAK DIPAKAI — spent selalu dihitung dari tx
 color           text            Warna tampilan
 enabled         boolean         ⚠️ Ada di DB tapi TIDAK DIPAKAI — semua budget tetap ditampilkan
+wallet_id       uuid            FK wallets(id) ON DELETE SET NULL, nullable — added migration 20260909000000
 created_at      timestamptz
 ```
 
-**Spent selalu dihitung** dari array transaksi yang sudah di-memori, bukan dari kolom `spent` di DB.
+**Spent selalu dihitung** dari array transaksi yang sudah di-memori, bukan dari kolom `spent` di DB. Satu-satunya perhitungan resmi ada di `src/lib/budgetSpent.js` (`getBudgetSpent`) — dipakai halaman Anggaran, `BudgetsCard`, dan `useNotifications`.
+
+`wallet_id` NULL = anggaran umum (semua dompet), nilai untuk semua baris sebelum migrasi. Kalau diisi, `getBudgetSpent()` hanya menjumlahkan transaksi dompet itu (tx tanpa `wallet_id` dihitung milik dompet utama). Satu kategori boleh punya beberapa anggaran asal beda dompet; anggaran umum & anggaran per-dompet untuk kategori yang sama saling mengunci (`isCategoryBlocked` di `budgets-page.jsx`). `ON DELETE SET NULL`: dompet dihapus → anggarannya jadi anggaran umum, tidak ikut terhapus.
 
 ### Tabel `savings`
 ```sql

@@ -3,13 +3,14 @@ import { useTranslation } from 'react-i18next';
 import { supabase } from '../supabase';
 import { usePaywall } from '../components/PaywallModal';
 
-// Actual Supabase columns: id, user_id, category, label, color, limit, enabled, spent, created_at
+// Actual Supabase columns: id, user_id, category, label, color, limit, enabled, spent, wallet_id, created_at
 // Note: no "period" column in DB — periode is UI-only, defaults to "monthly"
 function toBudget(row) {
   return {
     id:         row.id,
     categoryId: row.category || null,
     label:      row.label    || '',
+    walletId:   row.wallet_id || null,   // null = anggaran umum (semua dompet)
     color:      row.color    || 'var(--sage)',
     limit:      Number(row.limit ?? 0),
     enabled:    row.enabled  !== false,
@@ -98,6 +99,7 @@ export function useBudgets(userId, limits) {
         user_id:  userId,
         category: row.categoryId || null,
         label:    row.label,
+        wallet_id: row.walletId || null,
         color:    row.color,
         limit:    row.limit,
         enabled:  row.enabled ?? true,
@@ -115,6 +117,7 @@ export function useBudgets(userId, limits) {
     if ('enabled' in updates) patch.enabled = updates.enabled;
     if ('label'   in updates) patch.label   = updates.label;
     if ('color'   in updates) patch.color   = updates.color;
+    if ('walletId' in updates) patch.wallet_id = updates.walletId;
 
     const { data, error } = await supabase
       .from('budgets')

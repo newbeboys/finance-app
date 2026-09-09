@@ -7,8 +7,9 @@ import { useIsCompact } from './hooks/useContainerWidth';
 import { CategoryField, CUSTOM_ID, resolveCategory } from './category-field';
 import { useScrollLock } from './hooks/useScrollLock';
 import { formatRupiahInput } from './utils/numberFormat';
+import { getBudgetSpent, resolveBudgetCategoryId } from './lib/budgetSpent';
 
-export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, onDelete, customCategories = [], onCreateCustom, onDeleteCustom, isPro = false, isBasicAtMax = false, userId }) {
+export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, onDelete, customCategories = [], onCreateCustom, onDeleteCustom, isPro = false, isBasicAtMax = false, userId, accounts = [] }) {
   const { t: tr, i18n: i18nObj } = useTranslation();
   // Ruang konten, bukan lebar layar (lihat useContainerWidth). <750px: identik mobile.
   const isMobile = useIsCompact();
@@ -16,38 +17,85 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
   const [period, setPeriod] = React.useState("monthly");
   const [showAddModal, setShowAddModal] = React.useState(false);
   const [editingBudget, setEditingBudget] = React.useState(null);
+  // null = "Semua Dompet". Hanya relevan bila user punya >1 dompet.
+  const [filterWalletId, setFilterWalletId] = React.useState(null);
+
+  // Dompet yang sedang difilter dihapus → balik ke "Semua Dompet" (pola sama
+  // seperti filter dompet di analytics.jsx).
+  React.useEffect(() => {
+    if (filterWalletId == null) return;
+    if (!accounts.some(a => a.id === filterWalletId)) setFilterWalletId(null);
+  }, [accounts, filterWalletId]);
 
   const deleteRow = (id) => onDelete(id);
 
-  const spentByCategory = React.useMemo(() => {
-    const now = new Date();
-    const pfx = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const map = {};
-    transactions.forEach(tx => {
-      if (tx.amount < 0 && tx.dateRaw && tx.dateRaw.startsWith(pfx)) {
-        map[tx.category] = (map[tx.category] || 0) + Math.abs(tx.amount);
-      }
-    });
-    return map;
-  }, [transactions]);
+  // Perhitungan terpakai: sumber tunggal di src/lib/budgetSpent.js (fuzzy-match
+  // budget lama tanpa categoryId + cakupan dompet anggaran ada di sana).
+  const getSpent = React.useCallback(
+    (r) => getBudgetSpent(r, transactions, accounts),
+    [transactions, accounts]
+  );
 
-  const getSpent = (r) => {
-    if (r.categoryId) return spentByCategory[r.categoryId] || 0;
-    const bl = (r.label || '').toLowerCase().trim();
-    const match = CATEGORIES.find(c => {
-      const cl = c.label.toLowerCase();
-      return cl === bl || cl.startsWith(bl) || bl.startsWith(cl.split(' ')[0]);
-    });
-    return match ? (spentByCategory[match.id] || 0) : 0;
-  };
+  // Anggaran umum (walletId null) selalu relevan; anggaran per-dompet hanya saat
+  // filter "Semua Dompet" atau tepat dompet itu.
+  const matchesFilter = (r) => r.walletId == null || filterWalletId == null || r.walletId === filterWalletId;
 
   const rows = budgets;
   const visibleRows = rows.filter(r => (r.periode || "monthly") === period);
-  const active      = visibleRows.filter(r => r.enabled);
+
+  // Kartu ringkasan: sum polos semua baris yang relevan dgn filter aktif —
+  // TERPISAH dari penggabungan baris di groupedRows, jangan disatukan.
+  const active      = visibleRows.filter(r => r.enabled && matchesFilter(r));
   const totalLimit  = active.reduce((s, r) => s + r.limit, 0);
   const totalSpent  = active.reduce((s, r) => s + getSpent(r), 0);
   const totalPct    = totalLimit ? totalSpent / totalLimit : 0;
   const overCount   = active.filter(r => getSpent(r) > r.limit).length;
+
+  // Satu kategori bisa punya beberapa anggaran (dompet berbeda) → kelompokkan
+  // dulu, baru tentukan bentuk barisnya menurut filter dompet aktif.
+  const groupedRows = React.useMemo(() => {
+    const map = new Map();
+    visibleRows.forEach(r => {
+      const catId = resolveBudgetCategoryId(r);
+      // catId null = budget lama yang labelnya tak cocok kategori manapun →
+      // grup sendiri, supaya dua budget legacy tak berkaitan tidak tergabung.
+      const key = catId ?? `__nocat__:${r.id}`;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(r);
+    });
+
+    const out = [];
+    map.forEach(group => {
+      if (group.length === 1) {
+        const r = group[0];
+        if (!matchesFilter(r)) return;
+        out.push({ key: r.id, budget: r, spent: getSpent(r), limit: r.limit, combined: false });
+        return;
+      }
+      if (filterWalletId == null) {
+        // "Semua Dompet": satu baris gabungan. Nominalnya sengaja TIDAK
+        // ditampilkan (angka gabungan lintas dompet menyesatkan) — hanya
+        // progress bar dari total terpakai / total batas.
+        out.push({
+          key: group.map(r => r.id).join('+'),
+          budget: group[0],
+          spent: group.reduce((sum, r) => sum + getSpent(r), 0),
+          limit: group.reduce((sum, r) => sum + r.limit, 0),
+          combined: true,
+        });
+        return;
+      }
+      // Filter dompet spesifik: tampilkan anggaran dompet itu apa adanya. Kalau
+      // tidak ada yang cocok persis, fallback ke anggaran general dalam grup ini
+      // (data lama sebelum wallet-scoping — general tetap berlaku di dompet manapun).
+      // Kalau tidak ada keduanya, barisnya hilang.
+      const specific = group.find(x => x.walletId === filterWalletId);
+      const r = specific || group.find(x => x.walletId == null);
+      if (!r) return;
+      out.push({ key: r.id, budget: r, spent: getSpent(r), limit: r.limit, combined: false });
+    });
+    return out;
+  }, [visibleRows, filterWalletId, getSpent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const locale = i18nObj.language === 'en' ? 'en-US' : 'id-ID';
   const monthLabel = new Date().toLocaleDateString(locale, { month: 'long', year: 'numeric' }).toUpperCase();
@@ -67,10 +115,37 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
             </div>
           )}
         </div>
-        <div data-tour="budget-period-toggle" style={{ display: "flex", padding: 3, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10 }}>
-          {[{ id: "monthly", labelKey: "anggaran.bulanan" }, { id: "weekly", labelKey: "anggaran.mingguan" }].map(p => (
-            <button key={p.id} onClick={() => setPeriod(p.id)} style={{ padding: isMobile ? "9px 16px" : "7px 14px", fontSize: isMobile ? 13 : 12.5, background: period === p.id ? "var(--ivory)" : "transparent", border: period === p.id ? "1px solid var(--line-soft)" : "1px solid transparent", borderRadius: 8, color: period === p.id ? "var(--ink)" : "var(--muted)", fontWeight: period === p.id ? 500 : 400 }}>{tr(p.labelKey)}</button>
-          ))}
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <div data-tour="budget-period-toggle" style={{ display: "flex", padding: 3, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10 }}>
+            {[{ id: "monthly", labelKey: "anggaran.bulanan" }, { id: "weekly", labelKey: "anggaran.mingguan" }].map(p => (
+              <button key={p.id} onClick={() => setPeriod(p.id)} style={{ padding: isMobile ? "9px 16px" : "7px 14px", fontSize: isMobile ? 13 : 12.5, background: period === p.id ? "var(--ivory)" : "transparent", border: period === p.id ? "1px solid var(--line-soft)" : "1px solid transparent", borderRadius: 8, color: period === p.id ? "var(--ink)" : "var(--muted)", fontWeight: period === p.id ? 500 : 400 }}>{tr(p.labelKey)}</button>
+            ))}
+          </div>
+
+          {/* Filter dompet — HANYA tampil jika user punya lebih dari 1 dompet */}
+          {accounts.length > 1 && (
+            <select
+              value={filterWalletId ?? "all"}
+              onChange={e => setFilterWalletId(e.target.value === "all" ? null : e.target.value)}
+              style={{
+                padding: "9px 12px",
+                background: "var(--paper)",
+                border: "1px solid var(--line-soft)",
+                borderRadius: 10,
+                color: "var(--ink)",
+                fontSize: 12.5,
+                fontFamily: "inherit",
+                cursor: "pointer",
+                outline: "none",
+                maxWidth: "min(200px, calc(50vw - 24px))",
+              }}
+            >
+              <option value="all">{tr('analitik.semuaDompet')}</option>
+              {accounts.map(a => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+          )}
         </div>
       </div>
 
@@ -166,7 +241,7 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
               </div>
             )}
 
-            {visibleRows.length === 0 && (
+            {groupedRows.length === 0 && (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, padding: "40px 20px", textAlign: "center" }}>
                 <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--line)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M9 21V9" />
@@ -180,9 +255,10 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
               </div>
             )}
 
-            {visibleRows.map((r, i) => {
-              const computedSpent = getSpent(r);
-              const currentLimit  = r.limit;
+            {groupedRows.map((row, i) => {
+              const r             = row.budget;
+              const computedSpent = row.spent;
+              const currentLimit  = row.limit;
               const pct  = currentLimit ? computedSpent / currentLimit : 0;
               const over = computedSpent > currentLimit;
               // Kategori kustom baca `icon` dari resolveCategory(); bawaan (tanpa field
@@ -191,24 +267,35 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
 
               if (isMobile) {
                 return (
-                  <div key={r.id} style={{ padding: "16px 0", borderBottom: i < visibleRows.length - 1 ? "1px solid var(--line-soft)" : 0 }}>
+                  <div key={row.key} style={{ padding: "16px 0", borderBottom: i < groupedRows.length - 1 ? "1px solid var(--line-soft)" : 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
                       <span style={{ width: 38, height: 38, borderRadius: 10, flexShrink: 0, background: `color-mix(in oklch, ${r.color} 16%, var(--ivory))`, color: r.color, display: "grid", placeItems: "center" }}>
                         <CatIcon kind={catIcon} size={17} />
                       </span>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 14, fontWeight: 500 }}>{r.label}</div>
-                        <div className="tnum" style={{ fontSize: 12, color: over ? "var(--terra)" : "var(--muted)", marginTop: 1 }}>
-                          {fmtShort(computedSpent)} <span style={{ color: "var(--muted-2)" }}>{tr('anggaran.dari')}</span> {fmtShort(r.limit)}
-                          {over && <span style={{ marginLeft: 6, color: "var(--terra)" }}>• {tr('anggaran.over')}</span>}
-                        </div>
+                        {/* Baris gabungan: nominal sengaja tidak ditampilkan (angka
+                            lintas dompet menyesatkan) — progress bar tetap jalan. */}
+                        {row.combined ? (
+                          <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 1 }}>{tr('anggaran.gabunganBeberapaDompet')}</div>
+                        ) : (
+                          <div className="tnum" style={{ fontSize: 12, color: over ? "var(--terra)" : "var(--muted)", marginTop: 1 }}>
+                            {fmtShort(computedSpent)} <span style={{ color: "var(--muted-2)" }}>{tr('anggaran.dari')}</span> {fmtShort(currentLimit)}
+                            {over && <span style={{ marginLeft: 6, color: "var(--terra)" }}>• {tr('anggaran.over')}</span>}
+                          </div>
+                        )}
                       </div>
-                      <button onClick={() => setEditingBudget(r)} title={tr('umum.edit')} aria-label={tr('umum.edit')} style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid var(--line-soft)", background: "var(--paper)", color: "var(--ink-2)", display: "grid", placeItems: "center", flexShrink: 0 }}>
-                        <IconEdit size={14} />
-                      </button>
-                      <button onClick={() => deleteRow(r.id)} title={tr('umum.hapus')} aria-label={tr('umum.hapus')} style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid var(--line-soft)", background: "var(--paper)", color: "var(--terra)", display: "grid", placeItems: "center", flexShrink: 0 }}>
-                        <IconClose size={13} />
-                      </button>
+                      {/* Baris gabungan mewakili >1 anggaran — edit/hapus baru muncul
+                          setelah user memilih dompetnya di filter, supaya tidak ada
+                          anggaran yang terhapus/terubah tanpa user tahu yang mana. */}
+                      {!row.combined && (<>
+                        <button onClick={() => setEditingBudget(r)} title={tr('umum.edit')} aria-label={tr('umum.edit')} style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid var(--line-soft)", background: "var(--paper)", color: "var(--ink-2)", display: "grid", placeItems: "center", flexShrink: 0 }}>
+                          <IconEdit size={14} />
+                        </button>
+                        <button onClick={() => deleteRow(r.id)} title={tr('umum.hapus')} aria-label={tr('umum.hapus')} style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid var(--line-soft)", background: "var(--paper)", color: "var(--terra)", display: "grid", placeItems: "center", flexShrink: 0 }}>
+                          <IconClose size={13} />
+                        </button>
+                      </>)}
                     </div>
                     <div style={{ height: 7, background: "var(--line-soft)", borderRadius: 99, overflow: "hidden" }}>
                       <div style={{ height: "100%", width: `${Math.min(pct, 1) * 100}%`, background: over ? "var(--terra)" : r.color, borderRadius: 99, transition: "width .35s ease" }} />
@@ -218,14 +305,18 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
               }
 
               return (
-                <div key={r.id} className="budget-cols-row" style={{ display: "grid", gridTemplateColumns: "minmax(200px,1.4fr) 1.6fr 150px 80px", alignItems: "center", gap: 16, padding: "16px 0", borderBottom: i < visibleRows.length - 1 ? "1px solid var(--line-soft)" : 0 }}>
+                <div key={row.key} className="budget-cols-row" style={{ display: "grid", gridTemplateColumns: "minmax(200px,1.4fr) 1.6fr 150px 80px", alignItems: "center", gap: 16, padding: "16px 0", borderBottom: i < groupedRows.length - 1 ? "1px solid var(--line-soft)" : 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
                     <span style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: `color-mix(in oklch, ${r.color} 16%, var(--ivory))`, color: r.color, display: "grid", placeItems: "center" }}>
                       <CatIcon kind={catIcon} size={16} />
                     </span>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 13.5, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.label}</div>
-                      <div className="tnum" style={{ fontSize: 11.5, color: over ? "var(--terra)" : "var(--muted)" }}>{tr('anggaran.terpakai', { jumlah: fmtShort(computedSpent) })}</div>
+                      {row.combined ? (
+                        <div style={{ fontSize: 11.5, color: "var(--muted)" }}>{tr('anggaran.gabunganBeberapaDompet')}</div>
+                      ) : (
+                        <div className="tnum" style={{ fontSize: 11.5, color: over ? "var(--terra)" : "var(--muted)" }}>{tr('anggaran.terpakai', { jumlah: fmtShort(computedSpent) })}</div>
+                      )}
                     </div>
                   </div>
 
@@ -235,17 +326,19 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
                     </div>
                   </div>
 
-                  <div className="tnum" style={{ textAlign: "right", fontSize: 12.5, color: "var(--ink)", fontVariantNumeric: "tabular-nums" }}>
-                    {fmt(r.limit)}
+                  <div className="tnum" style={{ textAlign: "right", fontSize: 12.5, color: row.combined ? "var(--muted-2)" : "var(--ink)", fontVariantNumeric: "tabular-nums" }}>
+                    {row.combined ? "—" : fmt(currentLimit)}
                   </div>
 
                   <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-                    <button onClick={() => setEditingBudget(r)} title={tr('umum.edit')} aria-label={tr('umum.edit')} style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid var(--line-soft)", background: "var(--paper)", color: "var(--ink-2)", display: "grid", placeItems: "center" }}>
-                      <IconEdit size={14} />
-                    </button>
-                    <button onClick={() => deleteRow(r.id)} title={tr('umum.hapus')} aria-label={tr('umum.hapus')} style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid var(--line-soft)", background: "var(--paper)", color: "var(--terra)", display: "grid", placeItems: "center" }}>
-                      <IconClose size={13} />
-                    </button>
+                    {!row.combined && (<>
+                      <button onClick={() => setEditingBudget(r)} title={tr('umum.edit')} aria-label={tr('umum.edit')} style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid var(--line-soft)", background: "var(--paper)", color: "var(--ink-2)", display: "grid", placeItems: "center" }}>
+                        <IconEdit size={14} />
+                      </button>
+                      <button onClick={() => deleteRow(r.id)} title={tr('umum.hapus')} aria-label={tr('umum.hapus')} style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid var(--line-soft)", background: "var(--paper)", color: "var(--terra)", display: "grid", placeItems: "center" }}>
+                        <IconClose size={13} />
+                      </button>
+                    </>)}
                   </div>
                 </div>
               );
@@ -272,7 +365,8 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
         <AddBudgetModal
           initial={editingBudget}
           defaultPeriod={period}
-          existingCategoryIds={rows.map(r => r.categoryId).filter(Boolean)}
+          budgets={rows}
+          accounts={accounts}
           customCategories={customCategories}
           onCreateCustom={onCreateCustom}
           onDeleteCustom={onDeleteCustom}
@@ -288,11 +382,13 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
   );
 }
 
-function AddBudgetModal({ onClose, onAdd, onUpdate, initial = null, defaultPeriod = "monthly", existingCategoryIds = [], customCategories = [], onCreateCustom, onDeleteCustom, isPro = false, isBasicAtMax = false, userId }) {
+function AddBudgetModal({ onClose, onAdd, onUpdate, initial = null, defaultPeriod = "monthly", budgets = [], accounts = [], customCategories = [], onCreateCustom, onDeleteCustom, isPro = false, isBasicAtMax = false, userId }) {
   const { t: tr } = useTranslation();
   useScrollLock(true);
   const isEdit = !!initial;
   const [selectedCatId, setSelectedCatId] = React.useState(initial?.categoryId || "");
+  // null = anggaran umum (berlaku untuk semua dompet)
+  const [selectedWalletId, setSelectedWalletId] = React.useState(initial?.walletId ?? null);
   const [pendingCustom, setPendingCustom] = React.useState(null);
   const [limit, setLimit]                 = React.useState(initial ? String(initial.limit ?? "") : "");
   const [periode, setPeriode]             = React.useState(initial?.periode || defaultPeriod);
@@ -300,11 +396,33 @@ function AddBudgetModal({ onClose, onAdd, onUpdate, initial = null, defaultPerio
 
   const isCustom = selectedCatId === CUSTOM_ID;
 
-  // EDIT: kategori milik budget yang sedang diedit tidak dianggap "sudah dipakai",
-  // supaya user bisa mempertahankannya atau berpindah ke kategori lain yang masih bebas.
-  const usedCatIds = isEdit ? existingCategoryIds.filter(id => id !== initial.categoryId) : existingCategoryIds;
-  const availableCats   = CATEGORIES.filter(c => !usedCatIds.includes(c.id));
-  const availableCustom = customCategories.filter(c => !c.is_deleted && !usedCatIds.includes(c.id));
+  // Satu kategori boleh punya beberapa anggaran ASAL beda dompet. Yang dilarang:
+  //  • kategori sudah punya anggaran umum  → terkunci untuk dompet manapun
+  //  • mau bikin anggaran umum padahal sudah ada versi per-dompet
+  //  • dompet yang sama persis (duplikat)
+  // EDIT: anggaran yang sedang diedit dikecualikan lewat excludeId, supaya user
+  // bisa mempertahankan kategorinya atau pindah ke kategori lain yang masih bebas.
+  const isCategoryBlocked = (categoryId, targetWalletId, excludeId) => {
+    return budgets.some(b => {
+      if (b.id === excludeId) return false;
+      if (resolveBudgetCategoryId(b) !== categoryId) return false;
+      if (b.walletId == null) return true;
+      if (targetWalletId == null) return true;
+      return b.walletId === targetWalletId;
+    });
+  };
+
+  const availableCats   = CATEGORIES.filter(c => !isCategoryBlocked(c.id, selectedWalletId, initial?.id));
+  const availableCustom = customCategories.filter(c => !c.is_deleted && !isCategoryBlocked(c.id, selectedWalletId, initial?.id));
+
+  // Ganti dompet setelah kategori dipilih bisa membuat kategori itu jadi terkunci
+  // di dompet baru → pilihannya direset supaya tidak tersimpan kombinasi terlarang.
+  const changeWallet = (walletId) => {
+    setSelectedWalletId(walletId);
+    if (selectedCatId && selectedCatId !== CUSTOM_ID && isCategoryBlocked(selectedCatId, walletId, initial?.id)) {
+      setSelectedCatId("");
+    }
+  };
 
   const customNameValid = (pendingCustom?.name || "").trim().length > 0;
   // EDIT: pembuatan kategori kustom baru tidak diizinkan (alur create di-skip demi keamanan).
@@ -325,6 +443,7 @@ function AddBudgetModal({ onClose, onAdd, onUpdate, initial = null, defaultPerio
         label: cat?.label || initial.label || "",
         color: cat?.color || initial.color || "var(--sage)",
         limit: +limit,
+        walletId: selectedWalletId,
         period: periode,
         periode,
       });
@@ -354,6 +473,7 @@ function AddBudgetModal({ onClose, onAdd, onUpdate, initial = null, defaultPerio
       color,
       spent: 0,
       limit: +limit,
+      walletId: selectedWalletId,
       enabled: true,
       periode,
     });
@@ -380,6 +500,21 @@ function AddBudgetModal({ onClose, onAdd, onUpdate, initial = null, defaultPerio
         </div>
 
         <div style={{ display: "grid", gap: 14 }}>
+          {accounts.length > 1 && (
+            <label style={{ display: "block" }}>
+              <span style={{ display: "block", fontSize: 11, color: "var(--muted)", letterSpacing: ".05em", textTransform: "uppercase", marginBottom: 6 }}>{tr('anggaran.labelDompet')}</span>
+              <select
+                value={selectedWalletId ?? ""}
+                onChange={e => changeWallet(e.target.value === "" ? null : e.target.value)}
+                style={{ width: "100%", padding: "11px 12px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10, color: "var(--ink)", fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box", cursor: "pointer" }}>
+                <option value="">{tr('analitik.semuaDompet')}</option>
+                {accounts.map(a => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+            </label>
+          )}
+
           <label style={{ display: "block" }}>
             <span style={{ display: "block", fontSize: 11, color: "var(--muted)", letterSpacing: ".05em", textTransform: "uppercase", marginBottom: 6 }}>{tr('anggaran.labelKategori')}</span>
             <CategoryField

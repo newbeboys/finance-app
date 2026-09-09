@@ -330,7 +330,9 @@
     "periodeLabel": "Periode",
     "menyimpan": "Menyimpan…",
     "dari": "dari",
-    "over": "over!"
+    "over": "over!",
+    "labelDompet": "Dompet",
+    "gabunganBeberapaDompet": "Tergabung dari beberapa dompet"
   },
   "laporan": {
     "judul": "Laporan Keuangan",
