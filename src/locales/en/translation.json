@@ -867,6 +867,24 @@
       "notFound": "Record not found",
       "markPaidFailed": "Failed to mark as paid",
       "deleteFailed": "Failed to delete"
+    },
+    "proof": {
+      "docTitle": "Proof of Record",
+      "labelAmount": "Principal Amount",
+      "labelPaid": "Amount Paid",
+      "labelRemaining": "Remaining",
+      "labelDate": "Date Created",
+      "labelStatus": "Status",
+      "statusActive": "Active",
+      "colDate": "Date",
+      "colNote": "Note",
+      "colAmount": "Amount",
+      "closing": "Closing",
+      "disclaimer": "This document is a personal record between both parties, NOT an officially binding legal document. Use it only as a reminder of the agreement.",
+      "generatedOn": "Generated on {{tanggal}} via FinanceApp",
+      "pageOf": "Page {{n}} of {{total}}",
+      "watermark": "Made free with FinanceApp",
+      "shareDialogTitle": "Save or share proof of record"
     }
   },
   "paywall": {

@@ -867,6 +867,24 @@
       "notFound": "Catatan tidak ditemukan",
       "markPaidFailed": "Gagal menandai lunas",
       "deleteFailed": "Gagal menghapus"
+    },
+    "proof": {
+      "docTitle": "Bukti Catatan",
+      "labelAmount": "Jumlah Pokok",
+      "labelPaid": "Sudah Dibayar",
+      "labelRemaining": "Sisa",
+      "labelDate": "Tanggal Dibuat",
+      "labelStatus": "Status",
+      "statusActive": "Aktif",
+      "colDate": "Tanggal",
+      "colNote": "Keterangan",
+      "colAmount": "Jumlah",
+      "closing": "Penutup",
+      "disclaimer": "Dokumen ini adalah catatan pribadi antara kedua pihak, BUKAN dokumen hukum yang mengikat secara resmi. Gunakan hanya sebagai pengingat kesepakatan.",
+      "generatedOn": "Dibuat pada {{tanggal}} via FinanceApp",
+      "pageOf": "Hal. {{n}} dari {{total}}",
+      "watermark": "Dibuat gratis dengan FinanceApp",
+      "shareDialogTitle": "Simpan atau bagikan bukti catatan"
     }
   },
   "paywall": {
