@@ -85,9 +85,12 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
         });
         return;
       }
-      // Filter dompet spesifik: tampilkan anggaran dompet itu apa adanya;
-      // kalau dompet ini tidak punya anggaran kategori tsb, barisnya hilang.
-      const r = group.find(x => x.walletId === filterWalletId);
+      // Filter dompet spesifik: tampilkan anggaran dompet itu apa adanya. Kalau
+      // tidak ada yang cocok persis, fallback ke anggaran general dalam grup ini
+      // (data lama sebelum wallet-scoping — general tetap berlaku di dompet manapun).
+      // Kalau tidak ada keduanya, barisnya hilang.
+      const specific = group.find(x => x.walletId === filterWalletId);
+      const r = specific || group.find(x => x.walletId == null);
       if (!r) return;
       out.push({ key: r.id, budget: r, spent: getSpent(r), limit: r.limit, combined: false });
     });
