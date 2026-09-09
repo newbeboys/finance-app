@@ -153,10 +153,18 @@ t.wallet_id === account.id ||
 - Kolom `spent` di DB **tidak dipakai**
 - Saat UI render, `spent` dihitung real-time dari array transaksi yang di-load
 - Formula: `spent = sum(|amount|)` untuk semua tx `category === budget.categoryId` dalam periode aktif
+- Satu-satunya implementasi formula itu ada di `src/lib/budgetSpent.js` (`getBudgetSpent`) — dipakai halaman Anggaran, `BudgetsCard` (Beranda), dan `useNotifications`. Jangan bikin kalkulator lokal baru.
 - Mencatat tx pengeluaran di kategori tertentu **otomatis menambah progress**
 - **Tidak ada** menarik uang dari budget (budget = pelacak saja, bukan rekening)
 
 **Periode:** UI punya toggle Bulanan/Mingguan, tapi DB **tidak ada kolom periode** — hanya di client
+
+**Anggaran per dompet (`budgets.wallet_id`):**
+- `wallet_id` NULL = anggaran umum (semua dompet). Diisi → anggaran hanya menghitung transaksi dompet itu (tx tanpa `wallet_id` = dompet utama)
+- Selector Dompet ada di AddBudgetModal (di atas field Kategori) dan filter dompet di header halaman; **keduanya hanya muncul bila `accounts.length > 1`** → otomatis Pro-only, tanpa cek tier terpisah (sama seperti filter dompet di Analitik)
+- Satu kategori boleh punya beberapa anggaran asal beda dompet. `isCategoryBlocked()` mengunci: kategori yang sudah punya anggaran umum terkunci untuk semua dompet, dan sebaliknya anggaran umum tidak bisa dibuat kalau sudah ada versi per-dompet
+- Rendering baris: kategori dengan >1 anggaran, saat filter "Semua Dompet", jadi **satu baris gabungan** — progress bar dari total terpakai/total batas, nominal & tombol edit/hapus disembunyikan (angka gabungan lintas dompet menyesatkan; aksi baru muncul setelah user memilih dompetnya di filter). Pilih dompet spesifik → baris anggaran dompet itu apa adanya
+- Kartu ringkasan di atas tetap sum polos semua anggaran yang relevan dengan filter aktif (anggaran umum selalu ikut) — terpisah dari logika penggabungan baris
 
 **Notifikasi:**
 - 80% terpakai → peringatan
