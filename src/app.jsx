@@ -491,7 +491,7 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
   const handleDeleteCustomCategory = React.useCallback((id) => deleteCustomCategory(id, subscription.isPro), [deleteCustomCategory, subscription.isPro]);
 
   // Notifications
-  const { notifications, unreadCount, markAllRead, markRead, cleanupExpired } = useNotifications(transactions, notifSubs, budgets, debts);
+  const { notifications, unreadCount, markAllRead, markRead, cleanupExpired } = useNotifications(transactions, notifSubs, budgets, debts, accounts);
 
   // Savings goals — Supabase
   const { goals, createGoal, deleteGoal, depositToGoal } = useSavings(session.user.id, limits);
@@ -721,7 +721,7 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
 
             <TransactionsCard onAdd={() => setModal(true)} onScan={handleScan} scanLocked={!limits.receiptScanEnabled} limit={8} onSeeAll={() => setActive("transactions")} transactions={transactions} loading={txLoading} customCategories={customCategories} />
             <SavingsCard goals={goals} onManage={() => setActive("savings")} />
-            <BudgetsCard onManage={() => setActive("budgets")} transactions={transactions} budgets={budgets} customCategories={customCategories} />
+            <BudgetsCard onManage={() => setActive("budgets")} transactions={transactions} budgets={budgets} customCategories={customCategories} accounts={accounts} />
             <DebtsCard debts={debts} onManage={() => setActive("debts")} />
             <WeeklySummaryCard transactions={transactions} />
           </div>

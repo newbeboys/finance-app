@@ -8,6 +8,7 @@ import { categoryLabel, resolveCategory } from './category-field';
 import { usePaywall } from './components/PaywallModal';
 import { useMoneyIQ } from './components/MoneyIQChat';
 import { MonthYearPicker } from './components/MonthYearPicker';
+import { getBudgetSpent } from './lib/budgetSpent';
 
 // Nama bulan singkat terlokalisasi (mengikuti bahasa aktif)
 const monthShort = (locale, mo) => new Date(2024, mo, 1).toLocaleDateString(locale, { month: 'short' });
@@ -501,23 +502,10 @@ export function SavingsCard({ goals = GOALS, onManage }) {
   );
 }
 
-export function BudgetsCard({ onManage, transactions = [], budgets: allBudgets = [], customCategories = [] }) {
+export function BudgetsCard({ onManage, transactions = [], budgets: allBudgets = [], customCategories = [], accounts = [] }) {
   const { t: tr, i18n } = useTranslation();
   const locale = localeOf(i18n);
   const budgets = allBudgets.filter(b => b.enabled);
-
-  // Hitung pengeluaran aktual per category dari transaksi bulan ini
-  const spentByCategory = React.useMemo(() => {
-    const now = new Date();
-    const pfx = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const map = {};
-    transactions.forEach(tx => {
-      if (tx.amount < 0 && tx.dateRaw && tx.dateRaw.startsWith(pfx)) {
-        map[tx.category] = (map[tx.category] || 0) + Math.abs(tx.amount);
-      }
-    });
-    return map;
-  }, [transactions]);
 
   return (
     <div className="card rise" style={{ padding: 22 }}>
@@ -540,16 +528,9 @@ export function BudgetsCard({ onManage, transactions = [], budgets: allBudgets =
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {budgets.slice(0, 4).map(b => {
-            const bl = (b.label || '').toLowerCase().trim();
-            const matchedCat = !b.categoryId && CATEGORIES.find(c => {
-              const cl = c.label.toLowerCase();
-              return cl === bl || cl.startsWith(bl) || bl.startsWith(cl.split(' ')[0]);
-            });
-            const computedSpent = b.categoryId
-              ? (spentByCategory[b.categoryId] || 0)
-              : matchedCat
-                ? (spentByCategory[matchedCat.id] || 0)
-                : (b.spent ?? 0);
+            // Perhitungan terpakai: lihat src/lib/budgetSpent.js (sumber tunggal —
+            // sudah termasuk fuzzy-match budget lama & cakupan dompet anggaran).
+            const computedSpent = getBudgetSpent(b, transactions, accounts);
             const pct = Math.min(computedSpent / b.limit, 1.15);
             const over = computedSpent > b.limit;
             return (

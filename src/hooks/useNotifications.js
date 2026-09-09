@@ -1,6 +1,7 @@
 import React from 'react';
 import { formatNominal } from '../data';
 import { playSound } from '../lib/sound';
+import { getBudgetSpent } from '../lib/budgetSpent';
 import notifSound from '../assets/sound/notification-sound.mp3';
 
 const NOTIF_KEY    = 'notif_data';
@@ -38,37 +39,18 @@ function thisWeekKey() {
 }
 
 // ── Generate: Peringatan Anggaran ──────────────────────────────────
-function budgetNotifs(transactions, budgets) {
+function budgetNotifs(transactions, budgets, accounts) {
   const now = new Date();
   const pfx = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
   const activeBudgets = (budgets || []).filter(b => b.enabled && b.limit > 0);
   if (!activeBudgets.length) return [];
 
-  // Hitung pengeluaran bulan ini per categoryId
-  const spent = {};
-  transactions.forEach(tx => {
-    if (tx.amount < 0 && tx.dateRaw?.startsWith(pfx)) {
-      spent[tx.category] = (spent[tx.category] || 0) + Math.abs(tx.amount);
-    }
-  });
-
-  // Fuzzy match untuk budget lama tanpa categoryId
-  const CATS = ['food','transport','shopping','bills','entertainment','healthcare','snacking','education','crypto','laundry','cigarette'];
-  const MONTH_MAP = { jan:0,feb:1,mar:2,apr:3,mei:4,jun:5,jul:6,agu:7,ags:7,sep:8,okt:9,nov:10,des:11 };
-  const fuzzyId = (label) => {
-    const bl = (label || '').toLowerCase().trim();
-    // Simple check: if label is a standard id
-    if (CATS.includes(bl)) return bl;
-    // Partial match
-    const found = CATS.find(id => id.startsWith(bl.split(' ')[0]) || bl.startsWith(id.split(' ')[0]));
-    return found || null;
-  };
-
   const notifs = [];
   activeBudgets.forEach(b => {
-    const catId   = b.categoryId || fuzzyId(b.label);
-    const s       = catId ? (spent[catId] || 0) : 0;
+    // Terpakai dihitung lewat sumber tunggal (src/lib/budgetSpent.js): fuzzy-match
+    // budget lama tanpa categoryId + cakupan dompet (b.walletId) ikut terhormati.
+    const s       = getBudgetSpent(b, transactions, accounts);
     if (s === 0) return;
     const pct     = s / b.limit;
     const id      = `budget-${pct >= 1 ? 'over' : 'warn'}-${b.id}-${pfx}`;
@@ -221,7 +203,7 @@ function debtsNotifs(debts) {
 
 // ── Hook utama ────────────────────────────────────────────────────
 
-export function useNotifications(transactions, prefs, budgets, debts) {
+export function useNotifications(transactions, prefs, budgets, debts, accounts) {
   const [notifs, setNotifs] = React.useState(() => load(NOTIF_KEY, []));
 
   // Merge passed prefs with defaults (falls back to localStorage if not passed)
@@ -240,7 +222,7 @@ export function useNotifications(transactions, prefs, budgets, debts) {
     const doneIds  = new Set(existing.map(n => n.id));
 
     const fresh = [
-      ...(resolvedPrefs.budget  ? budgetNotifs(txs, budgets) : []),
+      ...(resolvedPrefs.budget  ? budgetNotifs(txs, budgets, accounts) : []),
       ...(resolvedPrefs.income  ? incomeNotifs(txs)           : []),
       ...(resolvedPrefs.weekly  ? weeklyNotif(txs)            : []),
       ...(resolvedPrefs.bills   ? billsNotif(txs)             : []),
@@ -256,7 +238,7 @@ export function useNotifications(transactions, prefs, budgets, debts) {
         playSound(notifSound, 0.5);
       }
     }
-  }, [transactions, resolvedPrefs, budgets, debts]);
+  }, [transactions, resolvedPrefs, budgets, debts, accounts]);
 
   const markAllRead = React.useCallback(() => {
     const now = Date.now();
