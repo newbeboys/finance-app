@@ -1,38 +1,43 @@
 import React, { useState } from 'react';
 import { Capacitor } from '@capacitor/core';
+import { useTranslation } from 'react-i18next';
+import { fmt } from '../../data';
 import { useScrollLock } from '../../hooks/useScrollLock';
 import './UpgradeModal.css';
 
 const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.Financeapp.app';
 
-const PRICING_PLANS = [
-  {
-    id: 'monthly',
-    label: 'Monthly',
-    price: 30000,
-    perMonth: 30000,
-    period: '/bulan',
-    savePercent: null,
-  },
-  {
-    id: '6months',
-    label: '6 Bulan',
-    price: 140000,
-    perMonth: 23333,
-    period: '/6 bulan',
-    savePercent: 22,
-  },
-  {
-    id: 'annual',
-    label: 'Tahunan',
-    price: 270000,
-    perMonth: 22500,
-    period: '/tahun',
-    savePercent: 25,
-  },
-];
+function getPricingPlans(t) {
+  return [
+    {
+      id: 'monthly',
+      label: t('subscription.compare.plan.monthly'),
+      price: 30000,
+      perMonth: 30000,
+      period: t('subscription.upgrade.period.monthly'),
+      savePercent: null,
+    },
+    {
+      id: '6months',
+      label: t('subscription.compare.plan.sixMonths'),
+      price: 140000,
+      perMonth: 23333,
+      period: t('subscription.upgrade.period.sixMonths'),
+      savePercent: 22,
+    },
+    {
+      id: 'annual',
+      label: t('subscription.compare.plan.annual'),
+      price: 270000,
+      perMonth: 22500,
+      period: t('subscription.upgrade.period.annual'),
+      savePercent: 25,
+    },
+  ];
+}
 
 export function UpgradeModal({ isOpen, onClose, reason, currentLimit, maxLimit, onSelectPlan, loading = false }) {
+  const { t } = useTranslation();
   const [selectedPlan, setSelectedPlan] = useState('annual');
   useScrollLock(!!isOpen);
 
@@ -45,6 +50,8 @@ export function UpgradeModal({ isOpen, onClose, reason, currentLimit, maxLimit, 
 
   if (!isOpen) return null;
 
+  const PRICING_PLANS = getPricingPlans(t);
+
   const handleUpgrade = () => {
     const plan = PRICING_PLANS.find(p => p.id === selectedPlan);
     onSelectPlan?.(selectedPlan, plan);
@@ -56,15 +63,15 @@ export function UpgradeModal({ isOpen, onClose, reason, currentLimit, maxLimit, 
     return (
       <div className="um-overlay" onClick={onClose}>
         <div className="um-sheet" onClick={(e) => e.stopPropagation()}>
-          <button className="um-close" onClick={onClose} aria-label="Tutup">✕</button>
+          <button className="um-close" onClick={onClose} aria-label={t('umum.tutup')}>✕</button>
 
           <div className="um-header">
             <div className="um-icon">👑</div>
-            <h2 className="um-title serif">Upgrade ke Pro</h2>
+            <h2 className="um-title serif">{t('subscription.upgrade.title')}</h2>
           </div>
 
           <div className="um-reason">
-            <p>Upgrade ke Pro saat ini hanya tersedia lewat aplikasi Android.</p>
+            <p>{t('subscription.upgrade.webOnlyDesc')}</p>
           </div>
 
           <div className="um-actions">
@@ -75,10 +82,10 @@ export function UpgradeModal({ isOpen, onClose, reason, currentLimit, maxLimit, 
               rel="noopener noreferrer"
               style={{ display: 'block', boxSizing: 'border-box', textAlign: 'center', textDecoration: 'none' }}
             >
-              Download di Play Store
+              {t('subscription.upgrade.downloadPlayStore')}
             </a>
             <button className="um-btn-secondary" onClick={onClose}>
-              Nanti Saja
+              {t('subscription.upgrade.later')}
             </button>
           </div>
         </div>
@@ -89,18 +96,18 @@ export function UpgradeModal({ isOpen, onClose, reason, currentLimit, maxLimit, 
   return (
     <div className="um-overlay" onClick={onClose}>
       <div className="um-sheet" onClick={(e) => e.stopPropagation()}>
-        <button className="um-close" onClick={onClose} aria-label="Tutup">✕</button>
+        <button className="um-close" onClick={onClose} aria-label={t('umum.tutup')}>✕</button>
 
         <div className="um-header">
           <div className="um-icon">👑</div>
-          <h2 className="um-title serif">Upgrade ke Pro</h2>
+          <h2 className="um-title serif">{t('subscription.upgrade.title')}</h2>
         </div>
 
         {reason && (
           <div className="um-reason">
             <p>{reason}</p>
             {currentLimit != null && maxLimit != null && (
-              <p className="um-limit">{currentLimit}/{maxLimit} terpakai</p>
+              <p className="um-limit">{t('subscription.upgrade.limitUsed', { currentLimit, maxLimit })}</p>
             )}
           </div>
         )}
@@ -122,18 +129,18 @@ export function UpgradeModal({ isOpen, onClose, reason, currentLimit, maxLimit, 
                 <div className="um-plan-top">
                   <span className="um-plan-label">{plan.label}</span>
                   {plan.savePercent && (
-                    <span className="um-plan-badge">HEMAT {plan.savePercent}%</span>
+                    <span className="um-plan-badge">{t('subscription.upgrade.saveBadge', { percent: plan.savePercent })}</span>
                   )}
                 </div>
                 <div className="um-plan-price-row">
                   <span className="um-plan-price">
-                    Rp {plan.price.toLocaleString('id-ID')}
+                    {fmt(plan.price)}
                   </span>
                   <span className="um-plan-period">{plan.period}</span>
                 </div>
                 {plan.perMonth !== plan.price && (
                   <div className="um-plan-monthly">
-                    ≈ Rp {plan.perMonth.toLocaleString('id-ID')}/bulan
+                    {t('subscription.upgrade.perMonthApprox', { price: fmt(plan.perMonth) })}
                   </div>
                 )}
               </div>
@@ -143,15 +150,15 @@ export function UpgradeModal({ isOpen, onClose, reason, currentLimit, maxLimit, 
 
         <div className="um-actions">
           <button className="um-btn-primary" onClick={handleUpgrade} disabled={loading} style={{ opacity: loading ? 0.7 : 1 }}>
-            {loading ? 'Memproses...' : 'Upgrade Sekarang'}
+            {loading ? t('subscription.upgrade.processing') : t('subscription.upgrade.confirm')}
           </button>
           <button className="um-btn-secondary" onClick={onClose} disabled={loading}>
-            Nanti Saja
+            {t('subscription.upgrade.later')}
           </button>
         </div>
 
         <p className="um-terms">
-          Perpanjang otomatis sesuai plan. Batalkan kapan saja di Settings.
+          {t('subscription.upgrade.terms')}
         </p>
       </div>
     </div>

@@ -98,7 +98,9 @@
     "aturAnggaran": "Atur anggaran",
     "diAtasAnggaran": "{{jumlah}} di atas anggaran",
     "ringkasanMingguan": "Ringkasan mingguan",
-    "mingguLalu": "Minggu lalu"
+    "mingguLalu": "Minggu lalu",
+    "wawasanAiProDesc": "Kartu saran cerdas — analisis pengeluaran, tips menabung, dan prediksi keuangan kamu.",
+    "wawasanAiProCta": "Tap untuk mengetahui lebih lanjut →"
   },
   "insight": {
     "pengeluaranTerbesar": "Pengeluaran terbesar: {{kategori}}",
@@ -209,6 +211,36 @@
     "piutang_bayar": "Pembayaran Piutang",
     "hutang": "Hutang",
     "hutang_bayar": "Pembayaran Hutang"
+  },
+  "category": {
+    "icon": {
+      "pickTitle": "Pilih Ikon & Warna"
+    },
+    "delete": {
+      "eyebrow": "Hapus Kategori",
+      "confirmTitle": "Hapus “{{label}}”?",
+      "warning": "Transaksi lama yang memakai kategori ini tetap aman, tapi kategori tidak bisa dipilih untuk transaksi baru. Slot kuota akan terbuka kembali.",
+      "deleting": "Menghapus…"
+    },
+    "edit": {
+      "eyebrow": "Edit Kategori",
+      "confirmTitle": "Ubah “{{label}}”",
+      "checking": "Memeriksa…",
+      "cooldownNotice": {
+        "editedOn": "Anda sudah edit kategori pada",
+        "retryAfter": "Coba lagi setelah",
+        "daysRemaining": "{{count}} hari",
+        "upgradeHint": "Butuh fleksibilitas lebih? Upgrade ke Pro untuk hapus & buat kategori unlimited."
+      },
+      "understood": "Mengerti",
+      "cooldownHint": "⚠ Edit kategori punya cooldown 1 bulan setelah perubahan.",
+      "nameLabel": "Nama Kategori",
+      "namePlaceholder": "Nama kategori",
+      "typeLabel": "Jenis",
+      "iconColorLabel": "Ikon & Warna",
+      "confirmButton": "Konfirmasi Edit",
+      "successToast": "Kategori berhasil diubah. Edit berikutnya bisa dilakukan setelah {{date}}."
+    }
   },
   "tabungan": {
     "target": "Target Tabungan",
@@ -322,7 +354,117 @@
     "pilihFormat": "Pilih format",
     "pdfDesc": "Dokumen siap cetak — rapi & ringkas",
     "excelDesc": "5 sheet, formula aktif, grafik & warna",
-    "tahun": "Tahun {{tahun}}"
+    "tahun": "Tahun {{tahun}}",
+    "doc": {
+      "tagline": "Less spending · More living",
+      "createdOn": "Dibuat {{tanggal}}",
+      "walletLine": "Dompet: {{dompet}}",
+      "allWallets": "Semua Dompet",
+      "emptyWallet": "Tidak ada transaksi pada periode ini untuk dompet yang dipilih.",
+      "kpiIncome": "Pemasukan",
+      "kpiExpense": "Pengeluaran",
+      "kpiNet": "Selisih bersih",
+      "savingsRate": "Tingkat menabung (savings rate)",
+      "chartBarMonthly": "Diagram batang — pemasukan vs pengeluaran",
+      "chartBarCategory": "Diagram batang — pengeluaran per kategori",
+      "chartPieIncome": "Diagram lingkaran — komposisi pemasukan",
+      "chartPieExpense": "Diagram lingkaran — komposisi pengeluaran",
+      "tableIncomeByCategory": "Tabel — pemasukan per kategori",
+      "tableExpenseByCategory": "Tabel — pengeluaran per kategori",
+      "tableMonthlyBreakdown": "Tabel — rincian bulanan",
+      "colCategory": "Kategori",
+      "colAmount": "Jumlah",
+      "colPctIncome": "% dari pemasukan",
+      "colPctExpense": "% dari pengeluaran",
+      "colMonth": "Bulan",
+      "colIn": "Masuk",
+      "colOut": "Keluar",
+      "colNet": "Bersih",
+      "colDate": "Tanggal",
+      "colName": "Nama",
+      "totalIncome": "Total pemasukan",
+      "totalExpense": "Total pengeluaran",
+      "sectionTransactions": "Bagian 4 — Rincian Transaksi",
+      "incomeTransactions": "Transaksi Pemasukan",
+      "expenseTransactions": "Transaksi Pengeluaran",
+      "totalIncomeCaps": "Total Pemasukan",
+      "totalExpenseCaps": "Total Pengeluaran",
+      "autoFooter": "FinanceApp — Laporan dibuat otomatis",
+      "disclaimer": "Dokumen ini bersifat informatif, bukan dokumen pajak resmi.",
+      "closing": "Penutup",
+      "generatedBy": "Laporan dibuat otomatis oleh FinanceApp pada {{tanggal}}.",
+      "headerRight": "Laporan {{periode}}",
+      "pageOf": "Hal. {{n}} dari {{total}}",
+      "shareDialogTitle": "Simpan atau bagikan laporan",
+      "buildFailed": "Gagal membuat file: {{pesan}}",
+      "upgradeHint": "Upgrade ke Pro untuk download laporan.",
+      "excelPreviewEyebrow": "FinanceApp — Pratinjau Excel",
+      "filenameMonthly": "Laporan",
+      "filenameYearly": "Laporan-Tahunan",
+      "excelFilePrefix": "FinanceApp_Laporan",
+      "monthsFull": [
+        "Januari",
+        "Februari",
+        "Maret",
+        "April",
+        "Mei",
+        "Juni",
+        "Juli",
+        "Agustus",
+        "September",
+        "Oktober",
+        "November",
+        "Desember"
+      ],
+      "monthsAbbr": [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "Mei",
+        "Jun",
+        "Jul",
+        "Agu",
+        "Sep",
+        "Okt",
+        "Nov",
+        "Des"
+      ]
+    },
+    "xlsx": {
+      "sheetSummary": "Ringkasan",
+      "sheetDetail": "Detail Transaksi",
+      "sheetCategory": "Per Kategori",
+      "sheetIncomeCategory": "Pemasukan per Kategori",
+      "sheetTrend": "Tren Bulanan",
+      "typeIncome": "Pemasukan",
+      "typeExpense": "Pengeluaran",
+      "titleReport": "Laporan Keuangan — {{periode}}",
+      "rowTotalIncome": "Total Pemasukan",
+      "rowTotalExpense": "Total Pengeluaran",
+      "rowNet": "Selisih Bersih",
+      "rowSavingsRate": "Tingkat Menabung",
+      "rowTotal": "Total",
+      "chartBar": "Diagram batang — Pemasukan vs Pengeluaran",
+      "chartPieExpense": "Diagram lingkaran — komposisi pengeluaran",
+      "chartPieIncome": "Diagram lingkaran — komposisi pemasukan",
+      "chartLine": "Grafik garis — tren bulanan",
+      "colNo": "No",
+      "colDate": "Tanggal",
+      "colCategory": "Kategori",
+      "colDescription": "Keterangan",
+      "colType": "Tipe",
+      "colAmount": "Jumlah",
+      "colTotal": "Total",
+      "colPercent": "Persentase",
+      "colMonth": "Bulan",
+      "colIncome": "Pemasukan",
+      "colExpense": "Pengeluaran",
+      "colDifference": "Selisih",
+      "totalIncomeCaps": "TOTAL PEMASUKAN",
+      "totalExpenseCaps": "TOTAL PENGELUARAN",
+      "previewExpenseCategory": "Pengeluaran per Kategori"
+    }
   },
   "pengaturan": {
     "judul": "Pengaturan",
@@ -723,6 +865,154 @@
       "notFound": "Catatan tidak ditemukan",
       "markPaidFailed": "Gagal menandai lunas",
       "deleteFailed": "Gagal menghapus"
+    }
+  },
+  "paywall": {
+    "title": "Fitur Khusus Pro",
+    "descFeature": "{{feature}} adalah fitur khusus Pro.",
+    "descGeneric": "Fitur ini khusus untuk pengguna Pro.",
+    "descSuffix": "Tingkatkan ke Pro untuk membuka fitur ini tanpa batas.",
+    "understand": "Mengerti",
+    "feature": {
+      "walletTambahan": "Wallet / Dompet tambahan",
+      "goalsTambahan": "Goals / Tabungan tambahan",
+      "scanNota": "Scan Nota",
+      "moneyIq": "Money IQ",
+      "transaksiBerulang": "Transaksi berulang",
+      "temaFontIni": "Tema font ini",
+      "tabungan": "Tabungan",
+      "laporanUnduh": "Unduh laporan PDF/Excel",
+      "kategoriKustomTambahan": "Kategori kustom tambahan",
+      "hutangPiutangTanpaBatas": "Hutang / Piutang tanpa batas"
+    },
+    "message": {
+      "transaksiLimit": "Penggunaan transaksi sudah maksimal bulan ini. Upgrade ke Pro untuk fleksibilitas tanpa batas.",
+      "anggaranLimit": "Penggunaan anggaran sudah maksimal. Upgrade ke Pro untuk fleksibilitas tanpa batas."
+    }
+  },
+  "subscription": {
+    "section": {
+      "eyebrow": "Langganan",
+      "title": "Akun & Paket"
+    },
+    "compare": {
+      "plan": {
+        "monthly": "Monthly",
+        "sixMonths": "6 Bulan",
+        "annual": "Tahunan"
+      },
+      "period": {
+        "monthly": "/bulan",
+        "sixMonths": "/6 bln",
+        "annual": "/tahun"
+      },
+      "perMonthApprox": "≈ {{price}}/bln",
+      "table": {
+        "feature": "Fitur"
+      },
+      "feature": {
+        "transaksi": {
+          "label": "Transaksi",
+          "basic": "75/bulan"
+        },
+        "kustomKategori": {
+          "label": "Custom kategori",
+          "basic": "Maks. 3"
+        },
+        "dompet": {
+          "label": "Dompet",
+          "basic": "1 dompet"
+        },
+        "goalsTabungan": {
+          "label": "Goals tabungan",
+          "basic": "Maks. 2"
+        },
+        "anggaran": {
+          "label": "Anggaran",
+          "basic": "Maks. 7"
+        },
+        "hutangPiutang": {
+          "label": "Hutang/Piutang",
+          "basic": "Maks. 5 aktif"
+        },
+        "transaksiBerulang": {
+          "label": "Transaksi berulang"
+        },
+        "laporanPdfExcel": {
+          "label": "Laporan PDF / Excel",
+          "basic": "Preview saja"
+        },
+        "scanNota": {
+          "label": "Scan nota"
+        },
+        "moneyIq": {
+          "label": "Money IQ"
+        },
+        "temaFontPremium": {
+          "label": "Tema font premium",
+          "basic": "2 tema",
+          "pro": "Semua tema"
+        },
+        "widgetLayarUtama": {
+          "label": "Widget layar utama"
+        }
+      },
+      "unlimited": "Tak terbatas",
+      "cta": "Mulai Pro — {{price}}{{period}}",
+      "hideToggle": "Sembunyikan perbandingan fitur ▲",
+      "showToggle": "Lihat perbandingan fitur Basic vs Pro ▼"
+    },
+    "upgrade": {
+      "title": "Upgrade ke Pro",
+      "webOnlyDesc": "Upgrade ke Pro saat ini hanya tersedia lewat aplikasi Android.",
+      "downloadPlayStore": "Download di Play Store",
+      "later": "Nanti Saja",
+      "limitUsed": "{{currentLimit}}/{{maxLimit}} terpakai",
+      "period": {
+        "monthly": "/bulan",
+        "sixMonths": "/6 bulan",
+        "annual": "/tahun"
+      },
+      "saveBadge": "HEMAT {{percent}}%",
+      "perMonthApprox": "≈ {{price}}/bulan",
+      "confirm": "Upgrade Sekarang",
+      "processing": "Memproses...",
+      "terms": "Perpanjang otomatis sesuai plan. Batalkan kapan saja di Settings."
+    },
+    "status": {
+      "billing": {
+        "monthly": "Monthly · {{price}}/bulan",
+        "sixMonths": "6-Month · {{price}}/6 bulan",
+        "annual": "Tahunan · {{price}}/tahun"
+      },
+      "renews": "Perpanjang {{date}}",
+      "descPro": "Akses penuh: laporan PDF/Excel, scan nota, transaksi berulang, Money IQ, dan semua tema font.",
+      "descBasic": "Beberapa fitur dibatasi. Upgrade ke Pro untuk akses tanpa batas.",
+      "pricing": {
+        "monthly": "Monthly — {{price}}/bulan",
+        "sixMonths": "6-Month — {{price}}",
+        "annual": "Annual — {{price}}"
+      },
+      "save": "hemat {{percent}}%",
+      "manage": "Kelola Langganan",
+      "cancel": "Batalkan Langganan",
+      "cancelAlert": "Hubungi support untuk membatalkan langganan.",
+      "upgradeCta": "Upgrade ke Pro"
+    },
+    "restore": {
+      "idle": "Pulihkan Pembelian",
+      "loading": "Memeriksa...",
+      "success": "✓ Berhasil dipulihkan",
+      "noSubscription": "Tidak ada langganan untuk dipulihkan",
+      "error": "Gagal memeriksa — coba lagi",
+      "webOnly": "Upgrade lewat aplikasi Android"
+    },
+    "purchase": {
+      "offeringsFailed": "Gagal memuat paket — coba lagi.",
+      "offeringUnavailable": "Penawaran tidak tersedia saat ini.",
+      "packageNotFound": "Paket tidak ditemukan. Coba restart app.",
+      "success": "Selamat! Kamu kini pengguna Pro 🎉",
+      "failed": "Pembelian gagal. Coba lagi nanti."
     }
   },
   "auth": {

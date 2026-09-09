@@ -224,11 +224,7 @@ export default function AddDebtModal({ open, onClose, onCreate, wallets = [] }) 
             <div style={{ fontSize: 13, color: 'var(--ink)', lineHeight: 1.5 }}>
               {t('debts.cooldown.message', { date: fmtDateLabel(cooldown.date) || cooldown.date })}
             </div>
-            {/* Nama fitur ini sengaja TIDAK dilewatkan lewat t() — kalimat pembungkusnya
-                di PaywallModal.jsx (klaster Paywall, belum di-i18n-kan) masih hardcode
-                Bahasa Indonesia; menerjemahkan cuma nama fiturnya akan bikin kalimat
-                campur bahasa. Akan dirapikan bareng saat klaster Paywall dikerjakan. */}
-            <button onClick={() => openPaywall('Hutang / Piutang tanpa batas')}
+            <button onClick={() => openPaywall(t('paywall.feature.hutangPiutangTanpaBatas'))}
               style={{ marginTop: 10, padding: '9px 14px', background: 'var(--ink)', color: 'var(--cream)', border: 0, borderRadius: 10, fontSize: 12.5, fontWeight: 500, cursor: 'pointer' }}>
               {t('debts.action.upgradeToPro')}
             </button>

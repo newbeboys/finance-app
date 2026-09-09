@@ -1,11 +1,7 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
+import { fmt } from '../../data';
 import './SubscriptionStatus.css';
-
-const BILLING_LABELS = {
-  monthly:  'Monthly · Rp 30.000/bulan',
-  '6months': '6-Month · Rp 140.000/6 bulan',
-  annual:   'Tahunan · Rp 270.000/tahun',
-};
 
 export function SubscriptionStatus({
   isPro,
@@ -15,9 +11,15 @@ export function SubscriptionStatus({
   onManage,
   onCancel,
 }) {
+  const { t, i18n } = useTranslation();
+  const BILLING_LABELS = {
+    monthly:   t('subscription.status.billing.monthly',   { price: fmt(30000) }),
+    '6months': t('subscription.status.billing.sixMonths', { price: fmt(140000) }),
+    annual:    t('subscription.status.billing.annual',    { price: fmt(270000) }),
+  };
   const planLabel = BILLING_LABELS[billingCycle] || null;
   const billingDate = expiresAt
-    ? new Date(expiresAt).toLocaleDateString('id-ID', {
+    ? new Date(expiresAt).toLocaleDateString(i18n.language === 'en' ? 'en-US' : 'id-ID', {
         year: 'numeric', month: 'long', day: 'numeric',
       })
     : null;
@@ -32,22 +34,26 @@ export function SubscriptionStatus({
             <div className="ss-plan-detail">{planLabel}</div>
           )}
           {isPro && billingDate && (
-            <div className="ss-billing">Perpanjang {billingDate}</div>
+            <div className="ss-billing">{t('subscription.status.renews', { date: billingDate })}</div>
           )}
         </div>
       </div>
 
       <p className="ss-desc">
-        {isPro
-          ? 'Akses penuh: laporan PDF/Excel, scan nota, transaksi berulang, Money IQ, dan semua tema font.'
-          : 'Beberapa fitur dibatasi. Upgrade ke Pro untuk akses tanpa batas.'}
+        {isPro ? t('subscription.status.descPro') : t('subscription.status.descBasic')}
       </p>
 
       {!isPro && (
         <ul className="ss-pricing">
-          <li>Monthly — Rp 30.000/bulan</li>
-          <li>6-Month — Rp 140.000 <span className="ss-save">hemat 22%</span></li>
-          <li>Annual — Rp 270.000 <span className="ss-save">hemat 25%</span></li>
+          <li>{t('subscription.status.pricing.monthly', { price: fmt(30000) })}</li>
+          <li>
+            {t('subscription.status.pricing.sixMonths', { price: fmt(140000) })}{' '}
+            <span className="ss-save">{t('subscription.status.save', { percent: 22 })}</span>
+          </li>
+          <li>
+            {t('subscription.status.pricing.annual', { price: fmt(270000) })}{' '}
+            <span className="ss-save">{t('subscription.status.save', { percent: 25 })}</span>
+          </li>
         </ul>
       )}
 
@@ -56,18 +62,18 @@ export function SubscriptionStatus({
           <>
             {onManage && (
               <button className="ss-btn ss-btn-outline" onClick={onManage}>
-                Kelola Langganan
+                {t('subscription.status.manage')}
               </button>
             )}
             {onCancel && (
               <button className="ss-btn ss-btn-danger" onClick={onCancel}>
-                Batalkan Langganan
+                {t('subscription.status.cancel')}
               </button>
             )}
           </>
         ) : (
           <button className="ss-btn ss-btn-primary" onClick={onUpgrade}>
-            Upgrade ke Pro
+            {t('subscription.status.upgradeCta')}
           </button>
         )}
       </div>

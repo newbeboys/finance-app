@@ -379,7 +379,7 @@ export function InsightsCard({ transactions = [], customCategories = [], limits 
   // Fitur Pro: basic user melihat placeholder terkunci
   if (limits !== null && !limits.aiInsightsEnabled) {
     return (
-      <div className="card rise" onClick={() => openPaywall('Money IQ')}
+      <div className="card rise" onClick={() => openPaywall(tr('paywall.feature.moneyIq'))}
         style={{ padding: 22, cursor: "pointer", display: "flex", flexDirection: "column", gap: 10, minHeight: 180, justifyContent: "center" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontSize: 14 }}>🔒</span>
@@ -389,7 +389,7 @@ export function InsightsCard({ transactions = [], customCategories = [], limits 
         <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.55 }}>
           {tr('beranda.wawasanAiProDesc', { defaultValue: 'Kartu saran cerdas — analisis pengeluaran, tips menabung, dan prediksi keuangan kamu.' })}
         </div>
-        <div style={{ fontSize: 12, color: "var(--gold)", marginTop: 4 }}>Tap untuk mengetahui lebih lanjut →</div>
+        <div style={{ fontSize: 12, color: "var(--gold)", marginTop: 4 }}>{tr('beranda.wawasanAiProCta')}</div>
       </div>
     );
   }

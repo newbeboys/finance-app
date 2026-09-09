@@ -146,7 +146,7 @@ export function SavingsPage({ goals, onAdd, onDeposit, onDelete }) {
               <div className="hairline" style={{ display: "flex" }}>
                 <button
                   data-tour={i === 0 ? "goal-deposit-first" : undefined}
-                  onClick={() => g.is_locked ? openPaywall('Tabungan') : onDeposit(g)}
+                  onClick={() => g.is_locked ? openPaywall(tr('paywall.feature.tabungan')) : onDeposit(g)}
                   style={{ flex: 1, padding: "12px 0", background: "transparent", border: 0, fontSize: 12.5, fontWeight: 500, color: g.is_locked ? "var(--muted)" : "var(--ink)", display: "inline-flex", gap: 7, alignItems: "center", justifyContent: "center", cursor: g.is_locked ? "not-allowed" : "pointer" }}>
                   <IconPlus size={14} /> {tr('tabungan.tambahDana')}
                   {g.is_locked && <span style={{ fontSize: 11 }}>🔒</span>}

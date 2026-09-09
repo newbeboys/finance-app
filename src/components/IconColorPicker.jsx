@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { useScrollLock } from '../hooks/useScrollLock';
 import { CatIcon, CUSTOM_CATEGORY_ICONS, DEFAULT_CATEGORY_ICON, IconClose } from '../icons';
 import { CUSTOM_COLORS } from '../category-field';
@@ -16,6 +17,7 @@ import { CUSTOM_COLORS } from '../category-field';
  *  - initialIcon, initialColor
  */
 export function IconColorPicker({ isOpen, onClose, onConfirm, initialIcon, initialColor }) {
+  const { t } = useTranslation();
   const [selectedIcon, setSelectedIcon] = React.useState(initialIcon || DEFAULT_CATEGORY_ICON);
   const [selectedColor, setSelectedColor] = React.useState(initialColor || CUSTOM_COLORS[0]);
 
@@ -74,7 +76,7 @@ export function IconColorPicker({ isOpen, onClose, onConfirm, initialIcon, initi
           <span style={{
             fontSize: 15, fontWeight: 600, color: 'var(--ink)', letterSpacing: '-0.01em',
           }}>
-            Pilih Ikon &amp; Warna
+            {t('category.icon.pickTitle')}
           </span>
           <button
             onClick={onClose}
@@ -155,7 +157,7 @@ export function IconColorPicker({ isOpen, onClose, onConfirm, initialIcon, initi
               letterSpacing: '.01em',
             }}
           >
-            Pilih
+            {t('umum.pilih')}
           </button>
         </div>
       </div>

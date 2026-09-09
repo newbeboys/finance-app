@@ -216,6 +216,8 @@ t.wallet_id === account.id ||
 
 ## 8. Analitik
 
+**I18n:** nama kategori di tabel, legenda, dan tengah donut mengikuti bahasa UI lewat `categoryLabel(cat, t)` (`src/category-field.jsx`). Kategori kustom milik user tidak diterjemahkan.
+
 **Lokasi kode:** `src/analytics.jsx`
 
 **Komponen:**
@@ -242,7 +244,7 @@ t.wallet_id === account.id ||
 
 ## 9. Laporan PDF & Excel
 
-**Lokasi kode:** `src/reports.jsx` (1192 baris)
+**Lokasi kode:** `src/reports.jsx` (~1297 baris) + `src/report-excel.js` (~538 baris)
 
 - **PDF:** `html2canvas` (screenshot DOM) → `jsPDF`. Multi-halaman, header berulang, page-break optimization
 - **Excel:** `ExcelJS` — sheet terpisah per detail transaksi
@@ -250,6 +252,10 @@ t.wallet_id === account.id ||
 - **Fitur:** Filter dompet (all vs spesifik), laporan bulanan/tahunan, resolve label kategori kustom, pie + bar chart
 
 **Tier:** Export = Pro only (`reportsExportEnabled`)
+
+**I18n (selesai 9 September 2026):** seluruh teks laporan ikut bahasa UI — judul, header kolom, label baris, nama sheet Excel, judul/legenda chart, nama file, dan **tanggal + nama bulan**. Nominal uang TIDAK ikut bahasa (selalu `Rp`/`id-ID` — lihat `teknis_keputusan-infrastruktur-roadmap.md` §1.13).
+
+⚠️ **Nama sheet & label tipe transaksi di Excel dipakai sebagai kriteria SUMIFS lintas-sheet.** Keduanya di-resolve SEKALI ke `refs.sheetNames`/`refs.typeLabels` di `buildWorkbook()`, lalu dipakai bersama oleh `addWorksheet()`, referensi formula, dan urutan sheet. Kalau ada yang menulis literalnya lagi di tempat lain, formula jadi `#REF!`/hasil 0 **tanpa error yang terlihat**. Batas 31 karakter nama sheet Excel dijaga `sheetName()`.
 
 ---
 

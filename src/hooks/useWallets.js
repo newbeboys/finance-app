@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '../supabase';
 import { usePaywall } from '../components/PaywallModal';
 import { logError } from '../lib/errorLogger';
@@ -25,6 +26,7 @@ export function useWallets(userId, limits) {
   const [accounts, setAccounts] = React.useState([]);
   const [loading, setLoading]   = React.useState(true);
   const { openPaywall } = usePaywall();
+  const { t } = useTranslation();
 
   React.useEffect(() => {
     if (!userId) { setLoading(false); return; }
@@ -67,7 +69,7 @@ export function useWallets(userId, limits) {
     // ── Batas plan: tolak insert bila sudah mencapai limit ────────
     const maxWallets = limits?.maxWallets ?? Infinity;
     if (accounts.length >= maxWallets) {
-      openPaywall('Wallet / Dompet tambahan');
+      openPaywall(t('paywall.feature.walletTambahan'));
       return { error: null, limitReached: true };
     }
 

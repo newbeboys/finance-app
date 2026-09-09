@@ -20,5 +20,8 @@ keystore-base64-clean.txt
 build-test-apk.ps1
 .claude/settings.local.json
 
+# Artefak debug sesi Playwright MCP (log console, snapshot halaman) — jangan di-track
+.playwright-mcp/
+
 
 

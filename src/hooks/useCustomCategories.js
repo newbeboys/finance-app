@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '../supabase';
 import { CATEGORIES, INCOME_CATEGORIES } from '../data';
 import { DEFAULT_CATEGORY_ICON } from '../icons';
@@ -29,6 +30,7 @@ export function useCustomCategories(userId, limits) {
   const [customCategories, setCustomCategories] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const { openPaywall } = usePaywall();
+  const { t } = useTranslation();
 
   // Load awal + subscribe realtime
   React.useEffect(() => {
@@ -94,7 +96,7 @@ export function useCustomCategories(userId, limits) {
     // Hitung hanya yang aktif (belum dihapus) — yang sudah soft-deleted tidak pakai kuota.
     const maxCustom = limits?.maxCustomCategories ?? Infinity;
     if (customCategories.filter(c => !c.is_deleted).length >= maxCustom) {
-      openPaywall('Kategori kustom tambahan');
+      openPaywall(t('paywall.feature.kategoriKustomTambahan'));
       return { error: null, category: null, limitReached: true };
     }
 

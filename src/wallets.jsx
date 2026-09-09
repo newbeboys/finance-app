@@ -22,7 +22,19 @@ export function WalletGlyph({ type, size = 16 }) {
   );
 }
 
+// Label tipe dompet versi Bahasa Indonesia mentah dari ACCOUNT_TYPES.
+// JANGAN dipakai untuk tampilan — pakai typeLabelI18n(). Fungsi ini khusus
+// untuk nilai yang DISIMPAN ke database (kolom `institution`), yang harus
+// stabil dan tidak ikut berubah mengikuti bahasa UI saat dompet dibuat.
 const typeLabel = (id) => (ACCOUNT_TYPES.find(t => t.id === id) || {}).label || id;
+
+// Label tipe dompet untuk TAMPILAN — mengikuti bahasa UI.
+const TYPE_LABEL_KEY = {
+  bank: 'dompet.rekeningBank', ewallet: 'dompet.eWallet',
+  cash: 'dompet.tunai', investment: 'dompet.investasi',
+};
+const typeLabelI18n = (id, translate) =>
+  translate(TYPE_LABEL_KEY[id] || '', { defaultValue: typeLabel(id) });
 
 export function AccountSwitcher({ accounts, selected, onSelect, onAdd, addLocked = false }) {
   const { t } = useTranslation();
@@ -79,7 +91,7 @@ export function AccountSwitcher({ accounts, selected, onSelect, onAdd, addLocked
                   </span>
                   <span style={{ flex: 1, textAlign: "left", minWidth: 0 }}>
                     <span style={{ display: "block", fontSize: 13, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.name}{a.is_locked ? " 🔒" : ""}</span>
-                    <span style={{ display: "block", fontSize: 11, color: "var(--muted)" }}>{typeLabel(a.type)}{a.last4 !== "—" ? ` •• ${a.last4}` : ""}</span>
+                    <span style={{ display: "block", fontSize: 11, color: "var(--muted)" }}>{typeLabelI18n(a.type, t)}{a.last4 !== "—" ? ` •• ${a.last4}` : ""}</span>
                   </span>
                   <span className="tnum" style={{ fontSize: 12.5 }}>{fmtShort(a.balance)}</span>
                 </button>
@@ -188,10 +200,10 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
           <div className="serif tnum kpi-nominal" style={{ fontSize: nominalFontSize(total, { hero: true }), letterSpacing: "-0.02em", marginTop: 6 }}>{formatNominal(total)}</div>
         </div>
         <div style={{ flex: 1, display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-          {byType.map(t => (
-            <div key={t.id} style={{ padding: "10px 14px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 12, minWidth: 120 }}>
-              <div style={{ fontSize: 11, color: "var(--muted)" }}>{t.label} · {t.count}</div>
-              <div className="tnum" style={{ fontSize: 15, fontWeight: 500, marginTop: 2 }}>{fmtShort(t.sum)}</div>
+          {byType.map(wt => (
+            <div key={wt.id} style={{ padding: "10px 14px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 12, minWidth: 120 }}>
+              <div style={{ fontSize: 11, color: "var(--muted)" }}>{typeLabelI18n(wt.id, t)} · {wt.count}</div>
+              <div className="tnum" style={{ fontSize: 15, fontWeight: 500, marginTop: 2 }}>{fmtShort(wt.sum)}</div>
             </div>
           ))}
         </div>
@@ -387,6 +399,10 @@ export function AddAccountModal({ open, onClose, onCreate }) {
       id: "a" + Date.now(),
       name: name.trim(),
       type,
+      // SENGAJA typeLabel() (Indonesia mentah), BUKAN typeLabelI18n(): nilai ini
+      // disimpan ke kolom `institution` di database. Kalau ikut bahasa UI, dompet
+      // yang dibuat saat UI English akan tersimpan "Bank Account" dan yang dibuat
+      // saat UI Indonesia "Rekening Bank" — data jadi tidak konsisten antar-baris.
       institution: institution.trim() || typeLabel(type),
       last4: last4.trim() || "—",
       balance: +String(balance).replace(/\D/g, "") || 0,
@@ -412,10 +428,10 @@ export function AddAccountModal({ open, onClose, onCreate }) {
         <div style={{ marginTop: 20 }}>
           <span style={fieldLabel}>{t('dompet.jenisdompet')}</span>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
-            {ACCOUNT_TYPES.map(t => (
-              <button key={t.id} onClick={() => setType(t.id)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 7, padding: "12px 6px", borderRadius: 12, background: type === t.id ? "var(--ivory)" : "var(--paper)", border: "1px solid " + (type === t.id ? "var(--ink)" : "var(--line-soft)"), color: "var(--ink)" }}>
-                <WalletGlyph type={t.id} size={18} />
-                <span style={{ fontSize: 11, textAlign: "center", lineHeight: 1.2 }}>{t.label}</span>
+            {ACCOUNT_TYPES.map(wt => (
+              <button key={wt.id} onClick={() => setType(wt.id)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 7, padding: "12px 6px", borderRadius: 12, background: type === wt.id ? "var(--ivory)" : "var(--paper)", border: "1px solid " + (type === wt.id ? "var(--ink)" : "var(--line-soft)"), color: "var(--ink)" }}>
+                <WalletGlyph type={wt.id} size={18} />
+                <span style={{ fontSize: 11, textAlign: "center", lineHeight: 1.2 }}>{typeLabelI18n(wt.id, t)}</span>
               </button>
             ))}
           </div>

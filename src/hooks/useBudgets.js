@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '../supabase';
 import { usePaywall } from '../components/PaywallModal';
 
@@ -49,6 +50,7 @@ export function useBudgets(userId, limits) {
   const [budgets, setBudgets] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const { openPaywall } = usePaywall();
+  const { t } = useTranslation();
 
   React.useEffect(() => {
     if (!userId) { setLoading(false); return; }
@@ -86,7 +88,7 @@ export function useBudgets(userId, limits) {
     // memengaruhi tampilan setelah toggle dihapus).
     const maxBudgets = limits?.maxBudgets ?? Infinity;
     if (budgets.length >= maxBudgets) {
-      openPaywall({ message: 'Penggunaan anggaran sudah maksimal. Upgrade ke Pro untuk fleksibilitas tanpa batas.' });
+      openPaywall({ message: t('paywall.message.anggaranLimit') });
       return { error: null, limitReached: true };
     }
 

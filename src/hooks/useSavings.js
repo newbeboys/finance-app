@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '../supabase';
 import { usePaywall } from '../components/PaywallModal';
 
@@ -44,6 +45,7 @@ export function useSavings(userId, limits) {
   const [goals, setGoals]     = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const { openPaywall } = usePaywall();
+  const { t } = useTranslation();
 
   React.useEffect(() => {
     if (!userId) { setLoading(false); return; }
@@ -88,7 +90,7 @@ export function useSavings(userId, limits) {
     // ── Batas plan: tolak insert bila sudah mencapai limit goals ──
     const maxGoals = limits?.maxSavingsGoals ?? Infinity;
     if (goals.length >= maxGoals) {
-      openPaywall('Goals / Tabungan tambahan');
+      openPaywall(t('paywall.feature.goalsTambahan'));
       return { error: null, limitReached: true };
     }
 

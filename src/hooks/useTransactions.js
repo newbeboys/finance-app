@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '../supabase';
 import { usePaywall } from '../components/PaywallModal';
 
@@ -27,6 +28,7 @@ export function useTransactions(userId, limits) {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState(null);
   const { openPaywall } = usePaywall();
+  const { t } = useTranslation();
 
   React.useEffect(() => {
     if (!userId) { setLoading(false); return; }
@@ -83,7 +85,7 @@ export function useTransactions(userId, limits) {
       if (cErr) {
         console.error('[useTransactions] count error:', cErr.code, cErr.message);
       } else if ((count ?? 0) >= maxPerMonth) {
-        openPaywall({ message: 'Penggunaan transaksi sudah maksimal bulan ini. Upgrade ke Pro untuk fleksibilitas tanpa batas.' });
+        openPaywall({ message: t('paywall.message.transaksiLimit') });
         return { error: null, limitReached: true };
       }
     }

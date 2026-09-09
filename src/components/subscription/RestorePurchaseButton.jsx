@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { Capacitor } from '@capacitor/core';
+import { useTranslation } from 'react-i18next';
 import './RestorePurchaseButton.css';
 
 // onRestore harus me-resolve dengan { hasPro: boolean } jika berhasil,
 // atau melempar error untuk kegagalan nyata (network error, dll).
 export function RestorePurchaseButton({ onRestore }) {
+  const { t } = useTranslation();
   const [status, setStatus] = useState('idle'); // idle | loading | success | error | web
   const [hasPro, setHasPro] = useState(false);
 
@@ -30,11 +32,11 @@ export function RestorePurchaseButton({ onRestore }) {
   };
 
   const LABELS = {
-    idle:    'Pulihkan Pembelian',
-    loading: 'Memeriksa...',
-    success: hasPro ? '✓ Berhasil dipulihkan' : 'Tidak ada langganan untuk dipulihkan',
-    error:   'Gagal memeriksa — coba lagi',
-    web:     'Upgrade lewat aplikasi Android',
+    idle:    t('subscription.restore.idle'),
+    loading: t('subscription.restore.loading'),
+    success: hasPro ? t('subscription.restore.success') : t('subscription.restore.noSubscription'),
+    error:   t('subscription.restore.error'),
+    web:     t('subscription.restore.webOnly'),
   };
 
   return (

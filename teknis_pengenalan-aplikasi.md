@@ -65,6 +65,10 @@ Pembayaran/upgrade dikelola melalui **Google Play Billing** via SDK **RevenueCat
 
 Preferensi bahasa disimpan di `localStorage` key `bahasa`. Managed oleh `i18next` + `react-i18next`.
 
+**Cakupan (per 9 September 2026):** migrasi i18n 5 klaster selesai — Hutang/Piutang, Paywall & Subscription, modal Kategori, konten Laporan (PDF/Excel), dan label kategori/tipe dompet bawaan. Yang masih hardcode Bahasa Indonesia dan belum dijadwalkan: teks widget layar-utama Android (`lib/widgetSync.js`), `MonthYearPicker.jsx`, `SplashScreen.jsx`, `tweaks-panel.jsx`.
+
+**Mata uang TIDAK ikut bahasa.** Aplikasi ini sengaja single-currency: nominal selalu Rupiah format `id-ID` (`Rp 1.234.567`) di semua bahasa. Tanggal & nama bulan ikut bahasa UI, nominal tidak. Detail alasannya di `teknis_keputusan-infrastruktur-roadmap.md` §1.13.
+
 ---
 
 ## URL & Informasi Infrastruktur Dasar

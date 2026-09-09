@@ -98,7 +98,9 @@
     "aturAnggaran": "Set up budget",
     "diAtasAnggaran": "{{jumlah}} over budget",
     "ringkasanMingguan": "Weekly summary",
-    "mingguLalu": "Last week"
+    "mingguLalu": "Last week",
+    "wawasanAiProDesc": "Smart advice cards — spending analysis, saving tips, and forecasts for your finances.",
+    "wawasanAiProCta": "Tap to learn more →"
   },
   "insight": {
     "pengeluaranTerbesar": "Biggest expense: {{kategori}}",
@@ -209,6 +211,36 @@
     "piutang_bayar": "Receivable Payment",
     "hutang": "Debt",
     "hutang_bayar": "Debt Payment"
+  },
+  "category": {
+    "icon": {
+      "pickTitle": "Choose Icon & Color"
+    },
+    "delete": {
+      "eyebrow": "Delete Category",
+      "confirmTitle": "Delete “{{label}}”?",
+      "warning": "Old transactions using this category remain safe, but it can no longer be selected for new transactions. The quota slot will open back up.",
+      "deleting": "Deleting…"
+    },
+    "edit": {
+      "eyebrow": "Edit Category",
+      "confirmTitle": "Edit “{{label}}”",
+      "checking": "Checking…",
+      "cooldownNotice": {
+        "editedOn": "You already edited this category on",
+        "retryAfter": "Try again after",
+        "daysRemaining": "{{count}} days",
+        "upgradeHint": "Need more flexibility? Upgrade to Pro to delete & create unlimited categories."
+      },
+      "understood": "Got it",
+      "cooldownHint": "⚠ Editing a category has a 1-month cooldown after each change.",
+      "nameLabel": "Category Name",
+      "namePlaceholder": "Category name",
+      "typeLabel": "Type",
+      "iconColorLabel": "Icon & Color",
+      "confirmButton": "Confirm Edit",
+      "successToast": "Category updated successfully. You can edit it again after {{date}}."
+    }
   },
   "tabungan": {
     "target": "Savings Goal",
@@ -322,7 +354,117 @@
     "pilihFormat": "Choose format",
     "pdfDesc": "Print-ready document — clean & concise",
     "excelDesc": "5 sheets, live formulas, charts & colour",
-    "tahun": "Year {{tahun}}"
+    "tahun": "Year {{tahun}}",
+    "doc": {
+      "tagline": "Less spending · More living",
+      "createdOn": "Created {{tanggal}}",
+      "walletLine": "Wallet: {{dompet}}",
+      "allWallets": "All Wallets",
+      "emptyWallet": "No transactions in this period for the selected wallet.",
+      "kpiIncome": "Income",
+      "kpiExpense": "Expenses",
+      "kpiNet": "Net difference",
+      "savingsRate": "Savings rate",
+      "chartBarMonthly": "Bar chart — income vs expenses",
+      "chartBarCategory": "Bar chart — expenses by category",
+      "chartPieIncome": "Pie chart — income composition",
+      "chartPieExpense": "Pie chart — expense composition",
+      "tableIncomeByCategory": "Table — income by category",
+      "tableExpenseByCategory": "Table — expenses by category",
+      "tableMonthlyBreakdown": "Table — monthly breakdown",
+      "colCategory": "Category",
+      "colAmount": "Amount",
+      "colPctIncome": "% of income",
+      "colPctExpense": "% of expenses",
+      "colMonth": "Month",
+      "colIn": "In",
+      "colOut": "Out",
+      "colNet": "Net",
+      "colDate": "Date",
+      "colName": "Name",
+      "totalIncome": "Total income",
+      "totalExpense": "Total expenses",
+      "sectionTransactions": "Section 4 — Transaction Details",
+      "incomeTransactions": "Income Transactions",
+      "expenseTransactions": "Expense Transactions",
+      "totalIncomeCaps": "Total Income",
+      "totalExpenseCaps": "Total Expenses",
+      "autoFooter": "FinanceApp — Automatically generated report",
+      "disclaimer": "This document is informational only, not an official tax document.",
+      "closing": "Closing",
+      "generatedBy": "Report generated automatically by FinanceApp on {{tanggal}}.",
+      "headerRight": "Report {{periode}}",
+      "pageOf": "Page {{n}} of {{total}}",
+      "shareDialogTitle": "Save or share report",
+      "buildFailed": "Failed to create file: {{pesan}}",
+      "upgradeHint": "Upgrade to Pro to download reports.",
+      "excelPreviewEyebrow": "FinanceApp — Excel Preview",
+      "filenameMonthly": "Report",
+      "filenameYearly": "Annual-Report",
+      "excelFilePrefix": "FinanceApp_Report",
+      "monthsFull": [
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December"
+      ],
+      "monthsAbbr": [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec"
+      ]
+    },
+    "xlsx": {
+      "sheetSummary": "Summary",
+      "sheetDetail": "Transaction Details",
+      "sheetCategory": "By Category",
+      "sheetIncomeCategory": "Income by Category",
+      "sheetTrend": "Monthly Trend",
+      "typeIncome": "Income",
+      "typeExpense": "Expense",
+      "titleReport": "Financial Report — {{periode}}",
+      "rowTotalIncome": "Total Income",
+      "rowTotalExpense": "Total Expenses",
+      "rowNet": "Net Difference",
+      "rowSavingsRate": "Savings Rate",
+      "rowTotal": "Total",
+      "chartBar": "Bar chart — Income vs Expenses",
+      "chartPieExpense": "Pie chart — expense composition",
+      "chartPieIncome": "Pie chart — income composition",
+      "chartLine": "Line chart — monthly trend",
+      "colNo": "No",
+      "colDate": "Date",
+      "colCategory": "Category",
+      "colDescription": "Description",
+      "colType": "Type",
+      "colAmount": "Amount",
+      "colTotal": "Total",
+      "colPercent": "Percentage",
+      "colMonth": "Month",
+      "colIncome": "Income",
+      "colExpense": "Expenses",
+      "colDifference": "Difference",
+      "totalIncomeCaps": "TOTAL INCOME",
+      "totalExpenseCaps": "TOTAL EXPENSES",
+      "previewExpenseCategory": "Expenses by Category"
+    }
   },
   "pengaturan": {
     "judul": "Settings",
@@ -723,6 +865,154 @@
       "notFound": "Record not found",
       "markPaidFailed": "Failed to mark as paid",
       "deleteFailed": "Failed to delete"
+    }
+  },
+  "paywall": {
+    "title": "Pro-Only Feature",
+    "descFeature": "{{feature}} is a Pro-only feature.",
+    "descGeneric": "This feature is exclusive to Pro users.",
+    "descSuffix": "Upgrade to Pro to unlock this feature without limits.",
+    "understand": "Got it",
+    "feature": {
+      "walletTambahan": "Additional wallets",
+      "goalsTambahan": "Additional savings goals",
+      "scanNota": "Receipt Scan",
+      "moneyIq": "Money IQ",
+      "transaksiBerulang": "Recurring transactions",
+      "temaFontIni": "This font theme",
+      "tabungan": "Savings",
+      "laporanUnduh": "Download PDF/Excel report",
+      "kategoriKustomTambahan": "Additional custom categories",
+      "hutangPiutangTanpaBatas": "Unlimited debts / receivables"
+    },
+    "message": {
+      "transaksiLimit": "You've reached this month's transaction limit. Upgrade to Pro for unlimited flexibility.",
+      "anggaranLimit": "You've reached the budget limit. Upgrade to Pro for unlimited flexibility."
+    }
+  },
+  "subscription": {
+    "section": {
+      "eyebrow": "Subscription",
+      "title": "Account & Plan"
+    },
+    "compare": {
+      "plan": {
+        "monthly": "Monthly",
+        "sixMonths": "6 Months",
+        "annual": "Annual"
+      },
+      "period": {
+        "monthly": "/mo",
+        "sixMonths": "/6mo",
+        "annual": "/yr"
+      },
+      "perMonthApprox": "≈ {{price}}/mo",
+      "table": {
+        "feature": "Feature"
+      },
+      "feature": {
+        "transaksi": {
+          "label": "Transactions",
+          "basic": "75/month"
+        },
+        "kustomKategori": {
+          "label": "Custom category",
+          "basic": "Max. 3"
+        },
+        "dompet": {
+          "label": "Wallet",
+          "basic": "1 wallet"
+        },
+        "goalsTabungan": {
+          "label": "Savings goals",
+          "basic": "Max. 2"
+        },
+        "anggaran": {
+          "label": "Budget",
+          "basic": "Max. 7"
+        },
+        "hutangPiutang": {
+          "label": "Debts/Receivables",
+          "basic": "Max. 5 active"
+        },
+        "transaksiBerulang": {
+          "label": "Recurring transactions"
+        },
+        "laporanPdfExcel": {
+          "label": "PDF / Excel Report",
+          "basic": "Preview only"
+        },
+        "scanNota": {
+          "label": "Receipt scan"
+        },
+        "moneyIq": {
+          "label": "Money IQ"
+        },
+        "temaFontPremium": {
+          "label": "Premium font theme",
+          "basic": "2 themes",
+          "pro": "All themes"
+        },
+        "widgetLayarUtama": {
+          "label": "Home screen widget"
+        }
+      },
+      "unlimited": "Unlimited",
+      "cta": "Start Pro — {{price}}{{period}}",
+      "hideToggle": "Hide feature comparison ▲",
+      "showToggle": "See Basic vs Pro comparison ▼"
+    },
+    "upgrade": {
+      "title": "Upgrade to Pro",
+      "webOnlyDesc": "Upgrading to Pro is currently only available through the Android app.",
+      "downloadPlayStore": "Download on Play Store",
+      "later": "Maybe Later",
+      "limitUsed": "{{currentLimit}}/{{maxLimit}} used",
+      "period": {
+        "monthly": "/mo",
+        "sixMonths": "/6mo",
+        "annual": "/yr"
+      },
+      "saveBadge": "SAVE {{percent}}%",
+      "perMonthApprox": "≈ {{price}}/mo",
+      "confirm": "Upgrade Now",
+      "processing": "Processing...",
+      "terms": "Auto-renews per plan. Cancel anytime in Settings."
+    },
+    "status": {
+      "billing": {
+        "monthly": "Monthly · {{price}}/mo",
+        "sixMonths": "6-Month · {{price}}/6mo",
+        "annual": "Annual · {{price}}/yr"
+      },
+      "renews": "Renews {{date}}",
+      "descPro": "Full access: PDF/Excel reports, receipt scan, recurring transactions, Money IQ, and all font themes.",
+      "descBasic": "Some features are limited. Upgrade to Pro for unlimited access.",
+      "pricing": {
+        "monthly": "Monthly — {{price}}/mo",
+        "sixMonths": "6-Month — {{price}}",
+        "annual": "Annual — {{price}}"
+      },
+      "save": "save {{percent}}%",
+      "manage": "Manage Subscription",
+      "cancel": "Cancel Subscription",
+      "cancelAlert": "Contact support to cancel your subscription.",
+      "upgradeCta": "Upgrade to Pro"
+    },
+    "restore": {
+      "idle": "Restore Purchase",
+      "loading": "Checking...",
+      "success": "✓ Restored successfully",
+      "noSubscription": "No subscription to restore",
+      "error": "Check failed — try again",
+      "webOnly": "Upgrade via the Android app"
+    },
+    "purchase": {
+      "offeringsFailed": "Failed to load plans — please try again.",
+      "offeringUnavailable": "No offers available right now.",
+      "packageNotFound": "Package not found. Try restarting the app.",
+      "success": "Congratulations! You're now a Pro user 🎉",
+      "failed": "Purchase failed. Please try again later."
     }
   },
   "auth": {
