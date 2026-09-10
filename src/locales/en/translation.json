@@ -866,7 +866,8 @@
       "paymentSaveFailed": "Failed to save payment",
       "notFound": "Record not found",
       "markPaidFailed": "Failed to mark as paid",
-      "deleteFailed": "Failed to delete"
+      "deleteFailed": "Failed to delete",
+      "proofFailed": "Failed to generate proof of record"
     },
     "proof": {
       "docTitle": "Proof of Record",

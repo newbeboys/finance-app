@@ -866,7 +866,8 @@
       "paymentSaveFailed": "Gagal menyimpan cicilan",
       "notFound": "Catatan tidak ditemukan",
       "markPaidFailed": "Gagal menandai lunas",
-      "deleteFailed": "Gagal menghapus"
+      "deleteFailed": "Gagal menghapus",
+      "proofFailed": "Gagal membuat bukti catatan"
     },
     "proof": {
       "docTitle": "Bukti Catatan",

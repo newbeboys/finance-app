@@ -480,6 +480,16 @@ t.wallet_id === account.id ||
 
 **Untuk type='payable'** (hutang): Toggle tidak ada, selalu `cash_disbursed_at_creation = true` (uang sudah keluar saat buat hutang).
 
+### Bukti Catatan — Shareable Debt Proof (added 10 September 2026)
+
+**Lokasi kode:** `src/lib/debtProof.js` (`generateDebtProof()`, generate PDF native jsPDF+autotable) + `src/components/debts/DebtDetailSheet.jsx` (tombol pemicu "Bukti Catatan")
+
+**Monetisasi:** Tombol **tersedia kedua tier, tidak di-gate** — yang beda cuma hasil PDF-nya: Basic dapat header branded (logo + "FinanceApp" + tagline) sebagai watermark, Pro dapat PDF polos tanpa branding apapun.
+
+**Konten:** Kalau `cash_disbursed_at_creation === false`, badge "Belum Ditagih" ikut tercetak di PDF, reuse key i18n yang sama dengan UI card (`debts.badge.notYetBilled`) — bukan teks baru. Riwayat cicilan diambil dari state `payments` yang sudah dimuat `DebtDetailSheet.jsx` untuk render UI, **tidak query ulang** ke Supabase.
+
+**Share:** Di Android via Capacitor `Share.share()` (native share sheet, bukan deep link `wa.me`); di web fallback `pdf.save()` (download langsung).
+
 ---
 
 ## 18. Sistem Error Logging Terpusat

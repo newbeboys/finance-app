@@ -1,6 +1,14 @@
 import i18n from '../i18n';
 import { logError } from './errorLogger';
 
+// Logo dipakai di header PDF versi Basic saja (lihat generateDebtProof()).
+// SENGAJA assets/logo.png, BUKAN src/assets/Logo/"new logo (2).png" — dicek
+// pixel data kedua file: "new logo (2).png" RGB tanpa alpha (background solid
+// ikut terbakar jadi bagian gambar), assets/logo.png RGBA dengan transparansi
+// asli. Ditempel di atas kotak warna PDF via pdf.addImage() → HARUS yang
+// transparan, kalau tidak background-nya nempel jadi patch putih.
+import financeAppLogo from '../../assets/logo.png';
+
 // ════════════════════════════════════════════════════════════════════
 //  debtProof — generate PDF "bukti catatan" untuk satu hutang/piutang.
 //  Fungsi murni: TIDAK menyentuh komponen UI apapun, TIDAK query Supabase
@@ -59,6 +67,25 @@ function fmtDateShort(iso) {
   return new Date(y, m - 1, d).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+// pdf.addImage() butuh base64/data-URI, tidak bisa fetch URL sendiri — jadi
+// hasil import Vite (URL asset) di-fetch lalu dikonversi sekali di sini.
+// Di-cache di modul-level: logo tidak berubah antar-panggilan generateDebtProof().
+let logoDataUrlPromise = null;
+function loadLogoDataUrl() {
+  if (!logoDataUrlPromise) {
+    logoDataUrlPromise = fetch(financeAppLogo)
+      .then((res) => res.blob())
+      .then((blob) => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      }))
+      .catch((err) => { logoDataUrlPromise = null; throw err; }); // gagal → boleh dicoba lagi lain kali
+  }
+  return logoDataUrlPromise;
+}
+
 /**
  * Generate PDF bukti catatan hutang/piutang dan simpan/bagikan.
  *
@@ -66,7 +93,7 @@ function fmtDateShort(iso) {
  *   person_name, note, amount, paid, remaining, date, due_date, status, …).
  * @param {Array}  payments - riwayat cicilan (baris debt_payments), DIOPER
  *   dari komponen pemanggil — fungsi ini TIDAK query ulang ke Supabase.
- * @param {object} opts - { isPro: boolean } — isPro=false → tambah watermark halus.
+ * @param {object} opts - { isPro: boolean } — isPro=false → header branded (logo+nama+tagline).
  * @returns {Promise<{error: null|Error}>}
  */
 export async function generateDebtProof(debt, payments = [], opts = {}) {
@@ -104,7 +131,9 @@ export async function generateDebtProof(debt, payments = [], opts = {}) {
       closing:       i18n.t('debts.proof.closing'),
       disclaimer:    i18n.t('debts.proof.disclaimer'),
       generatedOn:   i18n.t('debts.proof.generatedOn', { tanggal: fmtDateLong(new Date().toISOString().slice(0, 10)) }),
-      watermark:     i18n.t('debts.proof.watermark'),
+      // Reuse key laporan.doc.tagline — SAMA persis dgn header laporan bulanan/
+      // tahunan (reports.jsx), bukan key baru, biar tidak duplikasi terjemahan.
+      tagline:       i18n.t('laporan.doc.tagline'),
       shareDialogTitle: i18n.t('debts.proof.shareDialogTitle'),
       notYetBilled:     i18n.t('debts.badge.notYetBilled'),
       notYetBilledHint: i18n.t('debts.badge.notYetBilledHint'),
@@ -137,17 +166,46 @@ export async function generateDebtProof(debt, payments = [], opts = {}) {
     };
 
     // ── Header ──
+    // Basic: header branded (logo + "FinanceApp" + tagline) — pengganti watermark
+    // footer lama. Pro: cuma judul dokumen, tanpa nama/logo app sama sekali.
+    // Makanya tinggi header beda antar-tier → cursorY konten awal ikut beda dikit.
     pdf.setFillColor(...accent);
     pdf.rect(0, 0, pdfW, 3, 'F');
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(13);
-    pdf.setTextColor(...INK);
-    pdf.text('FinanceApp', SIDE_MM, cursorY);
+
+    // Kanan atas: judul dokumen — posisi & gaya SAMA di kedua tier, tidak berubah.
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(10);
     pdf.setTextColor(...MUTED);
-    pdf.text(`${T.docTitle} — ${T.typeLabel}`, pdfW - SIDE_MM, cursorY, { align: 'right' });
-    cursorY += 4;
+    pdf.text(`${T.docTitle} — ${T.typeLabel}`, pdfW - SIDE_MM, TOP_MM, { align: 'right' });
+
+    let headerBottomY;
+    if (!opts.isPro) {
+      const LOGO_SIZE = 10, LOGO_TOP = 12, LOGO_PAD = 1.5;
+      // Tanpa kotak background — assets/logo.png transparan asli (RGBA), jadi
+      // ikonnya (garis geometris gelap) tampil langsung di atas halaman
+      // putih/krem apa adanya, tidak tertimpa warna latar buatan apapun.
+      try {
+        const logoDataUrl = await loadLogoDataUrl();
+        pdf.addImage(logoDataUrl, 'PNG', SIDE_MM, LOGO_TOP, LOGO_SIZE, LOGO_SIZE);
+      } catch (imgErr) {
+        // Logo gagal dimuat bukan alasan menggagalkan seluruh PDF — lanjut tanpa gambar.
+        logError('debtProof', `logo load failed: ${imgErr?.message || imgErr}`, { debt_id: debt?.id }, 'low');
+      }
+      const textX = SIDE_MM + LOGO_SIZE + LOGO_PAD + 3;
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(13);
+      pdf.setTextColor(...INK);
+      pdf.text('FinanceApp', textX, LOGO_TOP + 5);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(...MUTED);
+      pdf.text(T.tagline, textX, LOGO_TOP + 9.5);
+      headerBottomY = LOGO_TOP + LOGO_SIZE + LOGO_PAD + 3;
+    } else {
+      headerBottomY = TOP_MM + 4;
+    }
+
+    cursorY = headerBottomY;
     pdf.setDrawColor(...LINE);
     pdf.setLineWidth(0.3);
     pdf.line(SIDE_MM, cursorY, pdfW - SIDE_MM, cursorY);
@@ -280,7 +338,9 @@ export async function generateDebtProof(debt, payments = [], opts = {}) {
     pdf.text(disclaimerLines, SIDE_MM, cursorY);
     cursorY += disclaimerLines.length * 4.2;
 
-    // ── Footer tiap halaman: tanggal + no. halaman, + watermark halus kalau Basic ──
+    // ── Footer tiap halaman: tanggal + no. halaman ──
+    // Watermark logo lama (footer 7pt) sudah dihapus — branding Basic sekarang
+    // sepenuhnya di header (lihat blok "Header" di atas).
     const total = pdf.getNumberOfPages();
     for (let i = 1; i <= total; i++) {
       pdf.setPage(i);
@@ -292,15 +352,6 @@ export async function generateDebtProof(debt, payments = [], opts = {}) {
       pdf.setTextColor(...MUTED);
       pdf.text(T.generatedOn, SIDE_MM, pdfH - 5);
       pdf.text(i18n.t('debts.proof.pageOf', { n: i, total }), pdfW - SIDE_MM, pdfH - 5, { align: 'right' });
-
-      // Watermark HALUS Basic-tier — teks kecil terpisah, bukan stempel diagonal.
-      // Sengaja tidak mengorbankan keterbacaan dokumen sebagai "bukti".
-      if (!opts.isPro) {
-        pdf.setFont('helvetica', 'normal');
-        pdf.setFontSize(7);
-        pdf.setTextColor(...MUTED);
-        pdf.text(T.watermark, pdfW / 2, pdfH - 3, { align: 'center' });
-      }
     }
 
     // ── Simpan / bagikan ──

@@ -1,9 +1,10 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { fmt } from '../../data';
-import { IconClose, IconCalendar, IconCheck } from '../../icons';
+import { IconClose, IconCalendar, IconCheck, IconReport } from '../../icons';
 import { DatePickerPopup } from '../../transactions';
 import { useScrollLock } from '../../hooks/useScrollLock';
+import { generateDebtProof } from '../../lib/debtProof';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 const todayISO = () => {
@@ -85,6 +86,17 @@ export default function DebtDetailSheet({ debt, onClose, getPayments, addPayment
     setConfirm('none');
     if (res?.error) { setErrorMsg(res.error.message || t('debts.error.deleteFailed')); return; }
     onClose();
+  };
+
+  // Bukti catatan PDF — payments dari state riwayat cicilan yang sudah dimuat
+  // (getPayments di load()), TIDAK query ulang. isPro diteruskan apa adanya
+  // dari prop (sumbernya sudah di app.jsx → DebtsPage), bukan useSubscription() baru.
+  const doGenerateProof = async () => {
+    if (busy) return;
+    setBusy(true); setErrorMsg('');
+    const { error } = await generateDebtProof(debt, payments, { isPro });
+    setBusy(false);
+    if (error) setErrorMsg(error.message || t('debts.error.proofFailed'));
   };
 
   return (
@@ -223,9 +235,17 @@ export default function DebtDetailSheet({ debt, onClose, getPayments, addPayment
             )}
           </div>
 
+          {/* Bukti Catatan — selalu tampil di kedua tier (Basic & Pro); yang beda
+              cuma hasil PDF-nya (watermark header), tombolnya sendiri tak di-gate. */}
+          {confirm === 'none' && (
+            <button onClick={doGenerateProof} disabled={busy} style={{ marginTop: 20, width: '100%', padding: '11px', background: 'var(--paper)', border: '1px solid var(--line-soft)', borderRadius: 11, fontSize: 13, color: 'var(--ink-2)', cursor: busy ? 'default' : 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              <IconReport size={14} /> {busy ? t('debts.action.processing') : t('debts.proof.docTitle')}
+            </button>
+          )}
+
           {/* Hapus */}
           {!locked && confirm === 'none' && (
-            <button onClick={() => setConfirm('delete')} style={{ marginTop: 20, width: '100%', padding: '11px', background: 'transparent', border: '1px solid var(--line-soft)', borderRadius: 11, fontSize: 13, color: 'var(--terra)', cursor: 'pointer' }}>
+            <button onClick={() => setConfirm('delete')} style={{ marginTop: 10, width: '100%', padding: '11px', background: 'transparent', border: '1px solid var(--line-soft)', borderRadius: 11, fontSize: 13, color: 'var(--terra)', cursor: 'pointer' }}>
               {t('debts.action.deleteRecord')}
             </button>
           )}
