@@ -140,52 +140,57 @@ export function useWallets(userId, limits) {
     return { error };
   }
 
-  // Balance adjustment: baca saldo TERBARU langsung dari DB (bukan dari state React
-  // `accounts`), hitung nilai baru, lalu tulis. Membaca dari state bikin race condition
-  // saat adjustBalance dipanggil dua kali berturut-turut (mis. reverse tx lama + apply
-  // tx baru di handleUpdateTransaction): kedua panggilan membaca closure `accounts` yang
-  // sama, jadi panggilan kedua menimpa hasil panggilan pertama dengan angka salah.
-  // Pemanggil WAJIB `await` secara berurutan (jangan Promise.all) supaya baca-tulis
-  // benar-benar sequential.
+  // Balance adjustment: SATU panggilan RPC atomik — lihat migrasi
+  // 20260911000000_add_atomic_adjust_wallet_balance.sql. Postgres yang menghitung
+  // `balance = balance + delta` di dalam satu UPDATE terkunci, jadi nilai basi tidak
+  // pernah singgah di JavaScript. Ini menggantikan pola SELECT-lalu-UPDATE lama yang
+  // rawan lost update: dua penulis bersamaan (dua device, atau tab + widget) sama-sama
+  // membaca saldo yang sama lalu saling menimpa hasil hitungan masing-masing.
+  //
+  // Kontrak return SENGAJA tetap { error } (bukan throw) seperti versi lama. Pemanggil
+  // di useDebts.js — createDebt/addPayment/deleteDebt — memperlakukan kegagalan saldo
+  // sebagai best-effort: catatan hutang yang sudah terlanjur tersimpan TIDAK boleh
+  // dibatalkan, cukup dicatat (high) untuk rekonsiliasi manual. Kalau fungsi ini
+  // melempar, throw-nya lolos ke tengah createDebt setelah baris debts + transaksi
+  // pokok commit, dan justru melewati logError yang dipasang untuk kasus itu.
   async function adjustBalance(walletId, delta) {
     if (!walletId || !delta) return { error: null };
 
-    const { data: freshWallet, error: fetchErr } = await supabase
-      .from('wallets')
-      .select('balance')
-      .eq('id', walletId)
-      .eq('user_id', userId)
-      .single();
+    // Identitas pemanggil diambil server dari auth.uid(); userId TIDAK dikirim sebagai
+    // argumen supaya tidak bisa dipalsukan. Cek kepemilikan dompet ada di dalam RPC.
+    const { data: newBalance, error } = await supabase.rpc('adjust_wallet_balance', {
+      p_wallet_id: walletId,
+      p_delta:     delta,
+    });
 
-    if (fetchErr || !freshWallet) {
-      console.error('[useWallets] adjustBalance fetch FAILED:', fetchErr?.message);
-      if (fetchErr) {
-        logError('adjustBalance', fetchErr.message, {
-          wallet_id: walletId, delta, phase: 'fetch', code: fetchErr.code,
-        }, 'high');
-      }
-      return { error: fetchErr };
-    }
-
-    const newBalance = Number(freshWallet.balance) + delta;
-    const { error } = await supabase
-      .from('wallets')
-      .update({ balance: newBalance })
-      .eq('id', walletId)
-      .eq('user_id', userId);
-    if (!error) {
-      setAccounts(prev => prev.map(a =>
-        a.id === walletId ? { ...a, balance: newBalance } : a
-      ));
-    } else {
+    if (error) {
       // Gagal update saldo = uang/data permanen terdampak → catat (high).
-      console.error('[useWallets] adjustBalance FAILED:', error.code, error.message);
+      console.error('[useWallets] adjustBalance RPC FAILED:', error.code, error.message);
       logError('adjustBalance', error.message, {
-        wallet_id: walletId, delta, attempted_balance: newBalance, code: error.code,
+        wallet_id: walletId, delta, code: error.code,
       }, 'high');
+      return { error };
     }
-    return { error };
+
+    // Saldo baru datang dari server (otoritatif hasil UPDATE terkunci), bukan hitungan
+    // lokal — jadi state tetap benar walau ada penulis lain yang commit di sela-sela.
+    const balance = Number(newBalance);
+    setAccounts(prev => prev.map(a =>
+      a.id === walletId ? { ...a, balance } : a
+    ));
+    return { error: null, balance };
   }
 
-  return { accounts, loading, createAccount, setPrimary, deleteAccount, adjustBalance };
+  // Sinkron saldo di state SAJA — tidak menyentuh database sama sekali.
+  // Dipakai setelah record_transaction() (RPC atomik) yang sudah mengubah saldo
+  // di server sebagai bagian dari transaksi yang sama. Memanggil adjustBalance()
+  // di situ akan menghitung deltanya DUA KALI.
+  function patchLocalBalance(walletId, delta) {
+    if (!walletId || !delta) return;
+    setAccounts(prev => prev.map(a =>
+      a.id === walletId ? { ...a, balance: Number(a.balance) + delta } : a
+    ));
+  }
+
+  return { accounts, loading, createAccount, setPrimary, deleteAccount, adjustBalance, patchLocalBalance };
 }

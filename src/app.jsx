@@ -369,7 +369,7 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
   }, [fontResetToast]);
 
   // Multi-wallet state — sinkron dengan Supabase
-  const { accounts, createAccount, setPrimary, deleteAccount: _deleteAccount, adjustBalance } = useWallets(session.user.id, limits);
+  const { accounts, createAccount, setPrimary, deleteAccount: _deleteAccount, adjustBalance, patchLocalBalance } = useWallets(session.user.id, limits);
 
   // Tombol "Tambah Wallet" tetap tampil + gemlock saat Basic sudah mencapai limit
   const walletAddLocked = accounts.length >= (limits?.maxWallets ?? Infinity);
@@ -402,18 +402,23 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
   const {
     debts, loading: debtsLoading,
     createDebt, addPayment, markPaid, deleteDebt, getPayments,
-  } = useDebts(session.user.id, limits, { transactions, createTransaction, deleteTransaction, adjustBalance });
+  } = useDebts(session.user.id, limits, { transactions, createTransaction, deleteTransaction, adjustBalance, patchLocalBalance });
 
-  // Wrapper: setelah create/update/delete transaksi, sesuaikan saldo dompet terkait.
-  // adjustBalance membaca saldo terbaru langsung dari DB, jadi aman dipanggil
-  // berturut-turut — TAPI harus di-`await` sequential (jangan Promise.all).
+  // CREATE: saldo TIDAK lagi disesuaikan di sini. createTransaction() menulis
+  // lewat RPC record_transaction() yang meng-INSERT transaksi + meng-UPDATE
+  // saldo dompet dalam satu transaksi Postgres (atomik) — lihat migrasi
+  // 20260911010000. Yang tersisa di sini cuma menyelaraskan saldo di state
+  // React; memanggil adjustBalance() lagi akan menghitung delta DUA KALI.
+  //
+  // UPDATE & DELETE di bawah masih pakai alur lama (mutasi lalu adjustBalance
+  // terpisah) — belum dipindah ke RPC atomik.
   const handleCreateTransaction = React.useCallback(async (tx) => {
     const res = await createTransaction(tx);
     if (!res.error && !res.limitReached && tx.wallet_id) {
-      await adjustBalance(tx.wallet_id, tx.amount);
+      patchLocalBalance(tx.wallet_id, tx.amount);
     }
     return res;
-  }, [createTransaction, adjustBalance]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [createTransaction, patchLocalBalance]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleUpdateTransaction = React.useCallback(async (id, updates, oldTx) => {
     const res = await updateTransaction(id, updates);

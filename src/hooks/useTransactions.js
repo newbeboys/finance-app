@@ -90,29 +90,52 @@ export function useTransactions(userId, limits) {
       }
     }
 
-    const { data, error: err } = await supabase
-      .from('transactions')
-      .insert({
-        user_id:   userId,
+    // ── Tulis via RPC atomik ──────────────────────────────────────────
+    // record_transaction() (migrasi 20260911010000) meng-INSERT baris transaksi
+    // DAN menyesuaikan saldo dompet dalam satu transaksi Postgres. Sebelumnya
+    // dua langkah terpisah (insert di sini, adjustBalance di app.jsx) yang bisa
+    // putus di tengah dan menyisakan transaksi tanpa perubahan saldo.
+    //
+    // `type` dan tanda amount TIDAK dikirim terpisah — fungsi menurunkan type
+    // dari tanda amount, jadi keduanya mustahil bertentangan.
+    //
+    // Kuota plan SENGAJA tetap dicek di atas (JS), bukan di dalam RPC:
+    // src/lib/planLimits.js adalah sumber tunggal semua batas, dan cek di sini
+    // yang memunculkan paywall. Jangan pindahkan/duplikasi ambangnya ke SQL.
+    const { data: newId, error: err } = await supabase.rpc('record_transaction', {
+      p_amount:    tx.amount,
+      p_category:  tx.category,
+      p_date:      isoDate,
+      p_wallet_id: tx.wallet_id || null,
+      p_merchant:  tx.merchant  || '',
+      p_note:      tx.note      || '',
+      p_time:      tx.time      || '00:00',
+      p_method:    tx.method    || 'Tunai',
+      p_debt_id:   tx.debt_id   || null,   // tautan ke catatan hutang/piutang (null utk transaksi biasa)
+    });
+
+    if (err) {
+      console.error('[useTransactions] record_transaction FAILED:', err.code, err.message);
+    } else if (newId) {
+      // RPC mengembalikan id saja; sisa kolomnya sudah kita ketahui persis
+      // (nilai yang baru saja dikirim), jadi baris untuk state dirakit di sini
+      // tanpa perlu SELECT tambahan.
+      setTransactions(prev => [toAppTx({
+        id:        newId,
         type:      tx.amount < 0 ? 'expense' : 'income',
         amount:    tx.amount,
         category:  tx.category,
-        merchant:  tx.merchant || '',
-        note:      tx.note     || '',
+        merchant:  tx.merchant  || '',
+        note:      tx.note      || '',
         date:      isoDate,
-        time:      tx.time     || '00:00',
-        method:    tx.method   || 'Tunai',
+        time:      tx.time      || '00:00',
+        method:    tx.method    || 'Tunai',
         wallet_id: tx.wallet_id || null,
-        debt_id:   tx.debt_id  || null,   // tautan ke catatan hutang/piutang (null utk transaksi biasa)
-      })
-      .select()
-      .single();
-
-    if (!err && data) {
-      setTransactions(prev => [toAppTx(data), ...prev]);
+        debt_id:   tx.debt_id   || null,
+      }), ...prev]);
     }
     // id dikembalikan agar useDebts bisa menautkannya ke debt_payments.transaction_id
-    return { error: err, id: data?.id ?? null };
+    return { error: err, id: newId ?? null };
   }
 
   async function deleteTransaction(id) {
