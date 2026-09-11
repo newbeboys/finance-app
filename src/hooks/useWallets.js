@@ -47,7 +47,19 @@ export function useWallets(userId, limits) {
         setLoading(false);
       });
 
-    // Realtime UPDATE: picks up is_locked changes from lockExcessOnDowngrade/unlockAllOnUpgrade
+    // Realtime UPDATE: picks up is_locked changes from lockExcessOnDowngrade/unlockAllOnUpgrade,
+    // DAN setiap perubahan `balance` dari mana pun (adjust_wallet_balance /
+    // record_transaction, tab lain, device lain).
+    //
+    // PENTING — kenapa handler ini menulis nilai ABSOLUT dari payload.new, bukan
+    // menambah delta: tabel `wallets` ada di publication `supabase_realtime`, jadi
+    // event ini ikut menyala untuk perubahan yang dipicu device ini sendiri, dan
+    // urutan kedatangannya TIDAK dijamin relatif terhadap response RPC-nya.
+    // Menyetel nilai absolut bersifat idempoten — datang sebelum atau sesudah
+    // response, hasil akhirnya sama. Jangan pernah menambahkan penulis state saldo
+    // kedua yang bekerja dengan DELTA (mis. `balance + delta`): dua penulis delta,
+    // atau satu delta + satu absolut, akan menggandakan saldo di UI secara acak
+    // tergantung siapa yang sampai duluan. Itu persis bug saldo dobel 11 Sep 2026.
     const channel = supabase
       .channel(`wallets_lock:${userId}`)
       .on(
@@ -181,16 +193,5 @@ export function useWallets(userId, limits) {
     return { error: null, balance };
   }
 
-  // Sinkron saldo di state SAJA — tidak menyentuh database sama sekali.
-  // Dipakai setelah record_transaction() (RPC atomik) yang sudah mengubah saldo
-  // di server sebagai bagian dari transaksi yang sama. Memanggil adjustBalance()
-  // di situ akan menghitung deltanya DUA KALI.
-  function patchLocalBalance(walletId, delta) {
-    if (!walletId || !delta) return;
-    setAccounts(prev => prev.map(a =>
-      a.id === walletId ? { ...a, balance: Number(a.balance) + delta } : a
-    ));
-  }
-
-  return { accounts, loading, createAccount, setPrimary, deleteAccount, adjustBalance, patchLocalBalance };
+  return { accounts, loading, createAccount, setPrimary, deleteAccount, adjustBalance };
 }

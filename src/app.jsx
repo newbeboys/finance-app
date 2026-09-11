@@ -369,7 +369,7 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
   }, [fontResetToast]);
 
   // Multi-wallet state — sinkron dengan Supabase
-  const { accounts, createAccount, setPrimary, deleteAccount: _deleteAccount, adjustBalance, patchLocalBalance } = useWallets(session.user.id, limits);
+  const { accounts, createAccount, setPrimary, deleteAccount: _deleteAccount, adjustBalance } = useWallets(session.user.id, limits);
 
   // Tombol "Tambah Wallet" tetap tampil + gemlock saat Basic sudah mencapai limit
   const walletAddLocked = accounts.length >= (limits?.maxWallets ?? Infinity);
@@ -402,23 +402,21 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
   const {
     debts, loading: debtsLoading,
     createDebt, addPayment, markPaid, deleteDebt, getPayments,
-  } = useDebts(session.user.id, limits, { transactions, createTransaction, deleteTransaction, adjustBalance, patchLocalBalance });
+  } = useDebts(session.user.id, limits, { transactions, createTransaction, deleteTransaction, adjustBalance });
 
-  // CREATE: saldo TIDAK lagi disesuaikan di sini. createTransaction() menulis
-  // lewat RPC record_transaction() yang meng-INSERT transaksi + meng-UPDATE
-  // saldo dompet dalam satu transaksi Postgres (atomik) — lihat migrasi
-  // 20260911010000. Yang tersisa di sini cuma menyelaraskan saldo di state
-  // React; memanggil adjustBalance() lagi akan menghitung delta DUA KALI.
+  // CREATE: saldo TIDAK disentuh di sini sama sekali. createTransaction() menulis
+  // lewat RPC record_transaction() yang meng-INSERT transaksi + meng-UPDATE saldo
+  // dompet dalam satu transaksi Postgres (atomik) — lihat migrasi 20260911010000 —
+  // dan subscription realtime di useWallets yang menyalurkan saldo barunya ke
+  // state. Jangan tambahkan penyesuaian saldo di sini: adjustBalance() menggandakan
+  // di DB, penulis state berbasis delta menggandakan di UI.
   //
   // UPDATE & DELETE di bawah masih pakai alur lama (mutasi lalu adjustBalance
-  // terpisah) — belum dipindah ke RPC atomik.
+  // terpisah) — belum dipindah ke RPC atomik. Keduanya aman terhadap realtime
+  // karena adjustBalance menyetel saldo ABSOLUT hasil RPC, bukan delta.
   const handleCreateTransaction = React.useCallback(async (tx) => {
-    const res = await createTransaction(tx);
-    if (!res.error && !res.limitReached && tx.wallet_id) {
-      patchLocalBalance(tx.wallet_id, tx.amount);
-    }
-    return res;
-  }, [createTransaction, patchLocalBalance]); // eslint-disable-line react-hooks/exhaustive-deps
+    return await createTransaction(tx);
+  }, [createTransaction]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleUpdateTransaction = React.useCallback(async (id, updates, oldTx) => {
     const res = await updateTransaction(id, updates);
