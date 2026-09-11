@@ -511,6 +511,66 @@ Realtime `useWallets` memakai **dua binding** di satu channel: `user_id=eq.<uid>
 
 ---
 
+### Shared Wallet — Alur Undangan, Task 3 (13 Sep 2026, sudah live)
+
+Migrasi `20260913000000_add_wallet_invite_flow.sql`. Empat RPC baru: `generate_wallet_invite`, `accept_wallet_invite`, `leave_wallet`, `remove_wallet_member`.
+
+#### Tabel `wallet_invites` (terpisah dari `wallet_members`)
+
+Kode 6 digit **tidak** disimpan di `wallet_members` — siklus hidupnya beda (kode: dibuat → ditebak → dipakai sekali/revoke/expired; keanggotaan: aktif → keluar), dan `wallet_members.user_id` NOT NULL tidak cocok untuk baris "penerima belum diketahui".
+
+```sql
+id          uuid        PRIMARY KEY
+wallet_id   uuid        NOT NULL, FK → wallets ON DELETE CASCADE
+code        text        NOT NULL
+role        text        'editor' | 'viewer'          (TIDAK ADA 'owner')
+status      text        'active' | 'accepted' | 'revoked'   (default 'active')
+created_by  uuid        NOT NULL, FK → auth.users
+accepted_by uuid        FK → auth.users ON DELETE SET NULL
+expires_at  timestamptz NOT NULL
+accepted_at timestamptz
+created_at  timestamptz
+```
+
+Unique index **parsial**: `UNIQUE (code) WHERE status = 'active'` — kode yang sudah `accepted`/`revoked` boleh muncul lagi di kombinasi acak berikutnya, keunikan hanya berlaku di antara kode yang masih bisa ditebak. RLS: SELECT hanya untuk owner dompetnya (`wallet_access_role(wallet_id) = 'owner'`); tidak ada policy INSERT/UPDATE/DELETE sama sekali — tulis murni lewat RPC.
+
+#### Tabel `wallet_invite_attempts` — rate limit brute force
+
+Pola identik `chat_rate_limits`: satu baris per user, dikunci `FOR UPDATE` di dalam `accept_wallet_invite` untuk cek+increment atomik (default 10 percobaan / 15 menit, dua-duanya parameter RPC). **Kenapa per-user, bukan per-kode:** kode salah tidak match baris manapun di `wallet_invites`, jadi tidak ada baris invite untuk ditempeli penalti — beda dari brute force PIN yang menyerang satu target. Satu-satunya pertahanan RPC yang berfungsi adalah membatasi kecepatan tebak satu akun; melawan banyak akun sybil paralel di luar cakupan lapisan SQL.
+
+#### `generate_wallet_invite(p_wallet_id, p_role DEFAULT 'editor', p_expires_in_hours DEFAULT 24)`
+
+- **Fitur Pro-only, dicek DI DALAM RPC** (join `user_subscriptions`: `plan='pro' AND (expires_at IS NULL OR expires_at > now())`), bukan cuma client-side seperti limit transaksi/dompet Basic — ini gerbang fitur yang kalau dilewati lewat panggilan RPC langsung membuka akses **permanen** ke akun ketiga, beda dari kuota transient yang reset tiap bulan.
+- Hanya owner (`wallet_access_role(p_wallet_id) = 'owner'`) yang boleh memanggil.
+- **Satu kode aktif per dompet** — memanggil ulang otomatis me-revoke kode `active` lama milik dompet yang sama. Ini sekaligus jawaban "owner generate ulang karena kode hilang": tidak ada RPC `regenerate` terpisah, panggil `generate_wallet_invite` lagi sudah cukup, dan kode lama langsung mati sehingga tidak ada dua kode valid bersamaan.
+- Expiry default **24 jam** (keputusan produk, param bisa di-override).
+
+#### `accept_wallet_invite(p_code, p_max_attempts DEFAULT 10, p_window_seconds DEFAULT 900)`
+
+- Rate limit dicek **sebelum** menyentuh `wallet_invites` sama sekali; percobaan gagal tetap menghabiskan jatah (esensi anti-brute-force).
+- Kode dicari dengan `status='active' AND expires_at > now()`; pesan error **sama persis** untuk "tidak ada", "sudah dipakai", dan "expired" — tidak membocorkan mana yang benar ke penebak (pola sama seperti `adjust_wallet_balance`).
+- **MENOLAK bila pemanggil sudah anggota aktif** dompet itu — lihat "Keamanan: kenapa bukan UPSERT" di bawah.
+- Kode **sekali pakai**: begitu diterima, `status` → `'accepted'`, tidak bisa dipakai orang lain.
+- Member yang dulu `status='left'` dan menerima kode baru → rejoin dengan role dari kode yang baru dipakai (bisa beda dari role sebelumnya).
+
+**Keamanan: kenapa bukan `ON CONFLICT DO UPDATE`.** Draft awal RPC ini pakai UPSERT buta (`INSERT ... ON CONFLICT (wallet_id,user_id) DO UPDATE SET role=...`). Itu berbahaya: karena hanya ada satu kode aktif per dompet, seorang **viewer yang sudah jadi anggota** bisa menaikkan perannya sendiri ke editor hanya dengan submit ulang kode yang beredar untuk orang lain — privilege escalation. Fix: `SELECT ... FOR UPDATE` eksplisit dulu, lalu bercabang tiga arah (belum pernah jadi anggota → INSERT; `status='left'` → UPDATE jadi active; **`status='active'` → RAISE EXCEPTION**, ditolak). Perubahan role anggota aktif (kalau dibutuhkan nanti) harus lewat RPC terpisah yang jelas niatnya, bukan ditumpangkan ke jalur invite.
+
+#### `leave_wallet(p_wallet_id)` & `remove_wallet_member(p_wallet_id, p_user_id)`
+
+`leave_wallet`: anggota aktif keluar atas inisiatif sendiri. Owner tidak bisa memanggilnya untuk dompetnya sendiri — dia tidak punya baris di `wallet_members` (keputusan Task 2 #1), jadi selalu jatuh ke `NOT FOUND`. `remove_wallet_member`: owner-only, mengeluarkan anggota tertentu. Keduanya set `status='left'` (bukan DELETE) — transaksi yang sudah dicatat anggota **tidak ikut terhapus**, konsisten dengan keputusan produk Task 2 #3.
+
+#### Diverifikasi di server (simulasi 2 akun test, semua di-rollback)
+
+Owner basic ditolak generate invite; owner Pro berhasil; member accept kode pertama → `editor/active`; reuse kode yang sama (sudah `accepted`) ditolak; generate kode kedua otomatis me-revoke yang lama (`count(status='active') = 1`); **member aktif submit kode kedua untuk upgrade diam-diam ditolak, role tetap `editor`** (bukti fix UPSERT bekerja); `leave_wallet` berhasil sekali, ditolak kalau dipanggil dua kali; `remove_wallet_member` atas anggota yang sudah `left` ditolak (bukan `active`).
+
+#### Untuk Task 4 (UI, belum dikerjakan)
+
+- **Wajib:** tampilkan status kode undangan (aktif / dipakai / kedaluwarsa) — data ada di `wallet_invites` (`status`, `expires_at`), owner bisa `SELECT` barisnya sendiri.
+- Belum ada RPC untuk mengubah role anggota aktif tanpa lewat leave+invite-ulang — kalau dibutuhkan, harus RPC baru (`set_wallet_member_role`, owner-only), bukan menumpang `accept_wallet_invite`.
+- `ON DELETE CASCADE` dari `wallets` ke `transactions` masih terbuka (lihat backlog roadmap) — belum ada guard di alur hapus dompet.
+
+---
+
 ### MonthYearPicker — Reusable Component Filter Bulan/Tahun Modern
 
 - **File:** `src/components/MonthYearPicker.jsx`
