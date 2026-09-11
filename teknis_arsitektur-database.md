@@ -408,9 +408,9 @@ Definisi di migration adalah salinan persis dari yang live di production per 23 
 
 ---
 
-### Function Security Hardening (23 Juli 2026 — Belum Di-push)
+### Function Security Hardening (23 Juli 2026 — SUDAH Di-push)
 
-Hasil audit Security Advisor Supabase menghasilkan 2 migration file tambahan (dibuat lokal, **belum dieksekusi/push**):
+Hasil audit Security Advisor Supabase menghasilkan 2 migration file tambahan. **Keduanya sudah ter-apply di production** — diverifikasi 11 Sep 2026 lewat `list_migrations` (versi `20260723010000` & `20260723020000` tercatat) dan pengecekan langsung `pg_proc`: `set_plan_for_testing` kini hanya bisa dieksekusi `service_role`, sudah tidak lagi oleh `authenticated`. Heading ini sebelumnya menyebut "belum di-push" — itu keliru dan sudah dikoreksi.
 
 **`20260723010000_harden_functions_search_path_and_grants.sql`:**
 - **Search path mutable fix:** Semua fungsi di schema `public` yang belum punya `search_path` eksplisit di-set ke `search_path = public, pg_temp` (loop otomatis, bukan hardcode per nama) — mencegah fungsi "ditipu" baca objek dari schema lain kalau `search_path` dimanipulasi pemanggil.
@@ -420,6 +420,25 @@ Hasil audit Security Advisor Supabase menghasilkan 2 migration file tambahan (di
 
 **`20260723020000_revoke_rls_auto_enable_execute.sql`:**
 - `rls_auto_enable` adalah event trigger function (auto-enable RLS pada tabel baru) — Postgres sendiri menolak pemanggilan langsung fungsi `RETURNS event_trigger`, jadi ini murni hygiene fix untuk warning linter, tidak ada risiko fungsional.
+
+---
+
+### RPC Saldo Atomik (11 Sep 2026)
+
+Dua RPC `SECURITY DEFINER` (`search_path = public, pg_temp`, execute di-revoke dari `public, anon`, grant hanya `authenticated`) menggantikan pola SELECT-lalu-UPDATE saldo di klien yang rawan *lost update* antar-device.
+
+**`adjust_wallet_balance(p_wallet_id uuid, p_delta numeric) → numeric`** (`20260911000000`, **sudah live**)
+Satu `UPDATE wallets SET balance = balance + p_delta` terkunci; mengembalikan saldo baru. Dipakai `useWallets.adjustBalance()`, yang mempertahankan kontrak return `{ error }` (bukan throw) karena `useDebts` memperlakukan kegagalan saldo sebagai best-effort.
+
+**`record_transaction(p_amount, p_category, p_date, p_wallet_id, p_merchant, p_note, p_time, p_method, p_debt_id) → uuid`** (`20260911010000`, **belum di-push**)
+INSERT baris `transactions` + UPDATE saldo dompet dalam **satu transaksi Postgres**, jadi tidak ada lagi jendela di mana transaksi tercatat tapi saldo belum berubah. Dipanggil dari `useTransactions.createTransaction()`.
+
+Catatan penting:
+- Identitas selalu dari `auth.uid()`, tidak pernah dari argumen (tidak ada `p_user_id` — IDOR).
+- **Kuota plan Basic TIDAK dicek di dalam RPC.** Gating tetap di `useTransactions.createTransaction()` dengan `planLimits.js` sebagai sumber tunggal; jangan duplikasi ambangnya ke SQL.
+- `amount` sudah bertanda (negatif = pengeluaran), jadi saldo cukup `balance + amount` **tanpa** `CASE WHEN type='income'`. Kolom `type` diturunkan dari tanda `amount` di dalam fungsi, supaya baris tidak bisa menyimpan `type` yang bertentangan dengan `amount`.
+- `p_date` bertipe `date` dan **wajib** dikirim klien — sengaja tidak ada fallback `CURRENT_DATE`, karena `CURRENT_DATE` di server adalah UTC dan akan salah satu hari untuk WIB (lihat bagian 2).
+- Setelah `record_transaction`, klien **tidak boleh** memanggil `adjustBalance()` lagi (dobel) — cukup `useWallets.patchLocalBalance()` yang hanya menyentuh state React. `adjustBalance()` masih dipakai di `deleteDebt()` dan di `handleUpdateTransaction`/`handleDeleteTransaction` yang belum dipindah ke RPC atomik.
 
 ---
 
