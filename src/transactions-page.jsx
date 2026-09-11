@@ -197,9 +197,9 @@ export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, 
                 const isDeleting = deletingId === t.id;
                 // Transaksi yang dicatat orang lain di dompet bersama tampil
                 // read-only (tanpa edit/hapus). Transaksi sendiri di dompet yang
-                // aksesnya sudah hilang: boleh dihapus, tidak ditawari edit.
-                // Lihat canDeleteTransaction / canEditTransaction.
-                const canDelete = canDeleteTransaction(t, userId);
+                // hanya bisa dibaca / sudah ditinggalkan: juga read-only
+                // (keputusan 12 Sep 2026). Lihat canDeleteTransaction.
+                const canDelete = canDeleteTransaction(t, userId, accounts);
                 const canEdit = canEditTransaction(t, userId, accounts);
                 const openEdit = canEdit && onUpdate ? () => setEditingTx(t) : undefined;
                 const editCursor = openEdit ? "pointer" : "default";

@@ -403,7 +403,7 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
   const {
     debts, loading: debtsLoading,
     createDebt, addPayment, markPaid, deleteDebt, getPayments,
-  } = useDebts(session.user.id, limits, { transactions, createTransaction, deleteTransaction });
+  } = useDebts(session.user.id, limits, { transactions, createTransaction, deleteTransaction, accounts });
 
   // CREATE / UPDATE / DELETE: saldo TIDAK disentuh di sini sama sekali. Ketiganya
   // lewat RPC atomik (record_transaction 20260911010000, update_transaction &
@@ -418,8 +418,8 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
   // Guard di depan: RPC-nya sudah menolak baris milik orang lain, tapi guard ini
   // menjaga UI tidak pernah mengirim permintaan yang pasti ditolak (transaksi
   // yang dicatat anggota lain di dompet bersama ikut ada di `transactions`).
-  // Hapus = cukup milik sendiri; ubah = milik sendiri + dompet asal & tujuan
-  // bisa ditulis (lihat canEditTransaction).
+  // Hapus & ubah = milik sendiri + dompet asal bisa ditulis; ubah juga
+  // mensyaratkan dompet tujuan bisa ditulis (lihat canDeleteTransaction).
   const handleUpdateTransaction = React.useCallback(async (id, updates, oldTx) => {
     const current = transactions.find(t => t.id === id) || oldTx;
     const targetWallet = updates.wallet_id ? accounts.find(a => a.id === updates.wallet_id) : null;
@@ -431,11 +431,11 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
 
   const handleDeleteTransaction = React.useCallback(async (id) => {
     const tx = transactions.find(t => t.id === id);
-    if (!canDeleteTransaction(tx, session.user.id)) {
+    if (!canDeleteTransaction(tx, session.user.id, accounts)) {
       return { error: new Error('Transaksi ini tidak bisa dihapus dari akunmu') };
     }
     return await deleteTransaction(id);
-  }, [deleteTransaction, transactions]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [deleteTransaction, transactions, accounts]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Transaksi berulang — saat app dibuka, eksekusi jadwal yang sudah jatuh tempo.
   // Ref guard memastikan hanya jalan sekali per sesi app.

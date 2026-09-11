@@ -868,6 +868,7 @@
       "notFound": "Record not found",
       "markPaidFailed": "Failed to mark as paid",
       "deleteFailed": "Failed to delete",
+      "walletReadOnly": "This record can't be deleted: its transactions are in a shared wallet you can now only view. Ask the wallet owner to restore your editor access.",
       "proofFailed": "Failed to generate proof of record"
     },
     "proof": {

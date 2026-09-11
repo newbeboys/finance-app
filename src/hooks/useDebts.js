@@ -2,6 +2,7 @@ import React from 'react';
 import { supabase } from '../supabase';
 import { usePaywall } from '../components/PaywallModal';
 import { logError } from '../lib/errorLogger';
+import { canDeleteTransaction } from '../lib/walletAccess';
 import i18n from '../i18n';
 
 // ════════════════════════════════════════════════════════════════════
@@ -20,6 +21,7 @@ import i18n from '../i18n';
 //    const { createTransaction, deleteTransaction } = useTransactions(...);
 //    const debts = useDebts(userId, limits, {
 //      transactions, createTransaction, deleteTransaction,
+//      accounts,   // dari useWallets — gerbang peran di deleteDebt
 //    });
 //
 //  PENTING: createTransaction yang di-pass HARUS versi MENTAH dari
@@ -108,6 +110,7 @@ export function useDebts(userId, limits, ledger = {}) {
     transactions = [],
     createTransaction,
     deleteTransaction,
+    accounts = [],
   } = ledger;
 
   const [debts, setDebts]     = React.useState([]);
@@ -469,17 +472,31 @@ export function useDebts(userId, limits, ledger = {}) {
     // menghapus baris DAN membalik saldonya dalam satu transaksi Postgres, jadi
     // tidak ada keadaan setengah jadi per transaksi: berhasil = keduanya, gagal =
     // tidak satu pun. Menghapus transaksi otomatis meng-cascade debt_payments
-    // (FK transaction_id). Pembalikan tidak mensyaratkan peran aktif di dompet,
-    // jadi transaksi di dompet bersama yang sudah user tinggalkan tetap beres.
+    // (FK transaction_id).
+    //
+    // Sejak 12 Sep 2026 delete_transaction mensyaratkan dompetnya bisa ditulis
+    // (owner/editor). Catatan hutang TIDAK boleh di-soft-delete selama ada
+    // transaksi tertaut yang tertinggal — kalau tidak, transaksinya tetap
+    // menempel di saldo dompet bersama tapi catatannya hilang dari daftar
+    // (dan transaksi hutang tidak terlihat owner). Karena itu:
+    //  1. pre-flight: kalau ada satu saja dompet tertaut yang tidak bisa
+    //     ditulis, tolak SEBELUM menghapus apa pun;
+    //  2. kegagalan di tengah (mis. peran dicabut di antara pre-flight dan
+    //     RPC) langsung menghentikan proses, dan soft-delete tidak dijalankan.
     const linked = transactions.filter(t => t.debt_id === debtId);
+    if (linked.some(t => !canDeleteTransaction(t, userId, accounts))) {
+      return { error: new Error(i18n.t('debts.error.walletReadOnly')) };
+    }
     for (const t of linked) {
       const { error: delErr } = (await deleteTransaction?.(t.id)) || {};
       if (delErr) {
-        // Transaksi & saldonya tetap utuh (atomik) — catat (high) supaya
-        // transaksi yang tertinggal bisa dibereskan manual.
+        // Transaksi ini & saldonya tetap utuh (atomik); yang sebelumnya
+        // sudah terhapus tetap terhapus. Catat (high) supaya bisa dibereskan
+        // manual, dan JANGAN soft-delete catatannya.
         logError('debts', delErr.message || String(delErr), {
           op: 'deleteDebt', debt_id: debtId, wallet_id: t.wallet_id, transaction_id: t.id,
         }, 'high');
+        return { error: new Error(i18n.t('debts.error.walletReadOnly')) };
       }
     }
 

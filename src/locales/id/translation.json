@@ -868,6 +868,7 @@
       "notFound": "Catatan tidak ditemukan",
       "markPaidFailed": "Gagal menandai lunas",
       "deleteFailed": "Gagal menghapus",
+      "walletReadOnly": "Catatan ini tidak bisa dihapus: transaksinya ada di dompet bersama yang sekarang hanya bisa kamu lihat. Minta pemilik dompet mengembalikan aksesmu ke editor.",
       "proofFailed": "Gagal membuat bukti catatan"
     },
     "proof": {
