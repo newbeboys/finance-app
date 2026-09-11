@@ -201,7 +201,7 @@ id              uuid            PRIMARY KEY
 user_id         uuid            NOT NULL, FK → auth.users
 name            text            Nama dompet (tampil di UI)
 bank            text            Nama bank/institusi (field klien: `institution`)
-balance         numeric         Saldo — diupdate manual via adjustBalance()
+balance         numeric         Saldo — diupdate via RPC atomik adjustBalance()
 type            text            'bank' | 'ewallet' | 'cash' | 'investment'
 is_primary      boolean         Maksimal satu per user
 color           text            Kode warna hex
@@ -212,7 +212,7 @@ created_at      timestamptz
 
 ⚠️ **Kolom `bank` tidak boleh diisi teks yang ikut bahasa UI.** Saat user tidak mengisi nama bank, `wallets.jsx` memakai `typeLabel(type)` — label tipe dompet versi **Bahasa Indonesia mentah** dari `ACCOUNT_TYPES`, BUKAN `typeLabelI18n()`. Kalau ikut bahasa UI, dompet yang dibuat saat UI English tersimpan `"Bank Account"` dan saat UI Indonesia `"Rekening Bank"` → nilai tidak konsisten antar-baris di database. Berlaku umum: **teks apa pun yang ditulis ke DB harus bebas bahasa UI.**
 
-**Saldo bukan dihitung:** Saldo **tidak** otomatis dari transaksi — tidak ada trigger Supabase. Diupdate client-side via `adjustBalance(walletId, delta)` setiap transaksi dibuat/diedit/dihapus. Atomik-safe: baca saldo dari state React (sudah realtime sync), hitung di client, tulis ke Supabase sekaligus.
+**Saldo bukan dihitung:** Saldo **tidak** otomatis dari transaksi — tidak ada trigger Supabase. Diupdate via `adjustBalance(walletId, delta)` setiap transaksi dibuat/diedit/dihapus, yang sejak 11 Sep 2026 memanggil RPC atomik `adjust_wallet_balance` (satu round-trip terkunci di server) — bukan lagi SELECT+UPDATE manual dua round-trip. Detail RPC & trade-off realtime: lihat bagian "RPC Saldo Atomik" di bawah.
 
 ### Tabel `budgets`
 ```sql
@@ -430,15 +430,84 @@ Dua RPC `SECURITY DEFINER` (`search_path = public, pg_temp`, execute di-revoke d
 **`adjust_wallet_balance(p_wallet_id uuid, p_delta numeric) → numeric`** (`20260911000000`, **sudah live**)
 Satu `UPDATE wallets SET balance = balance + p_delta` terkunci; mengembalikan saldo baru. Dipakai `useWallets.adjustBalance()`, yang mempertahankan kontrak return `{ error }` (bukan throw) karena `useDebts` memperlakukan kegagalan saldo sebagai best-effort.
 
-**`record_transaction(p_amount, p_category, p_date, p_wallet_id, p_merchant, p_note, p_time, p_method, p_debt_id) → uuid`** (`20260911010000`, **belum di-push**)
-INSERT baris `transactions` + UPDATE saldo dompet dalam **satu transaksi Postgres**, jadi tidak ada lagi jendela di mana transaksi tercatat tapi saldo belum berubah. Dipanggil dari `useTransactions.createTransaction()`.
+**`record_transaction(p_amount, p_category, p_date, p_wallet_id, p_merchant, p_note, p_time, p_method, p_debt_id) → uuid`** (`20260911010000`, **sudah live**)
+INSERT baris `transactions` + UPDATE saldo dompet dalam **satu transaksi Postgres**, jadi tidak ada lagi jendela di mana transaksi tercatat tapi saldo belum berubah. Dipanggil dari `useTransactions.createTransaction()` (dipakai `app.jsx` lewat wrapper `handleCreateTransaction`).
 
 Catatan penting:
 - Identitas selalu dari `auth.uid()`, tidak pernah dari argumen (tidak ada `p_user_id` — IDOR).
 - **Kuota plan Basic TIDAK dicek di dalam RPC.** Gating tetap di `useTransactions.createTransaction()` dengan `planLimits.js` sebagai sumber tunggal; jangan duplikasi ambangnya ke SQL.
 - `amount` sudah bertanda (negatif = pengeluaran), jadi saldo cukup `balance + amount` **tanpa** `CASE WHEN type='income'`. Kolom `type` diturunkan dari tanda `amount` di dalam fungsi, supaya baris tidak bisa menyimpan `type` yang bertentangan dengan `amount`.
 - `p_date` bertipe `date` dan **wajib** dikirim klien — sengaja tidak ada fallback `CURRENT_DATE`, karena `CURRENT_DATE` di server adalah UTC dan akan salah satu hari untuk WIB (lihat bagian 2).
-- Setelah `record_transaction`, klien **tidak boleh** memanggil `adjustBalance()` lagi (dobel) — cukup `useWallets.patchLocalBalance()` yang hanya menyentuh state React. `adjustBalance()` masih dipakai di `deleteDebt()` dan di `handleUpdateTransaction`/`handleDeleteTransaction` yang belum dipindah ke RPC atomik.
+- Setelah `record_transaction`, klien **tidak boleh** memanggil `adjustBalance()` lagi (dobel) — RPC sudah mengurus saldo di server.
+
+**`patchLocalBalance()` DIHAPUS.** Sebelumnya dipakai untuk menulis delta saldo langsung ke state React sebagai optimistic update, sejajar dengan realtime subscription yang menulis nilai absolut. Dua penulis saldo itu race — urutan datang tidak terjamin, dan kalau realtime menang duluan lalu delta menyusul, saldo di layar dobel. Bug ini sudah diverifikasi manual (reproducible) dan fix-nya (menghapus patch delta, murni andalkan realtime) sudah divalidasi termasuk skenario 2x cicilan berturut-turut cepat. **Trade-off:** saldo di UI sekarang 100% bergantung koneksi realtime — kalau channel terputus (sinyal jelek, app lama di background), saldo di layar telat update sampai app dibuka ulang; data di DB sendiri tetap benar.
+
+---
+
+### Shared Wallet / Dompet Bersama — Task 2 (12 Sep 2026, sudah live)
+
+Migrasi `20260912000000_add_wallet_members_and_shared_rls.sql`. Satu file untuk seluruh tahap ini — `supabase db push` menjalankan tiap file dalam satu transaksi, jadi tabel + policy + RPC commit bersama atau batal bersama.
+
+#### Tabel `wallet_members`
+```sql
+id          uuid        PRIMARY KEY
+wallet_id   uuid        NOT NULL, FK → wallets      ON DELETE CASCADE
+user_id     uuid        NOT NULL, FK → auth.users   ON DELETE CASCADE
+role        text        'owner' | 'editor' | 'viewer'   (default 'editor')
+status      text        'pending' | 'active' | 'left'   (default 'pending')
+invited_by  uuid        FK → auth.users ON DELETE SET NULL
+created_at  timestamptz
+joined_at   timestamptz
+UNIQUE (wallet_id, user_id)
+```
+
+**Owner TIDAK punya baris di sini** — `wallets.user_id` tetap satu-satunya sumber kepemilikan, karena dua sumber kebenaran akan drift. Nilai `role = 'owner'` dicadangkan dan belum dipakai. Baris ber-`status='left'` sengaja disimpan (bukan dihapus) supaya riwayat undangan terlacak; konsekuensinya undangan ulang harus UPSERT, bukan INSERT, karena kena `UNIQUE (wallet_id, user_id)`.
+
+Tiga index: `(wallet_id, user_id, status)` (pola query persis `wallet_access_role()`), `(user_id, status)` (arah "dompet apa yang saya ikuti", dipakai klien), dan **`transactions(wallet_id)`** — yang terakhir wajib, bukan optimasi: tabel `transactions` sebelumnya tidak punya index apa pun selain PK dan `idx_transactions_debt_id`, dan policy SELECT yang melebar akan seq-scan penuh tanpanya.
+
+#### Helper `wallet_access_role(p_wallet_id uuid) → text`
+
+`SECURITY DEFINER`, `STABLE`, `search_path = public, pg_temp`, execute di-revoke dari `public, anon`. Mengembalikan `'owner'` (dari `wallets.user_id`), `'editor'`/`'viewer'` (dari `wallet_members` ber-`status='active'`), atau `NULL` bila tidak punya akses.
+
+**Kenapa helper, bukan `EXISTS()` langsung di policy:** policy `wallets` perlu membaca `wallet_members`, dan policy `wallet_members` perlu tahu siapa owner dompetnya. Kalau keduanya ditulis sebagai `EXISTS()` biasa, evaluasi policy saling memanggil dan Postgres melempar `infinite recursion detected in policy for relation "wallets"` — yang mematikan **seluruh** akses dompet, bukan cuma fitur berbagi. `SECURITY DEFINER` melewati RLS di dalam badan fungsi sehingga rantainya putus. **Jangan pernah** mengganti pemanggilan helper ini di policy dengan `EXISTS(SELECT … FROM wallet_members)` "supaya lebih eksplisit".
+
+#### RLS: dari owner-only jadi owner OR anggota aktif
+
+Policy `FOR ALL` lama dipecah per-perintah (pola yang sudah dipakai `debts`/`debt_payments`), karena satu `FOR ALL` memakai `USING` yang sama untuk baca dan tulis — tidak bisa menyatakan "boleh baca semua transaksi dompet, tapi hanya boleh hapus milik sendiri".
+
+| | `wallets` | `transactions` |
+|---|---|---|
+| SELECT | `wallet_access_role(id) IS NOT NULL` | `user_id = uid` **OR** `wallet_access_role(wallet_id) IS NOT NULL` |
+| INSERT | `user_id = uid` | `user_id = uid` AND role ∈ (owner, editor) |
+| UPDATE | `user_id = uid` (owner saja) | `user_id = uid` (+ WITH CHECK role ∈ owner/editor) |
+| DELETE | `user_id = uid` (owner saja) | `user_id = uid` |
+
+Efek per role atas dompet bersama: **owner** penuh; **editor** baca + catat transaksi (dan ubah/hapus transaksinya sendiri); **viewer** baca saja — ditolak otomatis lewat fail-closed, karena `NULL IN (...)` bernilai `NULL` dan `NULL` di `WITH CHECK` = ditolak.
+
+`wallets` UPDATE/DELETE sengaja owner-only: satu-satunya tulis yang benar-benar dibutuhkan member adalah **saldo**, dan itu lewat RPC `SECURITY DEFINER` yang melewati RLS — jadi policy tidak perlu dilonggarkan untuk itu. Kedua RPC (`adjust_wallet_balance`, `record_transaction`) kini memakai `wallet_access_role(w.id) IN ('owner','editor')` menggantikan `w.user_id = v_user_id`; inilah "titik perluasan Fitur B" yang ditandai di migrasi 11 Sep.
+
+`user_id = uid` di SELECT `transactions` **dipertahankan sebagai cabang pertama**, bukan diganti: (a) setelah member keluar, dia harus tetap melihat transaksi yang dulu dia catat; (b) mayoritas mutlak baris adalah miliknya sendiri dan selesai di perbandingan murah itu tanpa memanggil helper.
+
+#### Keputusan produk final (jangan diubah tanpa diskusi)
+
+1. **Transaksi member atas nama member.** `record_transaction` menulis `user_id = auth.uid()`, bukan owner dompet — riwayat harus jelas siapa yang mencatat.
+2. **Hapus/edit transaksi SIMETRIS.** Semua orang hanya boleh menyentuh transaksi ber-`user_id` miliknya sendiri — **termasuk owner, yang TIDAK punya hak override** atas transaksi yang dicatat member. `USING` pada policy UPDATE/DELETE sengaja tanpa cabang owner.
+3. **Transaksi member tetap ada setelah dia keluar** dari dompet.
+4. **Hutang/piutang TETAP PRIVAT, tidak ikut terbagi.** Cek `p_debt_id` di `record_transaction` sengaja tetap `d.user_id = v_user_id`, bukan cek peran dompet.
+
+#### Sisi klien
+
+`src/lib/walletAccess.js` (`fetchSharedWalletIds`, `sharedOrFilter`) dipakai `useWallets` dan `useTransactions`. Daftar id dompet bersama harus dihitung di klien karena filter realtime Supabase tidak mengerti keanggotaan — dia hanya bisa membandingkan satu kolom. Tanpa dompet bersama, kedua hook jatuh kembali ke `.eq('user_id', userId)` persis seperti sebelum fitur ini ada.
+
+Realtime `useWallets` memakai **dua binding** di satu channel: `user_id=eq.<uid>` untuk dompet sendiri (otomatis mencakup dompet yang dibuat setelah subscribe) dan `id=in.(…)` untuk dompet bersama. Konsekuensinya daftar id itu **snapshot**: dompet yang dibagikan ke user *setelah* hook mount tidak terpantau sampai mount ulang.
+
+⚠️ `useTransactions` **tidak punya realtime sama sekali** (sudah begitu sejak sebelum fitur ini) — transaksi yang dicatat member baru muncul di layar owner setelah refetch.
+
+#### Catatan lain
+
+- `user_summary` (view, `security_invoker=on`) **tidak terpengaruh**: dia tidak menyentuh tabel `wallets` sama sekali (`total_saldo_dompet` ternyata `sum(transactions.amount)`), agregasinya di-key pada `t.user_id` sehingga atribusi tidak bergeser, dan grant-nya hanya `postgres`/`service_role` yang keduanya `rolbypassrls`. Kalau suatu saat view ini di-`GRANT` ke `authenticated`, pelebaran policy `transactions` akan membuat user melihat baris user lain lengkap dengan email-nya — jangan lakukan itu.
+- Security advisor memunculkan `wallet_access_role` di daftar "authenticated bisa eksekusi SECURITY DEFINER". Tidak bisa dihindari: policy dievaluasi sebagai role pemanggil, jadi `authenticated` wajib punya EXECUTE. Jinak — dipanggil langsung, fungsi ini hanya mengembalikan peran si pemanggil sendiri, dan UUID acak mengembalikan `NULL` baik dompetnya ada maupun tidak.
+- Kuota plan Basic (`accounts.length` di `useWallets`) **belum** mengecualikan dompet bersama — dompet orang lain ikut memakan kuota member. Diketahui, ditunda ke Task 4.
 
 ---
 

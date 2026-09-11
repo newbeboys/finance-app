@@ -498,6 +498,9 @@ REVOKE EXECUTE ON FUNCTION public.set_plan_for_testing(uuid, text, timestamptz, 
 - **Form Edit Goal** — currently hanya Add/Delete/Deposit
 - **Integrasi bank API** (opsional, skala besar) — auto-sync transaksi dari bank
 
+**Kategori: Dompet Bersama (Fitur B)**
+- **Task 4 WAJIB — blokir/guard hapus dompet bersama yang masih punya anggota aktif.** `transactions.wallet_id` punya FK `ON DELETE CASCADE` ke `wallets`, jadi owner yang menghapus dompet bersama saat ini akan ikut menghapus transaksi member **tanpa persetujuan mereka**. Bertabrakan dengan keputusan produk "transaksi member tetap ada setelah dia keluar". Perlu guard di UI, atau ubah FK jadi `RESTRICT`.
+
 **Kategori: Peningkatan Kualitas**
 - **Playwright test suite** — `playwright` ada di devDeps tapi tidak dikonfigurasi
 - **CI/CD untuk SQL migrations** — automated testing sebelum production push

@@ -2,6 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../supabase';
 import { usePaywall } from '../components/PaywallModal';
+import { fetchSharedWalletIds, sharedOrFilter } from '../lib/walletAccess';
 
 const MONTHS = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
 
@@ -37,20 +38,33 @@ export function useTransactions(userId, limits) {
     setLoading(true);
     setError(null);
 
-    supabase
-      .from('transactions')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .then(({ data, error: err }) => {
-        if (!alive) return;
-        if (err) {
-          setError(err.message);
-        } else {
-          setTransactions((data || []).map(toAppTx));
-        }
-        setLoading(false);
-      });
+    (async () => {
+      // Transaksi di dompet bersama dicatat atas nama ORANG LAIN (user_id-nya
+      // si pencatat), jadi `.eq('user_id', …)` saja akan menyembunyikannya.
+      // Disaring lewat wallet_id dompet yang boleh diakses.
+      const sharedIds = await fetchSharedWalletIds(userId);
+      if (!alive) return;
+
+      let query = supabase
+        .from('transactions')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      const orFilter = sharedOrFilter(userId, sharedIds, 'wallet_id');
+      // Cabang `user_id` tetap ada di dalam orFilter — bukan cuma wallet_id —
+      // supaya transaksi yang dulu user catat di dompet yang aksesnya sudah
+      // dicabut (dia keluar dari dompet itu) tetap muncul di riwayatnya sendiri.
+      query = orFilter ? query.or(orFilter) : query.eq('user_id', userId);
+
+      const { data, error: err } = await query;
+      if (!alive) return;
+      if (err) {
+        setError(err.message);
+      } else {
+        setTransactions((data || []).map(toAppTx));
+      }
+      setLoading(false);
+    })();
 
     return () => { alive = false; };
   }, [userId]);

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { supabase } from '../supabase';
 import { usePaywall } from '../components/PaywallModal';
 import { logError } from '../lib/errorLogger';
+import { fetchSharedWalletIds, sharedOrFilter } from '../lib/walletAccess';
 
 const FALLBACK_COLORS = ["#2A6FDB","#1FA8A0","#1B8A3F","#9A6BD9","#B26A4A","#B68A3E","#5C6B4C","#C9886D"];
 const pickColor = (name) => FALLBACK_COLORS[(name || '').charCodeAt(0) % FALLBACK_COLORS.length];
@@ -31,50 +32,83 @@ export function useWallets(userId, limits) {
   React.useEffect(() => {
     if (!userId) { setLoading(false); return; }
     let alive = true;
+    let channel = null;
     setLoading(true);
-    supabase
-      .from('wallets')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: true })
-      .then(({ data, error }) => {
+
+    (async () => {
+      // Dompet bersama (Fitur B) tidak bisa ditemukan lewat `user_id` — barisnya
+      // milik owner. Daftar id-nya harus diambil duluan karena dipakai dua kali:
+      // sebagai penyaring query di bawah, DAN sebagai filter realtime.
+      const sharedIds = await fetchSharedWalletIds(userId);
+      if (!alive) return;
+
+      let query = supabase
+        .from('wallets')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+      const orFilter = sharedOrFilter(userId, sharedIds, 'id');
+      // Tanpa dompet bersama, tetap pakai .eq() seperti dulu: lebih murah dan
+      // perilakunya identik dengan sebelum Fitur B ada.
+      query = orFilter ? query.or(orFilter) : query.eq('user_id', userId);
+
+      const { data, error } = await query;
+      if (!alive) return;
+      if (error) {
+        console.error('[useWallets] fetch error:', error.code, error.message);
+      } else {
+        setAccounts((data || []).map(toAppWallet));
+      }
+      setLoading(false);
+
+      // Realtime UPDATE: picks up is_locked changes from lockExcessOnDowngrade/unlockAllOnUpgrade,
+      // DAN setiap perubahan `balance` dari mana pun (adjust_wallet_balance /
+      // record_transaction, tab lain, device lain, atau anggota dompet bersama).
+      //
+      // PENTING — kenapa handler ini menulis nilai ABSOLUT dari payload.new, bukan
+      // menambah delta: tabel `wallets` ada di publication `supabase_realtime`, jadi
+      // event ini ikut menyala untuk perubahan yang dipicu device ini sendiri, dan
+      // urutan kedatangannya TIDAK dijamin relatif terhadap response RPC-nya.
+      // Menyetel nilai absolut bersifat idempoten — datang sebelum atau sesudah
+      // response, hasil akhirnya sama. Jangan pernah menambahkan penulis state saldo
+      // kedua yang bekerja dengan DELTA (mis. `balance + delta`): dua penulis delta,
+      // atau satu delta + satu absolut, akan menggandakan saldo di UI secara acak
+      // tergantung siapa yang sampai duluan. Itu persis bug saldo dobel 11 Sep 2026.
+      const applyRow = (payload) => {
         if (!alive) return;
-        if (error) {
-          console.error('[useWallets] fetch error:', error.code, error.message);
-        } else {
-          setAccounts((data || []).map(toAppWallet));
-        }
-        setLoading(false);
-      });
+        setAccounts(prev => prev.map(a =>
+          a.id === payload.new.id ? toAppWallet(payload.new) : a
+        ));
+      };
 
-    // Realtime UPDATE: picks up is_locked changes from lockExcessOnDowngrade/unlockAllOnUpgrade,
-    // DAN setiap perubahan `balance` dari mana pun (adjust_wallet_balance /
-    // record_transaction, tab lain, device lain).
-    //
-    // PENTING — kenapa handler ini menulis nilai ABSOLUT dari payload.new, bukan
-    // menambah delta: tabel `wallets` ada di publication `supabase_realtime`, jadi
-    // event ini ikut menyala untuk perubahan yang dipicu device ini sendiri, dan
-    // urutan kedatangannya TIDAK dijamin relatif terhadap response RPC-nya.
-    // Menyetel nilai absolut bersifat idempoten — datang sebelum atau sesudah
-    // response, hasil akhirnya sama. Jangan pernah menambahkan penulis state saldo
-    // kedua yang bekerja dengan DELTA (mis. `balance + delta`): dua penulis delta,
-    // atau satu delta + satu absolut, akan menggandakan saldo di UI secara acak
-    // tergantung siapa yang sampai duluan. Itu persis bug saldo dobel 11 Sep 2026.
-    const channel = supabase
-      .channel(`wallets_lock:${userId}`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'wallets', filter: `user_id=eq.${userId}` },
-        (payload) => {
-          if (!alive) return;
-          setAccounts(prev => prev.map(a =>
-            a.id === payload.new.id ? toAppWallet(payload.new) : a
-          ));
-        }
-      )
-      .subscribe();
+      // DUA binding, bukan satu. Dompet sendiri tetap disaring `user_id=eq.X`
+      // supaya dompet yang dibuat SETELAH langganan ini tetap terpantau tanpa
+      // perlu subscribe ulang. Dompet bersama tidak punya kolom yang bisa
+      // dipakai begitu, jadi harus daftar id eksplisit — konsekuensinya daftar
+      // itu snapshot: dompet yang dibagikan ke user SETELAH ini tidak terpantau
+      // sampai hook ini mount ulang.
+      channel = supabase
+        .channel(`wallets_lock:${userId}`)
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'wallets', filter: `user_id=eq.${userId}` },
+          applyRow
+        );
 
-    return () => { alive = false; supabase.removeChannel(channel); };
+      if (sharedIds.length) {
+        channel = channel.on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'wallets', filter: `id=in.(${sharedIds.join(',')})` },
+          applyRow
+        );
+      }
+
+      channel.subscribe();
+    })();
+
+    // channel bisa masih null kalau effect dibersihkan sebelum fetch selesai;
+    // `alive` di atas yang mencegah subscribe-nya terlanjur jalan.
+    return () => { alive = false; if (channel) supabase.removeChannel(channel); };
   }, [userId]);
 
   async function createAccount(a) {
