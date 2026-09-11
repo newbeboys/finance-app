@@ -257,12 +257,15 @@ export default function RecurringTransactionPage({ open, onClose, accounts = [] 
         )}
       </div>
 
+      {/* Picker hanya dompet yang boleh DITULIS — dompet bersama ber-peran
+          viewer akan ditolak record_transaction saat jadwal dieksekusi.
+          Daftar lengkap `accounts` tetap dipakai di atas untuk menampilkan nama. */}
       {formOpen && (
         <RecurringTransactionForm
           initial={editing}
           onSave={handleSave}
           onCancel={() => { setFormOpen(false); setEditing(null); }}
-          accounts={accounts}
+          accounts={accounts.filter((a) => a.canWrite)}
         />
       )}
       {confirm && (

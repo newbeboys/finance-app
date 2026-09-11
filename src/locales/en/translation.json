@@ -754,6 +754,7 @@
     "saldo": "Balance",
     "utama": "Primary",
     "setUtama": "Set primary",
+    "dibagikan": "Shared",
     "transaksi": "Transactions",
     "riwayat": "History",
     "transaksidompet": "Transactions · {{nama}}",

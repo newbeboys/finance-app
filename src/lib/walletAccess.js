@@ -25,20 +25,67 @@ import { supabase } from '../supabase';
  * @returns {Promise<string[]>} uuid dompet bersama, sudah unik
  */
 export async function fetchSharedWalletIds(userId) {
+  const memberships = await fetchSharedMemberships(userId);
+  return memberships.map(m => m.walletId);
+}
+
+/**
+ * Sama seperti fetchSharedWalletIds, tapi ikut membawa PERAN user di tiap
+ * dompet bersama ('editor' | 'viewer'). useWallets butuh peran ini untuk
+ * menandai dompet mana yang boleh dipakai mencatat transaksi — viewer tidak
+ * boleh (record_transaction menolaknya).
+ *
+ * Kegagalan TIDAK dilempar — alasan sama dengan fetchSharedWalletIds.
+ *
+ * @param {string} userId
+ * @returns {Promise<{walletId: string, role: string}[]>} unik per dompet
+ */
+export async function fetchSharedMemberships(userId) {
   if (!userId) return [];
 
   const { data, error } = await supabase
     .from('wallet_members')
-    .select('wallet_id')
+    .select('wallet_id, role')
     .eq('user_id', userId)
     .eq('status', 'active');   // 'pending' belum, 'left' sudah tidak lagi
 
   if (error) {
-    console.error('[walletAccess] fetchSharedWalletIds FAILED:', error.code, error.message);
+    console.error('[walletAccess] fetchSharedMemberships FAILED:', error.code, error.message);
     return [];
   }
 
-  return [...new Set((data || []).map(r => r.wallet_id).filter(Boolean))];
+  const byWallet = new Map();
+  (data || []).forEach(r => { if (r.wallet_id) byWallet.set(r.wallet_id, r.role); });
+  return [...byWallet].map(([walletId, role]) => ({ walletId, role }));
+}
+
+/**
+ * Boleh-tidaknya user MENGUBAH/MENGHAPUS sebuah transaksi dari klien.
+ *
+ * Dua syarat, dua-duanya wajib:
+ *  1. Transaksi itu dicatat user sendiri. Policy UPDATE/DELETE `transactions`
+ *     hanya mengizinkan `user_id = auth.uid()` (keputusan Task 2 #2 — owner
+ *     pun tidak bisa override transaksi anggota). Menulis ke baris orang lain
+ *     TIDAK menghasilkan error, cuma 0 baris — dan alur hapus/edit di app.jsx
+ *     lalu memanggil adjustBalance, sehingga saldo bergeser padahal
+ *     transaksinya masih ada.
+ *  2. Dompetnya masih bisa ditulis (milik sendiri, atau anggota ber-peran
+ *     editor). Bekas anggota / viewer MASIH lolos policy DELETE (cuma cek
+ *     user_id), tapi adjust_wallet_balance menolak mereka — hasilnya baris
+ *     terhapus sementara saldo owner tidak ikut dibalik.
+ *
+ * Transaksi tanpa wallet_id (data lama) selalu boleh — tidak ada saldo dompet
+ * yang ikut disentuh.
+ *
+ * @param {object} tx        transaksi format app (dari useTransactions)
+ * @param {string} userId
+ * @param {object[]} accounts dompet format app (dari useWallets), dengan `canWrite`
+ */
+export function canModifyTransaction(tx, userId, accounts = []) {
+  if (!tx || !userId || tx.user_id !== userId) return false;
+  if (!tx.wallet_id) return true;
+  const wallet = accounts.find(a => a.id === tx.wallet_id);
+  return !!wallet && wallet.canWrite === true;
 }
 
 /**

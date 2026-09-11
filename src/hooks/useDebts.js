@@ -467,18 +467,35 @@ export function useDebts(userId, limits, ledger = {}) {
 
     // Balikkan tiap transaksi tertaut: koreksi saldo lalu hapus transaksinya.
     // Menghapus transaksi otomatis meng-cascade debt_payments (FK transaction_id).
+    //
+    // Transaksi HANYA dihapus kalau saldonya berhasil dibalik. Kalau reversal
+    // gagal (mis. transaksinya ada di dompet bersama yang sudah user tinggalkan
+    // — DELETE tetap lolos RLS karena cuma cek user_id, tapi
+    // adjust_wallet_balance menolak), transaksi DIBIARKAN: baris yang masih ada
+    // tetap cocok dengan saldo dompetnya. Menghapusnya justru meninggalkan saldo
+    // yang memuat transaksi yang sudah hilang — bug yang sama dengan hapus
+    // transaksi anggota di app.jsx.
     const linked = transactions.filter(t => t.debt_id === debtId);
     for (const t of linked) {
       const { error: balErr } = (await adjustBalance?.(t.wallet_id, -t.amount)) || {};   // balik efek ke saldo
       if (balErr) {
-        // Reversal saldo gagal → saldo dompet bisa tertinggal salah setelah hapus
-        // catatan. Catat (high) supaya bisa dikoreksi manual.
         logError('debts', balErr.message || String(balErr), {
-          op: 'deleteDebt', debt_id: debtId, wallet_id: t.wallet_id,
-          delta: -t.amount, transaction_id: t.id,
+          op: 'deleteDebt', step: 'reverse_balance_failed_tx_kept', debt_id: debtId,
+          wallet_id: t.wallet_id, delta: -t.amount, transaction_id: t.id,
+        }, 'high');
+        continue;
+      }
+
+      const { error: delErr } = (await deleteTransaction?.(t.id)) || {};
+      if (delErr) {
+        // Saldo sudah dibalik tapi baris tidak terhapus → kembalikan saldonya
+        // supaya tetap cocok dengan transaksi yang masih ada.
+        const { error: undoErr } = (await adjustBalance?.(t.wallet_id, t.amount)) || {};
+        logError('debts', delErr.message || String(delErr), {
+          op: 'deleteDebt', step: 'delete_tx_failed_balance_restored', debt_id: debtId,
+          wallet_id: t.wallet_id, transaction_id: t.id, restore_failed: !!undoErr,
         }, 'high');
       }
-      await deleteTransaction?.(t.id);
     }
 
     // Soft delete baris debts (jejak created_at tetap untuk hitungan cooldown)

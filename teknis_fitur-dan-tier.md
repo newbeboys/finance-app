@@ -113,7 +113,7 @@ t.wallet_id === account.id ||
 - **UX:** Klik dropdown → pilih dompet → `WalletDeleteConfirmation` (bottom sheet)
   - Tampilkan: `⚠️ [X transaksi] terhubung akan hilang selamanya`
   - Tombol "Hapus Selamanya" → cascade delete via FK `wallet_id ON DELETE CASCADE`
-- **Safety:** Guard hanya = `accounts.length > 1` (semua dompet bisa dihapus, termasuk primary)
+- **Safety:** Guard = minimal 2 dompet **milik sendiri** (semua dompet milik sendiri bisa dihapus, termasuk primary). Dompet bersama milik orang lain tidak pernah muncul di daftar hapus dan tidak punya tombol "Set utama" — keduanya ditolak RLS sebagai 0 baris (bukan error), lihat `teknis_arsitektur-database.md` → Shared Wallet.
 
 ### Fix: Kategori Custom di Detail Dompet
 
@@ -750,7 +750,7 @@ if (Capacitor.isNativePlatform()) {
 - ⚠️ **Kapan `OnboardingScreen` ditampilkan ulang** — saat login/register, ada kondisi lain?
 - ⚠️ **Rules spesifik `buildInsights`** — isi rule-rule Money IQ tidak diaudit mendetail
 - ⚠️ **RC_PACKAGE_MAP di `settings-page.jsx`** — mapping UI plan ID ke RC package (nama tidak mencerminkan periode)
-- ⚠️ **Products di Play Console** — produk `pro_subscription` belum dibuat per 1 Juli 2026
+
 
 ---
 

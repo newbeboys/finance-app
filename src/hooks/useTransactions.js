@@ -21,8 +21,16 @@ function toAppTx(row) {
     amount:    Number(row.amount),
     wallet_id: row.wallet_id || null,
     debt_id:   row.debt_id  || null,   // != null → transaksi dari fitur Hutang/Piutang
+    // Pencatat transaksi. Sejak dompet bersama, daftar ini juga memuat
+    // transaksi yang dicatat ORANG LAIN — lihat canModifyTransaction().
+    user_id:   row.user_id  || null,
   };
 }
+
+// UPDATE/DELETE yang ditolak RLS (baris milik orang lain) TIDAK menghasilkan
+// error dari PostgREST — cuma 0 baris. Pemanggil (app.jsx) lalu menyesuaikan
+// saldo dompet seolah-olah berhasil. Karena itu 0 baris WAJIB diubah jadi error.
+const notAffected = (fn) => new Error(`${fn}: tidak ada baris yang berubah (transaksi bukan milikmu atau sudah tidak ada)`);
 
 export function useTransactions(userId, limits) {
   const [transactions, setTransactions] = React.useState([]);
@@ -146,6 +154,7 @@ export function useTransactions(userId, limits) {
         method:    tx.method    || 'Tunai',
         wallet_id: tx.wallet_id || null,
         debt_id:   tx.debt_id   || null,
+        user_id:   userId,   // record_transaction menulis user_id = auth.uid()
       }), ...prev]);
     }
     // id dikembalikan agar useDebts bisa menautkannya ke debt_payments.transaction_id
@@ -153,13 +162,17 @@ export function useTransactions(userId, limits) {
   }
 
   async function deleteTransaction(id) {
-    const { error: err } = await supabase
+    const { data, error: delErr } = await supabase
       .from('transactions')
       .delete()
       .eq('id', id)
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .select('id');
 
-    if (!err) {
+    const err = delErr || (data?.length ? null : notAffected('deleteTransaction'));
+    if (err) {
+      console.error('[useTransactions] deleteTransaction FAILED:', err.message);
+    } else {
       setTransactions(prev => prev.filter(t => t.id !== id));
     }
     return { error: err };
@@ -181,13 +194,18 @@ export function useTransactions(userId, limits) {
       })
       .eq('id', id)
       .eq('user_id', userId)
-      .select()
-      .single();
+      .select();
 
-    if (!err && data) {
-      setTransactions(prev => prev.map(t => t.id === id ? toAppTx(data) : t));
+    // Dulu `.single()` yang (secara kebetulan) mengubah 0 baris jadi error
+    // PGRST116. Sekarang diperiksa eksplisit supaya perlindungannya tidak
+    // hilang diam-diam kalau suatu hari diganti .maybeSingle() / .select() dihapus.
+    const updateErr = err || (data?.length ? null : notAffected('updateTransaction'));
+    if (updateErr) {
+      console.error('[useTransactions] updateTransaction FAILED:', updateErr.message);
+    } else {
+      setTransactions(prev => prev.map(t => t.id === id ? toAppTx(data[0]) : t));
     }
-    return { error: err };
+    return { error: updateErr };
   }
 
   return { transactions, loading, error, createTransaction, deleteTransaction, updateTransaction };

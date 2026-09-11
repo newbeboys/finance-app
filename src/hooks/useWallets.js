@@ -3,12 +3,16 @@ import { useTranslation } from 'react-i18next';
 import { supabase } from '../supabase';
 import { usePaywall } from '../components/PaywallModal';
 import { logError } from '../lib/errorLogger';
-import { fetchSharedWalletIds, sharedOrFilter } from '../lib/walletAccess';
+import { fetchSharedMemberships, sharedOrFilter } from '../lib/walletAccess';
 
 const FALLBACK_COLORS = ["#2A6FDB","#1FA8A0","#1B8A3F","#9A6BD9","#B26A4A","#B68A3E","#5C6B4C","#C9886D"];
 const pickColor = (name) => FALLBACK_COLORS[(name || '').charCodeAt(0) % FALLBACK_COLORS.length];
 
-function toAppWallet(row) {
+// roleById: Map wallet_id → 'editor' | 'viewer' untuk dompet bersama.
+// Dompet yang `user_id`-nya bukan user ini = dompet bersama milik orang lain.
+function toAppWallet(row, userId, roleById) {
+  const isShared = !!userId && row.user_id !== userId;
+  const role     = isShared ? (roleById?.get(row.id) || null) : 'owner';
   return {
     id:          row.id,
     name:        row.name,
@@ -17,9 +21,18 @@ function toAppWallet(row) {
     type:        row.type  || 'bank',
     balance:     Number(row.balance) || 0,
     color:       row.color || pickColor(row.name),
-    primary:     row.is_primary || false,
+    // `is_primary` di baris dompet bersama adalah dompet utama si OWNER, bukan
+    // milik user ini. Kalau ikut terbawa, user bisa punya dua dompet utama dan
+    // `accounts.find(a => a.primary)` bisa memilih dompet teman sebagai
+    // default catat transaksi — transaksi pribadi tercatat ke dompet orang.
+    primary:     !isShared && (row.is_primary || false),
     last4:       row.last4 || '—',
     is_locked:   row.is_locked || false,
+    ownerId:     row.user_id,
+    isShared,
+    role,
+    // Boleh dipakai mencatat transaksi / disesuaikan saldonya. Viewer tidak.
+    canWrite:    role === 'owner' || role === 'editor',
   };
 }
 
@@ -39,8 +52,10 @@ export function useWallets(userId, limits) {
       // Dompet bersama (Fitur B) tidak bisa ditemukan lewat `user_id` — barisnya
       // milik owner. Daftar id-nya harus diambil duluan karena dipakai dua kali:
       // sebagai penyaring query di bawah, DAN sebagai filter realtime.
-      const sharedIds = await fetchSharedWalletIds(userId);
+      const memberships = await fetchSharedMemberships(userId);
       if (!alive) return;
+      const sharedIds = memberships.map(m => m.walletId);
+      const roleById  = new Map(memberships.map(m => [m.walletId, m.role]));
 
       let query = supabase
         .from('wallets')
@@ -57,7 +72,7 @@ export function useWallets(userId, limits) {
       if (error) {
         console.error('[useWallets] fetch error:', error.code, error.message);
       } else {
-        setAccounts((data || []).map(toAppWallet));
+        setAccounts((data || []).map(row => toAppWallet(row, userId, roleById)));
       }
       setLoading(false);
 
@@ -77,7 +92,10 @@ export function useWallets(userId, limits) {
       const applyRow = (payload) => {
         if (!alive) return;
         setAccounts(prev => prev.map(a =>
-          a.id === payload.new.id ? toAppWallet(payload.new) : a
+          // `user_id` lama dipakai sebagai cadangan: kalau payload tidak
+          // membawanya, dompet sendiri jangan sampai terbaca "bersama" (dan
+          // kehilangan primary/canWrite) hanya karena satu event realtime.
+          a.id === payload.new.id ? toAppWallet({ user_id: a.ownerId, ...payload.new }, userId, roleById) : a
         ));
       };
 
@@ -143,7 +161,7 @@ export function useWallets(userId, limits) {
 
     // Simpan color & last4 di local state
     const wallet = {
-      ...toAppWallet(data),
+      ...toAppWallet(data, userId),
       color: a.color || pickColor(a.name),
       last4: a.last4 || '—',
     };
@@ -163,21 +181,63 @@ export function useWallets(userId, limits) {
     return { error: null };
   }
 
+  // PENTING untuk setPrimary & deleteAccount: UPDATE/DELETE yang ditolak RLS
+  // (dompet bersama — policy tulis `wallets` owner-only) TIDAK menghasilkan
+  // error, cuma 0 baris. Karena itu keduanya menolak dompet bersama di depan
+  // DAN memeriksa jumlah baris yang benar-benar tersentuh lewat `.select('id')`
+  // — jangan pernah menganggap "error null" = berhasil.
+  const notAffected = (fn) => new Error(`${fn}: tidak ada baris yang berubah (dompet bukan milikmu atau sudah tidak ada)`);
+
   async function setPrimary(id) {
-    await supabase.from('wallets').update({ is_primary: false }).eq('user_id', userId);
-    const { error } = await supabase
-      .from('wallets').update({ is_primary: true }).eq('id', id).eq('user_id', userId);
+    const target = accounts.find(a => a.id === id);
+    if (!target || target.isShared) {
+      const error = notAffected('setPrimary');
+      console.error('[useWallets] setPrimary DITOLAK:', error.message);
+      return { error };
+    }
+
+    // Urutan SENGAJA: tandai target dulu, BARU kosongkan yang lain. Urutan lama
+    // (kosongkan semua → tandai target) meninggalkan user TANPA dompet utama di
+    // DB kalau langkah kedua gagal / kena 0 baris.
+    const { data, error: setErr } = await supabase
+      .from('wallets').update({ is_primary: true })
+      .eq('id', id).eq('user_id', userId)
+      .select('id');
+    const error = setErr || (data?.length ? null : notAffected('setPrimary'));
     if (error) {
       console.error('[useWallets] setPrimary FAILED:', error.message);
-    } else {
-      setAccounts(prev => prev.map(a => ({ ...a, primary: a.id === id })));
+      return { error };
     }
-    return { error };
+
+    const { error: clearErr } = await supabase
+      .from('wallets').update({ is_primary: false })
+      .eq('user_id', userId).neq('id', id);
+    if (clearErr) {
+      // Target sudah jadi utama; yang lama mungkin masih ikut bertanda utama
+      // di DB. State dibiarkan mencerminkan itu, bukan dipaksa rapi.
+      console.error('[useWallets] setPrimary clear-others FAILED:', clearErr.message);
+      setAccounts(prev => prev.map(a => a.id === id ? { ...a, primary: true } : a));
+      return { error: clearErr };
+    }
+
+    // Dompet bersama tidak pernah primary (lihat toAppWallet) — jangan disentuh.
+    setAccounts(prev => prev.map(a => a.isShared ? a : { ...a, primary: a.id === id }));
+    return { error: null };
   }
 
   async function deleteAccount(id) {
-    const { error } = await supabase
-      .from('wallets').delete().eq('id', id).eq('user_id', userId);
+    const target = accounts.find(a => a.id === id);
+    if (!target || target.isShared) {
+      const error = notAffected('deleteAccount');
+      console.error('[useWallets] deleteAccount DITOLAK:', error.message);
+      return { error };
+    }
+
+    const { data, error: delErr } = await supabase
+      .from('wallets').delete()
+      .eq('id', id).eq('user_id', userId)
+      .select('id');
+    const error = delErr || (data?.length ? null : notAffected('deleteAccount'));
     if (error) {
       console.error('[useWallets] deleteAccount FAILED:', error.message);
     } else {
@@ -227,5 +287,11 @@ export function useWallets(userId, limits) {
     return { error: null, balance };
   }
 
-  return { accounts, loading, createAccount, setPrimary, deleteAccount, adjustBalance };
+  // Dompet yang boleh dipakai mencatat transaksi: milik sendiri + dompet
+  // bersama ber-peran editor. Dipakai semua picker dompet untuk MENULIS
+  // (catat transaksi, transaksi berulang, hutang) — dompet viewer akan ditolak
+  // record_transaction.
+  const writableAccounts = React.useMemo(() => accounts.filter(a => a.canWrite), [accounts]);
+
+  return { accounts, writableAccounts, loading, createAccount, setPrimary, deleteAccount, adjustBalance };
 }

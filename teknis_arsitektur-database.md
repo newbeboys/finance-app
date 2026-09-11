@@ -503,6 +503,8 @@ Realtime `useWallets` memakai **dua binding** di satu channel: `user_id=eq.<uid>
 
 ⚠️ `useTransactions` **tidak punya realtime sama sekali** (sudah begitu sejak sebelum fitur ini) — transaksi yang dicatat member baru muncul di layar owner setelah refetch.
 
+**Tulis yang ditolak RLS = 0 baris, BUKAN error (perbaikan Task 4 Commit A, 11 Sep 2026).** Sejak `accounts`/`transactions` di klien memuat baris milik orang lain, empat jalur tulis diam-diam "berhasil" padahal tidak menyentuh apa pun: hapus transaksi anggota oleh owner (lalu `adjustBalance` tetap jalan → **saldo bergeser permanen**, terverifikasi di server), "Set utama" di dompet bersama (dompet utama milik sendiri ikut terkosongkan), hapus dompet bersama, dan `is_primary` milik owner yang terbawa ke daftar anggota (dompet teman bisa jadi default catat transaksi). Aturannya sekarang: `deleteTransaction`/`updateTransaction`/`setPrimary`/`deleteAccount` memakai `.select('id')` dan mengubah 0 baris jadi error. `toAppWallet` membawa `ownerId`/`isShared`/`role`/`canWrite` dan memaksa `primary=false` untuk dompet bersama; `writableAccounts` (milik sendiri + editor) dipakai semua picker yang menulis. `canModifyTransaction()` (`walletAccess.js`) menggerbangi edit/hapus di UI **dan** di handler `app.jsx`, karena policy UPDATE/DELETE `transactions` hanya mengecek `user_id` — bekas anggota/viewer masih lolos DELETE, sementara `adjust_wallet_balance` menolak mereka (baris hilang, saldo owner tidak dibalik; terverifikasi di server). `useDebts.deleteDebt` hanya menghapus transaksi yang saldonya berhasil dibalik. Mempersempit policy UPDATE/DELETE ke `wallet_access_role IN (owner, editor)` di server masih usulan, belum diputuskan.
+
 #### Catatan lain
 
 - `user_summary` (view, `security_invoker=on`) **tidak terpengaruh**: dia tidak menyentuh tabel `wallets` sama sekali (`total_saldo_dompet` ternyata `sum(transactions.amount)`), agregasinya di-key pada `t.user_id` sehingga atribusi tidak bergeser, dan grant-nya hanya `postgres`/`service_role` yang keduanya `rolbypassrls`. Kalau suatu saat view ini di-`GRANT` ke `authenticated`, pelebaran policy `transactions` akan membuat user melihat baris user lain lengkap dengan email-nya — jangan lakukan itu.
@@ -552,6 +554,7 @@ Pola identik `chat_rate_limits`: satu baris per user, dikunci `FOR UPDATE` di da
 > ```jsonc
 > { "ok": true,  "wallet_id": "…", "role": "editor" }
 > { "ok": false, "reason": "invalid_code" }                       // tidak ada / kedaluwarsa / sudah dipakai
+> { "ok": false, "reason": "own_wallet" }                         // owner memasukkan kode dompetnya sendiri (sejak 20260915000000)
 > { "ok": false, "reason": "already_member" }
 > { "ok": false, "reason": "rate_limited", "reset_at": "…" }
 > ```
@@ -568,6 +571,10 @@ Pola identik `chat_rate_limits`: satu baris per user, dikunci `FOR UPDATE` di da
 > **Aturan umum yang lahir dari sini:** di fungsi mana pun yang **menulis penghitung / jejak audit lalu menolak request** — jangan `RAISE` setelah menulis. `RAISE` = rollback = tulisan itu hilang. Pakai `RETURN` dengan nilai status. `RAISE` hanya boleh untuk kondisi yang memang tidak menyisakan apa pun untuk disimpan (mis. tidak ada sesi login), **atau** ketika rollback justru yang diinginkan — contohnya `generate_wallet_invite`, yang me-revoke kode lama lalu `RAISE` kalau gagal membuat kode unik: di situ rollback benar, karena kode lama memang harus tetap hidup kalau penggantinya gagal dibuat. `leave_wallet`/`remove_wallet_member` juga `UPDATE`-lalu-`RAISE`, tapi aman karena `RAISE`-nya hanya menyala saat `NOT FOUND`, yaitu ketika `UPDATE` menyentuh 0 baris — tidak ada tulisan yang hilang.
 
 **Keamanan: kenapa bukan `ON CONFLICT DO UPDATE`.** Draft awal RPC ini pakai UPSERT buta (`INSERT ... ON CONFLICT (wallet_id,user_id) DO UPDATE SET role=...`). Itu berbahaya: karena hanya ada satu kode aktif per dompet, seorang **viewer yang sudah jadi anggota** bisa menaikkan perannya sendiri ke editor hanya dengan submit ulang kode yang beredar untuk orang lain — privilege escalation. Fix: `SELECT ... FOR UPDATE` eksplisit dulu, lalu bercabang tiga arah (belum pernah jadi anggota → INSERT; `status='left'` → UPDATE jadi active; **`status='active'` → tolak** dengan `reason: 'already_member'`). Hasil `FOUND` disimpan ke variabel sendiri (`v_has_member_row`) karena nilainya berubah setiap ada SELECT/UPDATE berikutnya. Perubahan role anggota aktif (kalau dibutuhkan nanti) harus lewat RPC terpisah yang jelas niatnya, bukan ditumpangkan ke jalur invite.
+
+#### Hardening `wallet_members` — migrasi `20260915000000_harden_wallet_members_writes.sql` (11 Sep 2026, live)
+
+Dua jalur yang merusak invariant "owner tidak punya baris di `wallet_members`" ditutup. (1) `accept_wallet_invite` kini mengembalikan `reason:'own_wallet'` saat owner memakai kode dompetnya sendiri — dicek setelah increment counter (RETURN, bukan RAISE) dan **sebelum** menyentuh `wallet_members`, jadi kodenya tetap `active`. (2) Policy `"wallet_members: owner manages"` (FOR ALL, Task 2) **dihapus**: dengan policy itu owner — termasuk user Basic — bisa INSERT/UPDATE langsung lewat PostgREST, melewati gate Pro di `generate_wallet_invite`, menambahkan user mana pun tanpa persetujuannya, atau menulis `role='owner'` (yang oleh `wallet_access_role` dikembalikan apa adanya → hak setara owner). Sekarang `wallet_members` hanya punya policy SELECT; semua tulis lewat RPC SECURITY DEFINER, sama seperti `wallet_invites`. Terverifikasi di server (rollback): owner-accept-own-code → `own_wallet` dan kode tetap aktif; INSERT langsung (orang lain / diri sendiri) → 42501; UPDATE langsung → 0 baris; owner masih bisa SELECT anggotanya; `already_member`/`invalid_code` tidak berubah.
 
 #### `leave_wallet(p_wallet_id)` & `remove_wallet_member(p_wallet_id, p_user_id)`
 
@@ -593,7 +600,7 @@ Uji `leave_wallet` (berhasil sekali, ditolak kalau dipanggil dua kali) dan `remo
 
 #### Untuk Task 4 (UI, belum dikerjakan)
 
-- **Wajib:** periksa field `ok` dari `accept_wallet_invite`, **jangan** andalkan `error` dari supabase-js — lihat kotak peringatan kontrak di atas. Petakan tiap `reason` ke pesan UI: `invalid_code` → "Kode salah atau sudah kedaluwarsa", `already_member` → "Kamu sudah jadi anggota dompet ini", `rate_limited` → tampilkan waktu dari `reset_at`.
+- **Wajib:** periksa field `ok` dari `accept_wallet_invite`, **jangan** andalkan `error` dari supabase-js — lihat kotak peringatan kontrak di atas. Petakan tiap `reason` ke pesan UI: `invalid_code` → "Kode salah atau sudah kedaluwarsa", `own_wallet` → "Ini kode dompetmu sendiri", `already_member` → "Kamu sudah jadi anggota dompet ini", `rate_limited` → tampilkan waktu dari `reset_at`.
 - **Wajib:** tampilkan status kode undangan (aktif / dipakai / kedaluwarsa) — data ada di `wallet_invites` (`status`, `expires_at`), owner bisa `SELECT` barisnya sendiri.
 - Belum ada RPC untuk mengubah role anggota aktif tanpa lewat leave+invite-ulang — kalau dibutuhkan, harus RPC baru (`set_wallet_member_role`, owner-only), bukan menumpang `accept_wallet_invite`.
 - `ON DELETE CASCADE` dari `wallets` ke `transactions` masih terbuka (lihat backlog roadmap) — belum ada guard di alur hapus dompet.

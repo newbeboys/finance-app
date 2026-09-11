@@ -136,6 +136,12 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
   const [txSheet, setTxSheet] = React.useState(null);
   const [deletingWallet, setDeletingWallet] = React.useState(null);
   const [deleteDropdownOpen, setDeleteDropdownOpen] = React.useState(false);
+  // Hanya dompet MILIK SENDIRI yang boleh dihapus — DELETE `wallets` owner-only
+  // di RLS, dan penolakannya berupa 0 baris (bukan error), jadi dompet bersama
+  // yang ikut di daftar ini dulu "hilang" dari layar lalu muncul lagi saat
+  // reload. Guard "sisakan minimal satu dompet" juga dihitung dari sini.
+  const ownedAccounts = accounts.filter(a => !a.isShared);
+  const canDeleteAny = ownedAccounts.length > 1;
   const total = accounts.reduce((s, a) => s + a.balance, 0);
   const byType = ACCOUNT_TYPES.map(t => ({
     ...t, sum: accounts.filter(a => a.type === t.id).reduce((s, a) => s + a.balance, 0),
@@ -158,9 +164,9 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => accounts.length > 1 && setDeleteDropdownOpen(o => !o)}
+          <button onClick={() => canDeleteAny && setDeleteDropdownOpen(o => !o)}
             title={t('dompet.hapusDompet', { defaultValue: 'Hapus Dompet' })}
-            style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--terra)", color: "#fff", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, opacity: accounts.length < 2 ? 0.5 : 1, cursor: accounts.length < 2 ? "not-allowed" : "pointer" }}>
+            style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--terra)", color: "#fff", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, opacity: canDeleteAny ? 1 : 0.5, cursor: canDeleteAny ? "pointer" : "not-allowed" }}>
             🗑️ {t('dompet.hapusDompet', { defaultValue: 'Hapus Dompet' })}
           </button>
           <button data-tour="wallets-add" onClick={onAdd} style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, opacity: addLocked ? 0.6 : 1, cursor: addLocked ? "not-allowed" : "pointer" }}>
@@ -169,14 +175,14 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
           </button>
         </div>
 
-        {deleteDropdownOpen && accounts.length > 1 && (
+        {deleteDropdownOpen && canDeleteAny && (
           <>
             <div onClick={() => setDeleteDropdownOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(42,44,32,.45)", zIndex: 150 }} />
             <div className="card rise" style={{ position: "absolute", top: "100%", right: 0, width: 320, zIndex: 200, padding: 12, marginTop: 8 }}>
               <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)", paddingBottom: 10, borderBottom: "1px solid var(--line-soft)", marginBottom: 10 }}>
                 Pilih Dompet untuk Dihapus
               </div>
-              {accounts.map(a => (
+              {ownedAccounts.map(a => (
                 <button key={a.id}
                   onClick={() => { setDeletingWallet(a); setDeleteDropdownOpen(false); }}
                   style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "10px", marginBottom: 6, borderRadius: 10, border: 0, background: "var(--paper)", color: "var(--ink)", fontSize: 13, cursor: "pointer", textAlign: "left" }}>
@@ -223,8 +229,12 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
                 <span style={{ width: 40, height: 40, borderRadius: 11, background: `color-mix(in oklch, ${a.color} 16%, var(--ivory))`, color: a.color, display: "grid", placeItems: "center" }}>
                   <WalletGlyph type={a.type} size={19} />
                 </span>
+                {/* Dompet bersama: tidak ada "Set utama" — UPDATE `wallets` owner-only,
+                    dan setPrimary mengosongkan dompet utama milik sendiri lebih dulu. */}
                 {a.is_locked
                   ? <span style={{ fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--muted)", background: "var(--paper)", padding: "3px 8px", borderRadius: 999, fontWeight: 500, border: "1px solid var(--line-soft)" }}>Soft Lock</span>
+                  : a.isShared
+                  ? <span style={{ fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--muted)", background: "var(--paper)", padding: "3px 8px", borderRadius: 999, fontWeight: 500, border: "1px solid var(--line-soft)" }}>{t('dompet.dibagikan')}</span>
                   : a.primary
                     ? <span style={{ fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--sage)", background: "rgba(92,107,76,.14)", padding: "3px 8px", borderRadius: 999, fontWeight: 500 }}>{t('dompet.utama')}</span>
                     : <button onClick={() => onSetPrimary(a.id)} title={t('dompet.setUtama')} style={{ fontSize: 11, color: "var(--muted)", background: "transparent", border: "1px solid var(--line-soft)", borderRadius: 999, padding: "3px 9px" }}>{t('dompet.setUtama')}</button>}

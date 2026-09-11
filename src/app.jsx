@@ -45,6 +45,7 @@ import { validateUserStillExists, logoutDeletedUser } from './utils/sessionValid
 import { useTransactions } from './hooks/useTransactions';
 import { useSavings } from './hooks/useSavings';
 import { useWallets } from './hooks/useWallets';
+import { canModifyTransaction } from './lib/walletAccess';
 import { useNotifications } from './hooks/useNotifications';
 import { useBudgets } from './hooks/useBudgets';
 import { useDebts } from './hooks/useDebts';
@@ -369,7 +370,7 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
   }, [fontResetToast]);
 
   // Multi-wallet state — sinkron dengan Supabase
-  const { accounts, createAccount, setPrimary, deleteAccount: _deleteAccount, adjustBalance } = useWallets(session.user.id, limits);
+  const { accounts, writableAccounts, createAccount, setPrimary, deleteAccount: _deleteAccount, adjustBalance } = useWallets(session.user.id, limits);
 
   // Tombol "Tambah Wallet" tetap tampil + gemlock saat Basic sudah mencapai limit
   const walletAddLocked = accounts.length >= (limits?.maxWallets ?? Infinity);
@@ -418,7 +419,19 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
     return await createTransaction(tx);
   }, [createTransaction]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  //
+  // Guard canModifyTransaction() di UPDATE & DELETE WAJIB, bukan kosmetik. Dua
+  // jalur ini menulis tabel lalu adjustBalance TERPISAH (tidak atomik), jadi
+  // keduanya harus ditolak di depan untuk transaksi yang (a) dicatat orang lain
+  // di dompet bersama, atau (b) ada di dompet yang tidak lagi bisa ditulis
+  // (bekas anggota / viewer): di (b) DELETE lolos RLS tapi adjust_wallet_balance
+  // ditolak → baris hilang, saldo owner tidak ikut dibalik.
   const handleUpdateTransaction = React.useCallback(async (id, updates, oldTx) => {
+    const current = transactions.find(t => t.id === id) || oldTx;
+    const targetWallet = updates.wallet_id ? accounts.find(a => a.id === updates.wallet_id) : null;
+    if (!canModifyTransaction(current, session.user.id, accounts) || (updates.wallet_id && !targetWallet?.canWrite)) {
+      return { error: new Error('Transaksi ini tidak bisa diubah dari akunmu') };
+    }
     const res = await updateTransaction(id, updates);
     if (!res.error) {
       // Balik efek transaksi lama ke dompet lama
@@ -427,16 +440,21 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
       if (updates.wallet_id) await adjustBalance(updates.wallet_id, updates.amount);
     }
     return res;
-  }, [updateTransaction, adjustBalance]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [updateTransaction, adjustBalance, transactions, accounts]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDeleteTransaction = React.useCallback(async (id) => {
     const tx = transactions.find(t => t.id === id);
+    if (!canModifyTransaction(tx, session.user.id, accounts)) {
+      return { error: new Error('Transaksi ini tidak bisa dihapus dari akunmu') };
+    }
+    // deleteTransaction mengembalikan error untuk 0 baris terhapus — jadi
+    // adjustBalance di bawah hanya jalan kalau barisnya BENAR-BENAR hilang.
     const res = await deleteTransaction(id);
     if (!res.error && tx?.wallet_id) {
       await adjustBalance(tx.wallet_id, -tx.amount); // balik efek ke saldo
     }
     return res;
-  }, [deleteTransaction, adjustBalance, transactions]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [deleteTransaction, adjustBalance, transactions, accounts]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Transaksi berulang — saat app dibuka, eksekusi jadwal yang sudah jatuh tempo.
   // Ref guard memastikan hanya jalan sekali per sesi app.
@@ -453,7 +471,9 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
       try {
         // handleCreateTransaction (bukan createTransaction mentah) supaya saldo
         // dompet ikut menyesuaikan — konsisten dengan transaksi manual.
-        const done = await checkRecurringTransactions(handleCreateTransaction, accounts);
+        // writableAccounts, bukan accounts: fallback resolveWalletId (dompet
+        // utama / dompet pertama) tidak boleh jatuh ke dompet bersama viewer.
+        const done = await checkRecurringTransactions(handleCreateTransaction, writableAccounts);
         if (done.length) {
           setRecurringToasts(done.map((d, i) => ({ ...d, id: `${Date.now()}-${i}` })));
         }
@@ -759,7 +779,7 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
             markPaid={markPaid}
             deleteDebt={deleteDebt}
             getPayments={getPayments}
-            wallets={accounts}
+            wallets={writableAccounts}
             isPro={subscription.isPro}
           />
         )}
@@ -767,7 +787,7 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
         {active !== "dashboard" && active !== "budgets" && active !== "wallets" && active !== "reports" && active !== "analytics" && active !== "savings" && active !== "transactions" && active !== "settings" && active !== "debts" && <Placeholder section={active} />}
       </main>
 
-      <AddTransactionModal open={modal} onClose={closeAddModal} onSave={handleCreateTransaction} accounts={accounts} customCategories={customCategories} onCreateCustom={addCustomCategory} onDeleteCustom={handleDeleteCustomCategory} prefill={scanPrefill} notice={scanNotice} previewImage={scanPreview} isPro={subscription.isPro} isBasicAtMax={isBasicAtMax} userId={session.user.id} />
+      <AddTransactionModal open={modal} onClose={closeAddModal} onSave={handleCreateTransaction} accounts={writableAccounts} customCategories={customCategories} onCreateCustom={addCustomCategory} onDeleteCustom={handleDeleteCustomCategory} prefill={scanPrefill} notice={scanNotice} previewImage={scanPreview} isPro={subscription.isPro} isBasicAtMax={isBasicAtMax} userId={session.user.id} />
       <ScanStrukSheet open={scanOpen} onClose={() => setScanOpen(false)} onResult={handleScanResult} />
       <AddAccountModal open={addAcct} onClose={() => setAddAcct(false)} onCreate={createAccount} />
       <AddGoalModal open={addGoal} onClose={() => setAddGoal(false)} onCreate={createGoal} />
