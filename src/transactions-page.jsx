@@ -7,7 +7,7 @@ import { AddTransactionModal } from './transactions';
 import { LockBadge } from './components/PaywallModal';
 import { resolveCategory, categoryLabel } from './category-field';
 import { MonthYearPicker } from './components/MonthYearPicker';
-import { canModifyTransaction } from './lib/walletAccess';
+import { canEditTransaction, canDeleteTransaction } from './lib/walletAccess';
 
 export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, transactions: txProp, loading = false, onDelete, onUpdate, customCategories = [], onCreateCustom, onDeleteCustom, isPro = false, isBasicAtMax = false, userId }) {
   const { t: tr, i18n } = useTranslation();
@@ -195,11 +195,13 @@ export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, 
                 const color = c?.color || (isIncome ? "var(--sage)" : "var(--muted-2)");
                 const borderBottom = i < g.items.length - 1 ? "1px solid var(--line-soft)" : 0;
                 const isDeleting = deletingId === t.id;
-                // Transaksi yang dicatat orang lain di dompet bersama, atau yang
-                // dompetnya sudah tidak bisa ditulis, tampil read-only: tidak
-                // ada edit/hapus. Lihat canModifyTransaction().
-                const canModify = canModifyTransaction(t, userId, accounts);
-                const openEdit = canModify && onUpdate ? () => setEditingTx(t) : undefined;
+                // Transaksi yang dicatat orang lain di dompet bersama tampil
+                // read-only (tanpa edit/hapus). Transaksi sendiri di dompet yang
+                // aksesnya sudah hilang: boleh dihapus, tidak ditawari edit.
+                // Lihat canDeleteTransaction / canEditTransaction.
+                const canDelete = canDeleteTransaction(t, userId);
+                const canEdit = canEditTransaction(t, userId, accounts);
+                const openEdit = canEdit && onUpdate ? () => setEditingTx(t) : undefined;
                 const editCursor = openEdit ? "pointer" : "default";
 
                 return (
@@ -217,7 +219,7 @@ export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, 
                       <div className="tnum" style={{ fontSize: 13.5, fontWeight: 600, color: isIncome ? "var(--sage)" : "var(--ink)", flexShrink: 0 }}>
                         {isIncome ? "+" : "−"}{fmt(Math.abs(t.amount))}
                       </div>
-                      {onDelete && canModify && (
+                      {onDelete && canDelete && (
                         <button onClick={() => setDeletingId(t.id)} title={tr('umum.hapus')}
                           style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid var(--line-soft)", background: "var(--paper)", color: "var(--terra)", display: "grid", placeItems: "center", flexShrink: 0 }}>
                           <IconClose size={12} />
@@ -246,13 +248,13 @@ export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, 
                       </div>
                       {/* Edit + Hapus — tampil saat hover */}
                       <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", opacity: hover === t.id ? 1 : 0, transition: "opacity .15s" }}>
-                        {onUpdate && canModify && (
+                        {onUpdate && canEdit && (
                           <button onClick={() => setEditingTx(t)} title={tr('umum.edit')}
                             style={{ padding: "5px 10px", borderRadius: 8, border: "1px solid var(--line-soft)", background: "var(--paper)", color: "var(--ink-2)", fontSize: 11, cursor: "pointer" }}>
                             {tr('umum.edit')}
                           </button>
                         )}
-                        {onDelete && canModify && (
+                        {onDelete && canDelete && (
                           <button onClick={() => setDeletingId(t.id)} title={tr('umum.hapus')}
                             style={{ width: 28, height: 28, borderRadius: 8, border: "1px solid var(--line-soft)", background: "var(--paper)", color: "var(--terra)", display: "grid", placeItems: "center", cursor: "pointer" }}>
                             <IconClose size={12} />

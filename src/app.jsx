@@ -45,7 +45,7 @@ import { validateUserStillExists, logoutDeletedUser } from './utils/sessionValid
 import { useTransactions } from './hooks/useTransactions';
 import { useSavings } from './hooks/useSavings';
 import { useWallets } from './hooks/useWallets';
-import { canModifyTransaction } from './lib/walletAccess';
+import { canEditTransaction, canDeleteTransaction } from './lib/walletAccess';
 import { useNotifications } from './hooks/useNotifications';
 import { useBudgets } from './hooks/useBudgets';
 import { useDebts } from './hooks/useDebts';
@@ -370,7 +370,7 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
   }, [fontResetToast]);
 
   // Multi-wallet state — sinkron dengan Supabase
-  const { accounts, writableAccounts, createAccount, setPrimary, deleteAccount: _deleteAccount, adjustBalance } = useWallets(session.user.id, limits);
+  const { accounts, writableAccounts, createAccount, setPrimary, deleteAccount: _deleteAccount } = useWallets(session.user.id, limits);
 
   // Tombol "Tambah Wallet" tetap tampil + gemlock saat Basic sudah mencapai limit
   const walletAddLocked = accounts.length >= (limits?.maxWallets ?? Infinity);
@@ -396,65 +396,46 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
   // Transactions — sinkron dengan Supabase per user yang login
   const { transactions, loading: txLoading, createTransaction, deleteTransaction, updateTransaction } = useTransactions(session.user.id, limits);
 
-  // Hutang/Piutang — butuh "ledger" dari transactions & wallets untuk orkestrasi
-  // + rollback. PENTING: pass createTransaction/deleteTransaction MENTAH (bukan
-  // wrapper handle* yang sudah adjustBalance) supaya saldo tidak dobel — useDebts
-  // memanggil adjustBalance sendiri.
+  // Hutang/Piutang — butuh "ledger" dari transactions untuk orkestrasi +
+  // rollback. create/delete di sini sudah atomik (RPC record_transaction /
+  // delete_transaction menulis baris + saldo sekaligus), jadi useDebts tidak
+  // pernah menyentuh saldo sendiri.
   const {
     debts, loading: debtsLoading,
     createDebt, addPayment, markPaid, deleteDebt, getPayments,
-  } = useDebts(session.user.id, limits, { transactions, createTransaction, deleteTransaction, adjustBalance });
+  } = useDebts(session.user.id, limits, { transactions, createTransaction, deleteTransaction });
 
-  // CREATE: saldo TIDAK disentuh di sini sama sekali. createTransaction() menulis
-  // lewat RPC record_transaction() yang meng-INSERT transaksi + meng-UPDATE saldo
-  // dompet dalam satu transaksi Postgres (atomik) — lihat migrasi 20260911010000 —
-  // dan subscription realtime di useWallets yang menyalurkan saldo barunya ke
-  // state. Jangan tambahkan penyesuaian saldo di sini: adjustBalance() menggandakan
-  // di DB, penulis state berbasis delta menggandakan di UI.
-  //
-  // UPDATE & DELETE di bawah masih pakai alur lama (mutasi lalu adjustBalance
-  // terpisah) — belum dipindah ke RPC atomik. Keduanya aman terhadap realtime
-  // karena adjustBalance menyetel saldo ABSOLUT hasil RPC, bukan delta.
+  // CREATE / UPDATE / DELETE: saldo TIDAK disentuh di sini sama sekali. Ketiganya
+  // lewat RPC atomik (record_transaction 20260911010000, update_transaction &
+  // delete_transaction 20260916000000) yang menulis baris transaksi + saldo
+  // dompet dalam satu transaksi Postgres; saldo barunya sampai ke state lewat
+  // realtime useWallets. Jangan tambahkan adjustBalance() di sini (dobel di DB)
+  // ataupun penulis state berbasis delta (dobel di UI).
   const handleCreateTransaction = React.useCallback(async (tx) => {
     return await createTransaction(tx);
   }, [createTransaction]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  //
-  // Guard canModifyTransaction() di UPDATE & DELETE WAJIB, bukan kosmetik. Dua
-  // jalur ini menulis tabel lalu adjustBalance TERPISAH (tidak atomik), jadi
-  // keduanya harus ditolak di depan untuk transaksi yang (a) dicatat orang lain
-  // di dompet bersama, atau (b) ada di dompet yang tidak lagi bisa ditulis
-  // (bekas anggota / viewer): di (b) DELETE lolos RLS tapi adjust_wallet_balance
-  // ditolak → baris hilang, saldo owner tidak ikut dibalik.
+  // Guard di depan: RPC-nya sudah menolak baris milik orang lain, tapi guard ini
+  // menjaga UI tidak pernah mengirim permintaan yang pasti ditolak (transaksi
+  // yang dicatat anggota lain di dompet bersama ikut ada di `transactions`).
+  // Hapus = cukup milik sendiri; ubah = milik sendiri + dompet asal & tujuan
+  // bisa ditulis (lihat canEditTransaction).
   const handleUpdateTransaction = React.useCallback(async (id, updates, oldTx) => {
     const current = transactions.find(t => t.id === id) || oldTx;
     const targetWallet = updates.wallet_id ? accounts.find(a => a.id === updates.wallet_id) : null;
-    if (!canModifyTransaction(current, session.user.id, accounts) || (updates.wallet_id && !targetWallet?.canWrite)) {
+    if (!canEditTransaction(current, session.user.id, accounts) || (updates.wallet_id && !targetWallet?.canWrite)) {
       return { error: new Error('Transaksi ini tidak bisa diubah dari akunmu') };
     }
-    const res = await updateTransaction(id, updates);
-    if (!res.error) {
-      // Balik efek transaksi lama ke dompet lama
-      if (oldTx?.wallet_id) await adjustBalance(oldTx.wallet_id, -oldTx.amount);
-      // Terapkan efek transaksi baru ke dompet baru (bisa sama atau berbeda)
-      if (updates.wallet_id) await adjustBalance(updates.wallet_id, updates.amount);
-    }
-    return res;
-  }, [updateTransaction, adjustBalance, transactions, accounts]); // eslint-disable-line react-hooks/exhaustive-deps
+    return await updateTransaction(id, updates);
+  }, [updateTransaction, transactions, accounts]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDeleteTransaction = React.useCallback(async (id) => {
     const tx = transactions.find(t => t.id === id);
-    if (!canModifyTransaction(tx, session.user.id, accounts)) {
+    if (!canDeleteTransaction(tx, session.user.id)) {
       return { error: new Error('Transaksi ini tidak bisa dihapus dari akunmu') };
     }
-    // deleteTransaction mengembalikan error untuk 0 baris terhapus — jadi
-    // adjustBalance di bawah hanya jalan kalau barisnya BENAR-BENAR hilang.
-    const res = await deleteTransaction(id);
-    if (!res.error && tx?.wallet_id) {
-      await adjustBalance(tx.wallet_id, -tx.amount); // balik efek ke saldo
-    }
-    return res;
-  }, [deleteTransaction, adjustBalance, transactions, accounts]); // eslint-disable-line react-hooks/exhaustive-deps
+    return await deleteTransaction(id);
+  }, [deleteTransaction, transactions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Transaksi berulang — saat app dibuka, eksekusi jadwal yang sudah jatuh tempo.
   // Ref guard memastikan hanya jalan sekali per sesi app.

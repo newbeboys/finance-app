@@ -22,15 +22,11 @@ function toAppTx(row) {
     wallet_id: row.wallet_id || null,
     debt_id:   row.debt_id  || null,   // != null → transaksi dari fitur Hutang/Piutang
     // Pencatat transaksi. Sejak dompet bersama, daftar ini juga memuat
-    // transaksi yang dicatat ORANG LAIN — lihat canModifyTransaction().
+    // transaksi yang dicatat ORANG LAIN — lihat canEditTransaction /
+    // canDeleteTransaction di lib/walletAccess.js.
     user_id:   row.user_id  || null,
   };
 }
-
-// UPDATE/DELETE yang ditolak RLS (baris milik orang lain) TIDAK menghasilkan
-// error dari PostgREST — cuma 0 baris. Pemanggil (app.jsx) lalu menyesuaikan
-// saldo dompet seolah-olah berhasil. Karena itu 0 baris WAJIB diubah jadi error.
-const notAffected = (fn) => new Error(`${fn}: tidak ada baris yang berubah (transaksi bukan milikmu atau sudah tidak ada)`);
 
 export function useTransactions(userId, limits) {
   const [transactions, setTransactions] = React.useState([]);
@@ -58,7 +54,9 @@ export function useTransactions(userId, limits) {
         .select('*')
         .order('created_at', { ascending: false });
 
-      const orFilter = sharedOrFilter(userId, sharedIds, 'wallet_id');
+      // excludeDebt: transaksi hutang/piutang orang lain di dompet bersama
+      // tidak pernah ikut terbaca (Task 2 #4) — cerminan policy SELECT.
+      const orFilter = sharedOrFilter(userId, sharedIds, 'wallet_id', { excludeDebt: true });
       // Cabang `user_id` tetap ada di dalam orFilter — bukan cuma wallet_id —
       // supaya transaksi yang dulu user catat di dompet yang aksesnya sudah
       // dicabut (dia keluar dari dompet itu) tetap muncul di riwayatnya sendiri.
@@ -161,17 +159,24 @@ export function useTransactions(userId, limits) {
     return { error: err, id: newId ?? null };
   }
 
+  // ── Hapus & ubah: RPC atomik (migrasi 20260916000000) ─────────────
+  // delete_transaction / update_transaction menulis baris DAN menyesuaikan
+  // saldo dompet dalam satu transaksi Postgres — sama seperti record_transaction
+  // untuk create. Jadi pemanggil TIDAK BOLEH memanggil adjustBalance lagi
+  // (dobel di DB); saldo baru sampai ke state lewat realtime useWallets.
+  //
+  // Kenapa bukan .delete()/.update() + adjustBalance seperti dulu:
+  //  - baris milik orang lain di dompet bersama ditolak RLS sebagai 0 BARIS,
+  //    bukan error → adjustBalance tetap jalan → saldo bergeser padahal
+  //    transaksinya masih ada;
+  //  - bekas anggota/viewer lolos DELETE (policy cuma cek user_id) tapi
+  //    adjust_wallet_balance menolak mereka → baris hilang, saldo tidak dibalik.
+  // RPC-nya memvalidasi `user_id = auth.uid()` dan RAISE kalau bukan milik
+  // pemanggil, jadi kegagalan selalu berupa error, tidak pernah "sukses kosong".
   async function deleteTransaction(id) {
-    const { data, error: delErr } = await supabase
-      .from('transactions')
-      .delete()
-      .eq('id', id)
-      .eq('user_id', userId)
-      .select('id');
-
-    const err = delErr || (data?.length ? null : notAffected('deleteTransaction'));
+    const { error: err } = await supabase.rpc('delete_transaction', { p_transaction_id: id });
     if (err) {
-      console.error('[useTransactions] deleteTransaction FAILED:', err.message);
+      console.error('[useTransactions] delete_transaction FAILED:', err.code, err.message);
     } else {
       setTransactions(prev => prev.filter(t => t.id !== id));
     }
@@ -179,33 +184,24 @@ export function useTransactions(userId, limits) {
   }
 
   async function updateTransaction(id, updates) {
-    const { data, error: err } = await supabase
-      .from('transactions')
-      .update({
-        type:      updates.amount < 0 ? 'expense' : 'income',
-        amount:    updates.amount,
-        category:  updates.category,
-        merchant:  updates.merchant || '',
-        note:      updates.note     || '',
-        method:    updates.method   || 'Tunai',
-        wallet_id: updates.wallet_id || null,
-        ...(updates.dateRaw ? { date: updates.dateRaw } : {}),
-        ...(updates.time    ? { time: updates.time    } : {}),
-      })
-      .eq('id', id)
-      .eq('user_id', userId)
-      .select();
+    const { data, error: err } = await supabase.rpc('update_transaction', {
+      p_transaction_id: id,
+      p_amount:    updates.amount,
+      p_category:  updates.category,
+      p_wallet_id: updates.wallet_id || null,   // null = dompet lama dipertahankan
+      p_merchant:  updates.merchant || '',
+      p_note:      updates.note     || '',
+      p_method:    updates.method   || 'Tunai',
+      p_date:      updates.dateRaw  || null,     // null = tanggal lama (bukan CURRENT_DATE/UTC)
+      p_time:      updates.time     || null,
+    });
 
-    // Dulu `.single()` yang (secara kebetulan) mengubah 0 baris jadi error
-    // PGRST116. Sekarang diperiksa eksplisit supaya perlindungannya tidak
-    // hilang diam-diam kalau suatu hari diganti .maybeSingle() / .select() dihapus.
-    const updateErr = err || (data?.length ? null : notAffected('updateTransaction'));
-    if (updateErr) {
-      console.error('[useTransactions] updateTransaction FAILED:', updateErr.message);
-    } else {
-      setTransactions(prev => prev.map(t => t.id === id ? toAppTx(data[0]) : t));
+    if (err || !data) {
+      console.error('[useTransactions] update_transaction FAILED:', err?.code, err?.message);
+      return { error: err || new Error('update_transaction: tidak ada baris dikembalikan') };
     }
-    return { error: updateErr };
+    setTransactions(prev => prev.map(t => t.id === id ? toAppTx(data) : t));
+    return { error: null };
   }
 
   return { transactions, loading, error, createTransaction, deleteTransaction, updateTransaction };

@@ -15,12 +15,11 @@ import i18n from '../i18n';
 //  (buat catatan / bayar cicilan) otomatis membuat baris transaksi tertaut
 //  (punya debt_id) dan menyesuaikan saldo dompet. Karena orkestrasi lintas
 //  tabel + rollback harus terjadi di satu tempat, hook menerima "ledger"
-//  (alat dari useTransactions & useWallets) sebagai argumen ke-3:
+//  (alat dari useTransactions) sebagai argumen ke-3:
 //
 //    const { createTransaction, deleteTransaction } = useTransactions(...);
-//    const { adjustBalance } = useWallets(...);
 //    const debts = useDebts(userId, limits, {
-//      transactions, createTransaction, deleteTransaction, adjustBalance,
+//      transactions, createTransaction, deleteTransaction,
 //    });
 //
 //  PENTING: createTransaction yang di-pass HARUS versi MENTAH dari
@@ -39,9 +38,11 @@ import i18n from '../i18n';
 //  Penyaluran saldo baru ke state adalah tugas subscription realtime di
 //  useWallets, titik.
 //
-//  adjustBalance() masih dipakai di SATU tempat: deleteDebt(), yang membalik
-//  efek transaksi lama. deleteTransaction() tidak menyentuh saldo sama sekali,
-//  jadi reversal di sana memang harus menulis ke DB sendiri.
+//  Sejak RPC delete_transaction (migrasi 20260916000000), deleteTransaction
+//  JUGA membalik saldo secara atomik. Jadi deleteDebt() dan semua rollback di
+//  bawah (addPayment) cukup memanggil deleteTransaction — tidak ada lagi
+//  pembalikan saldo manual di hook ini. Dulu rollback addPayment menghapus
+//  transaksinya tanpa membalik efek record_transaction ke saldo.
 // ════════════════════════════════════════════════════════════════════
 
 // Kategori bawaan untuk transaksi hutang/piutang. Dipakai sebagai id kategori
@@ -107,7 +108,6 @@ export function useDebts(userId, limits, ledger = {}) {
     transactions = [],
     createTransaction,
     deleteTransaction,
-    adjustBalance,
   } = ledger;
 
   const [debts, setDebts]     = React.useState([]);
@@ -465,35 +465,20 @@ export function useDebts(userId, limits, ledger = {}) {
     if (!debt) return { error: new Error(i18n.t('debts.error.notFound')) };
     if (debt.is_locked) return { error: new Error(i18n.t('debts.error.locked')) };
 
-    // Balikkan tiap transaksi tertaut: koreksi saldo lalu hapus transaksinya.
-    // Menghapus transaksi otomatis meng-cascade debt_payments (FK transaction_id).
-    //
-    // Transaksi HANYA dihapus kalau saldonya berhasil dibalik. Kalau reversal
-    // gagal (mis. transaksinya ada di dompet bersama yang sudah user tinggalkan
-    // — DELETE tetap lolos RLS karena cuma cek user_id, tapi
-    // adjust_wallet_balance menolak), transaksi DIBIARKAN: baris yang masih ada
-    // tetap cocok dengan saldo dompetnya. Menghapusnya justru meninggalkan saldo
-    // yang memuat transaksi yang sudah hilang — bug yang sama dengan hapus
-    // transaksi anggota di app.jsx.
+    // Balikkan tiap transaksi tertaut. deleteTransaction (RPC delete_transaction)
+    // menghapus baris DAN membalik saldonya dalam satu transaksi Postgres, jadi
+    // tidak ada keadaan setengah jadi per transaksi: berhasil = keduanya, gagal =
+    // tidak satu pun. Menghapus transaksi otomatis meng-cascade debt_payments
+    // (FK transaction_id). Pembalikan tidak mensyaratkan peran aktif di dompet,
+    // jadi transaksi di dompet bersama yang sudah user tinggalkan tetap beres.
     const linked = transactions.filter(t => t.debt_id === debtId);
     for (const t of linked) {
-      const { error: balErr } = (await adjustBalance?.(t.wallet_id, -t.amount)) || {};   // balik efek ke saldo
-      if (balErr) {
-        logError('debts', balErr.message || String(balErr), {
-          op: 'deleteDebt', step: 'reverse_balance_failed_tx_kept', debt_id: debtId,
-          wallet_id: t.wallet_id, delta: -t.amount, transaction_id: t.id,
-        }, 'high');
-        continue;
-      }
-
       const { error: delErr } = (await deleteTransaction?.(t.id)) || {};
       if (delErr) {
-        // Saldo sudah dibalik tapi baris tidak terhapus → kembalikan saldonya
-        // supaya tetap cocok dengan transaksi yang masih ada.
-        const { error: undoErr } = (await adjustBalance?.(t.wallet_id, t.amount)) || {};
+        // Transaksi & saldonya tetap utuh (atomik) — catat (high) supaya
+        // transaksi yang tertinggal bisa dibereskan manual.
         logError('debts', delErr.message || String(delErr), {
-          op: 'deleteDebt', step: 'delete_tx_failed_balance_restored', debt_id: debtId,
-          wallet_id: t.wallet_id, transaction_id: t.id, restore_failed: !!undoErr,
+          op: 'deleteDebt', debt_id: debtId, wallet_id: t.wallet_id, transaction_id: t.id,
         }, 'high');
       }
     }

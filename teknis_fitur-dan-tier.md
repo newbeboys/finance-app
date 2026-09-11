@@ -55,10 +55,10 @@ PIN aktif?
 | Berulang | Tidak | Checkbox |
 
 **Saat simpan:**
-1. Data → Supabase via `useTransactions.createTransaction`
-2. Jika ada `wallet_id` → `adjustBalance(wallet_id, amount)`
-3. Edit: saldo lama di-reverse, saldo baru diupdate
-4. Hapus: saldo di-reverse
+1. Buat / edit / hapus masing-masing SATU RPC atomik — `record_transaction`, `update_transaction`, `delete_transaction` — yang menulis baris transaksi **dan** saldo dompet dalam satu transaksi Postgres. Klien tidak pernah menyesuaikan saldo sendiri (`adjustBalance()` dihapus dari klien 11 Sep 2026)
+2. Edit: efek lama ditarik dari dompet asal, efek baru diterapkan ke dompet tujuan
+3. Hapus: efek transaksi dibalik dari saldo dompetnya
+4. Edit/hapus hanya untuk transaksi yang dicatat user sendiri — transaksi anggota lain di dompet bersama tampil read-only
 
 **Scan Struk** (Pro only)
 - Kamera Android via Capacitor Camera plugin
@@ -95,8 +95,8 @@ PIN aktif?
 
 **Cara kerja saldo:**
 - Saldo **TIDAK** dihitung dari transaksi (bukan reconciliation otomatis)
-- Diupdate via `adjustBalance(walletId, delta)` saat transaksi dibuat/diedit/dihapus
-- `adjustBalance` baca saldo dari state React (sudah realtime), hitung `newBalance = current + delta`, tulis Supabase
+- Diupdate di server oleh RPC atomik transaksi (`record_transaction` / `update_transaction` / `delete_transaction`) — delta diturunkan dari baris transaksinya, bukan dihitung klien
+- Saldo baru sampai ke UI lewat realtime `useWallets` (nilai absolut)
 - **Keterbatasan:** Transaksi lama (sebelum `wallet_id` ditambah) tidak punya `wallet_id`, jadi saldo tidak terpengaruh
 
 **Fungsi `txForAccount`:**
@@ -445,7 +445,8 @@ t.wallet_id === account.id ||
 - `type = 'receivable'` → Piutang (uang orang lain ke kamu)
 - `type = 'payable'` → Hutang (uang kamu ke orang lain)
 - `amount` selalu positif; arah via type
-- Membuat catatan → otomatis 1 transaksi + `adjustBalance` ke dompet
+- Membuat catatan → otomatis 1 transaksi (saldo dompet ikut berubah di dalam RPC `record_transaction`)
+- Transaksi ber-`debt_id` **privat selamanya**: hanya terlihat oleh pencatatnya, sekalipun dicatat di dompet bersama (policy SELECT `transactions`, migrasi `20260916000000`)
 - Tiap cicilan (`addPayment`) → 1 transaksi + baris `debt_payments`
 - Transaksi ber-`debt_id` **dikecualikan** dari kuota 75 Basic
 - 3 tab: Piutang, Hutang, Lunas
@@ -516,9 +517,7 @@ t.wallet_id === account.id ||
 
 | Source | Lokasi | Severity | Trigger |
 |---|---|---|---|
-| `adjustBalance` | useWallets.js | high | Update saldo gagal |
-| `debts` | useDebts.js | high | adjustBalance pasca-insert catatan baru gagal |
-| `debts` | useDebts.js | high | Reversal saldo saat hapus gagal |
+| `debts` | useDebts.js | high | `delete_transaction` gagal saat hapus catatan (transaksi & saldonya tetap utuh — atomik) |
 | `recurringHelper` | recurringHelper.js | high | createTransaction gagal saat eksekusi jadwal |
 | `revenuecat-webhook` | Edge Function | medium/high | JSON tidak valid / update user_subscriptions gagal |
 | `auth-signup` | Register.jsx | high | supabase.auth.signUp() gagal |

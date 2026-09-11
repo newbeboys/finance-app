@@ -201,7 +201,7 @@ id              uuid            PRIMARY KEY
 user_id         uuid            NOT NULL, FK → auth.users
 name            text            Nama dompet (tampil di UI)
 bank            text            Nama bank/institusi (field klien: `institution`)
-balance         numeric         Saldo — diupdate via RPC atomik adjustBalance()
+balance         numeric         Saldo — diupdate di dalam RPC atomik transaksi (record/update/delete_transaction)
 type            text            'bank' | 'ewallet' | 'cash' | 'investment'
 is_primary      boolean         Maksimal satu per user
 color           text            Kode warna hex
@@ -212,7 +212,7 @@ created_at      timestamptz
 
 ⚠️ **Kolom `bank` tidak boleh diisi teks yang ikut bahasa UI.** Saat user tidak mengisi nama bank, `wallets.jsx` memakai `typeLabel(type)` — label tipe dompet versi **Bahasa Indonesia mentah** dari `ACCOUNT_TYPES`, BUKAN `typeLabelI18n()`. Kalau ikut bahasa UI, dompet yang dibuat saat UI English tersimpan `"Bank Account"` dan saat UI Indonesia `"Rekening Bank"` → nilai tidak konsisten antar-baris di database. Berlaku umum: **teks apa pun yang ditulis ke DB harus bebas bahasa UI.**
 
-**Saldo bukan dihitung:** Saldo **tidak** otomatis dari transaksi — tidak ada trigger Supabase. Diupdate via `adjustBalance(walletId, delta)` setiap transaksi dibuat/diedit/dihapus, yang sejak 11 Sep 2026 memanggil RPC atomik `adjust_wallet_balance` (satu round-trip terkunci di server) — bukan lagi SELECT+UPDATE manual dua round-trip. Detail RPC & trade-off realtime: lihat bagian "RPC Saldo Atomik" di bawah.
+**Saldo bukan dihitung:** Saldo **tidak** otomatis dari transaksi — tidak ada trigger Supabase. Diupdate di server oleh RPC transaksi yang menulis baris **dan** saldo dalam satu transaksi Postgres: `record_transaction` (buat), `update_transaction` & `delete_transaction` (ubah/hapus, sejak `20260916000000`). Klien tidak lagi menyesuaikan saldo terpisah — `useWallets.adjustBalance()` dihapus 11 Sep 2026. Detail RPC & trade-off realtime: lihat bagian "RPC Saldo Atomik" di bawah.
 
 ### Tabel `budgets`
 ```sql
@@ -428,7 +428,7 @@ Hasil audit Security Advisor Supabase menghasilkan 2 migration file tambahan. **
 Dua RPC `SECURITY DEFINER` (`search_path = public, pg_temp`, execute di-revoke dari `public, anon`, grant hanya `authenticated`) menggantikan pola SELECT-lalu-UPDATE saldo di klien yang rawan *lost update* antar-device.
 
 **`adjust_wallet_balance(p_wallet_id uuid, p_delta numeric) → numeric`** (`20260911000000`, **sudah live**)
-Satu `UPDATE wallets SET balance = balance + p_delta` terkunci; mengembalikan saldo baru. Dipakai `useWallets.adjustBalance()`, yang mempertahankan kontrak return `{ error }` (bukan throw) karena `useDebts` memperlakukan kegagalan saldo sebagai best-effort.
+Satu `UPDATE wallets SET balance = balance + p_delta` terkunci; mengembalikan saldo baru. **Sejak 11 Sep 2026 tidak dipakai klien lagi** — `useWallets.adjustBalance()` dihapus karena pola "tulis baris lalu sesuaikan saldo terpisah" adalah akar bug saldo dobel dan saldo korup di dompet bersama. RPC-nya masih ada di server (lihat catatan keamanan di bagian Task 4).
 
 **`record_transaction(p_amount, p_category, p_date, p_wallet_id, p_merchant, p_note, p_time, p_method, p_debt_id) → uuid`** (`20260911010000`, **sudah live**)
 INSERT baris `transactions` + UPDATE saldo dompet dalam **satu transaksi Postgres**, jadi tidak ada lagi jendela di mana transaksi tercatat tapi saldo belum berubah. Dipanggil dari `useTransactions.createTransaction()` (dipakai `app.jsx` lewat wrapper `handleCreateTransaction`).
@@ -438,7 +438,7 @@ Catatan penting:
 - **Kuota plan Basic TIDAK dicek di dalam RPC.** Gating tetap di `useTransactions.createTransaction()` dengan `planLimits.js` sebagai sumber tunggal; jangan duplikasi ambangnya ke SQL.
 - `amount` sudah bertanda (negatif = pengeluaran), jadi saldo cukup `balance + amount` **tanpa** `CASE WHEN type='income'`. Kolom `type` diturunkan dari tanda `amount` di dalam fungsi, supaya baris tidak bisa menyimpan `type` yang bertentangan dengan `amount`.
 - `p_date` bertipe `date` dan **wajib** dikirim klien — sengaja tidak ada fallback `CURRENT_DATE`, karena `CURRENT_DATE` di server adalah UTC dan akan salah satu hari untuk WIB (lihat bagian 2).
-- Setelah `record_transaction`, klien **tidak boleh** memanggil `adjustBalance()` lagi (dobel) — RPC sudah mengurus saldo di server.
+- Setelah `record_transaction` / `update_transaction` / `delete_transaction`, klien **tidak boleh** menyesuaikan saldo lagi (dobel) — RPC sudah mengurus saldo di server.
 
 **`patchLocalBalance()` DIHAPUS.** Sebelumnya dipakai untuk menulis delta saldo langsung ke state React sebagai optimistic update, sejajar dengan realtime subscription yang menulis nilai absolut. Dua penulis saldo itu race — urutan datang tidak terjamin, dan kalau realtime menang duluan lalu delta menyusul, saldo di layar dobel. Bug ini sudah diverifikasi manual (reproducible) dan fix-nya (menghapus patch delta, murni andalkan realtime) sudah divalidasi termasuk skenario 2x cicilan berturut-turut cepat. **Trade-off:** saldo di UI sekarang 100% bergantung koneksi realtime — kalau channel terputus (sinyal jelek, app lama di background), saldo di layar telat update sampai app dibuka ulang; data di DB sendiri tetap benar.
 
@@ -477,7 +477,7 @@ Policy `FOR ALL` lama dipecah per-perintah (pola yang sudah dipakai `debts`/`deb
 
 | | `wallets` | `transactions` |
 |---|---|---|
-| SELECT | `wallet_access_role(id) IS NOT NULL` | `user_id = uid` **OR** `wallet_access_role(wallet_id) IS NOT NULL` |
+| SELECT | `wallet_access_role(id) IS NOT NULL` | `user_id = uid` **OR** (`debt_id IS NULL` AND `wallet_access_role(wallet_id) IS NOT NULL`) — syarat `debt_id` sejak `20260916000000` |
 | INSERT | `user_id = uid` | `user_id = uid` AND role ∈ (owner, editor) |
 | UPDATE | `user_id = uid` (owner saja) | `user_id = uid` (+ WITH CHECK role ∈ owner/editor) |
 | DELETE | `user_id = uid` (owner saja) | `user_id = uid` |
@@ -492,8 +492,9 @@ Efek per role atas dompet bersama: **owner** penuh; **editor** baca + catat tran
 
 1. **Transaksi member atas nama member.** `record_transaction` menulis `user_id = auth.uid()`, bukan owner dompet — riwayat harus jelas siapa yang mencatat.
 2. **Hapus/edit transaksi SIMETRIS.** Semua orang hanya boleh menyentuh transaksi ber-`user_id` miliknya sendiri — **termasuk owner, yang TIDAK punya hak override** atas transaksi yang dicatat member. `USING` pada policy UPDATE/DELETE sengaja tanpa cabang owner.
-3. **Transaksi member tetap ada setelah dia keluar** dari dompet.
-4. **Hutang/piutang TETAP PRIVAT, tidak ikut terbagi.** Cek `p_debt_id` di `record_transaction` sengaja tetap `d.user_id = v_user_id`, bukan cek peran dompet.
+3. **Transaksi member tetap ada setelah dia keluar** dari dompet — dan tetap miliknya: dia masih boleh menghapusnya. Karena itu policy UPDATE/DELETE **sengaja tidak** dipersempit ke peran aktif (keputusan 11 Sep 2026); pembalikan saldonya ditangani `delete_transaction`/`update_transaction` tanpa mensyaratkan peran.
+4. **Hutang/piutang TETAP PRIVAT, tidak ikut terbagi.** Cek `p_debt_id` di `record_transaction` sengaja tetap `d.user_id = v_user_id`, bukan cek peran dompet. Sejak `20260916000000` ini berlaku juga untuk **transaksi tertautnya**: baris ber-`debt_id` hanya terlihat oleh pencatatnya, sekalipun dicatat di dompet bersama.
+5. **Anggota baru BOLEH melihat riwayat dompet sebelum dia bergabung** (keputusan 11 Sep 2026) — policy SELECT memang tidak memfilter tanggal. Satu-satunya pengecualian adalah #4 (transaksi hutang), yang privat selamanya.
 
 #### Sisi klien
 
@@ -503,7 +504,11 @@ Realtime `useWallets` memakai **dua binding** di satu channel: `user_id=eq.<uid>
 
 ⚠️ `useTransactions` **tidak punya realtime sama sekali** (sudah begitu sejak sebelum fitur ini) — transaksi yang dicatat member baru muncul di layar owner setelah refetch.
 
-**Tulis yang ditolak RLS = 0 baris, BUKAN error (perbaikan Task 4 Commit A, 11 Sep 2026).** Sejak `accounts`/`transactions` di klien memuat baris milik orang lain, empat jalur tulis diam-diam "berhasil" padahal tidak menyentuh apa pun: hapus transaksi anggota oleh owner (lalu `adjustBalance` tetap jalan → **saldo bergeser permanen**, terverifikasi di server), "Set utama" di dompet bersama (dompet utama milik sendiri ikut terkosongkan), hapus dompet bersama, dan `is_primary` milik owner yang terbawa ke daftar anggota (dompet teman bisa jadi default catat transaksi). Aturannya sekarang: `deleteTransaction`/`updateTransaction`/`setPrimary`/`deleteAccount` memakai `.select('id')` dan mengubah 0 baris jadi error. `toAppWallet` membawa `ownerId`/`isShared`/`role`/`canWrite` dan memaksa `primary=false` untuk dompet bersama; `writableAccounts` (milik sendiri + editor) dipakai semua picker yang menulis. `canModifyTransaction()` (`walletAccess.js`) menggerbangi edit/hapus di UI **dan** di handler `app.jsx`, karena policy UPDATE/DELETE `transactions` hanya mengecek `user_id` — bekas anggota/viewer masih lolos DELETE, sementara `adjust_wallet_balance` menolak mereka (baris hilang, saldo owner tidak dibalik; terverifikasi di server). `useDebts.deleteDebt` hanya menghapus transaksi yang saldonya berhasil dibalik. Mempersempit policy UPDATE/DELETE ke `wallet_access_role IN (owner, editor)` di server masih usulan, belum diputuskan.
+**Tulis yang ditolak RLS = 0 baris, BUKAN error (perbaikan Task 4 Commit A, 11 Sep 2026).** Sejak `accounts`/`transactions` di klien memuat baris milik orang lain, empat jalur tulis diam-diam "berhasil" padahal tidak menyentuh apa pun: hapus transaksi anggota oleh owner (lalu `adjustBalance` tetap jalan → **saldo bergeser permanen**, terverifikasi di server), "Set utama" di dompet bersama (dompet utama milik sendiri ikut terkosongkan), hapus dompet bersama, dan `is_primary` milik owner yang terbawa ke daftar anggota (dompet teman bisa jadi default catat transaksi). Aturannya sekarang: `setPrimary`/`deleteAccount` memakai `.select('id')` dan mengubah 0 baris jadi error; hapus/ubah transaksi lewat RPC `delete_transaction`/`update_transaction` yang RAISE untuk baris bukan milik pemanggil (jadi tidak pernah "sukses kosong") dan menulis saldo di dalam transaksi Postgres yang sama — `adjustBalance()` klien dihapus. `toAppWallet` membawa `ownerId`/`isShared`/`role`/`canWrite` dan memaksa `primary=false` untuk dompet bersama; `writableAccounts` (milik sendiri + editor) dipakai semua picker yang menulis. `canDeleteTransaction()` (milik sendiri) dan `canEditTransaction()` (milik sendiri + dompetnya bisa ditulis) di `walletAccess.js` menggerbangi UI **dan** handler `app.jsx`.
+
+**Bekas anggota / viewer & saldo (keputusan 11 Sep 2026).** Policy DELETE `transactions` cuma cek `user_id`, sedangkan `adjust_wallet_balance` mensyaratkan peran aktif — dulu bekas anggota bisa menghapus transaksinya tapi saldo owner tidak ikut dibalik (terverifikasi: baris hilang, saldo tetap memuat −1000). Policy **tidak** dipersempit (itu membalik keputusan #3); perbaikannya di RPC — pembalikan untuk baris milik sendiri tidak mensyaratkan peran, dan besarnya diturunkan dari baris, bukan argumen. Menaruh dana ke dompet tujuan (`update_transaction`) tetap wajib owner/editor. Terverifikasi di server (rollback): bekas anggota memindahkan + menghapus transaksinya → saldo owner kembali persis ke angka awal; owner menghapus/mengubah transaksi anggota → 42501; bekas anggota mengedit transaksi yang tetap di dompet bersama → 42501.
+
+⚠️ **Masih terbuka (belum diputuskan):** `adjust_wallet_balance` masih bisa dipanggil langsung oleh **editor** dengan delta sembarang atas dompet bersama — mengubah saldo teman tanpa jejak transaksi apa pun. Tidak ada kode klien yang memanggilnya lagi, jadi mencabut `EXECUTE`-nya dari `authenticated` tidak merusak apa pun. Hal serupa: `UPDATE transactions` langsung (lolos policy untuk baris sendiri) bisa mengubah `amount`/`wallet_id` tanpa menyesuaikan saldo.
 
 #### Catatan lain
 
@@ -575,6 +580,12 @@ Pola identik `chat_rate_limits`: satu baris per user, dikunci `FOR UPDATE` di da
 #### Hardening `wallet_members` — migrasi `20260915000000_harden_wallet_members_writes.sql` (11 Sep 2026, live)
 
 Dua jalur yang merusak invariant "owner tidak punya baris di `wallet_members`" ditutup. (1) `accept_wallet_invite` kini mengembalikan `reason:'own_wallet'` saat owner memakai kode dompetnya sendiri — dicek setelah increment counter (RETURN, bukan RAISE) dan **sebelum** menyentuh `wallet_members`, jadi kodenya tetap `active`. (2) Policy `"wallet_members: owner manages"` (FOR ALL, Task 2) **dihapus**: dengan policy itu owner — termasuk user Basic — bisa INSERT/UPDATE langsung lewat PostgREST, melewati gate Pro di `generate_wallet_invite`, menambahkan user mana pun tanpa persetujuannya, atau menulis `role='owner'` (yang oleh `wallet_access_role` dikembalikan apa adanya → hak setara owner). Sekarang `wallet_members` hanya punya policy SELECT; semua tulis lewat RPC SECURITY DEFINER, sama seperti `wallet_invites`. Terverifikasi di server (rollback): owner-accept-own-code → `own_wallet` dan kode tetap aktif; INSERT langsung (orang lain / diri sendiri) → 42501; UPDATE langsung → 0 baris; owner masih bisa SELECT anggotanya; `already_member`/`invalid_code` tidak berubah.
+
+#### Transaksi hutang privat + hapus/edit atomik — migrasi `20260916000000_private_debt_tx_and_atomic_tx_rpcs.sql` (11 Sep 2026, live)
+
+(1) Policy SELECT `transactions`: cabang anggota dompet kini mensyaratkan `debt_id IS NULL` (keputusan Task 2 #4 diperluas ke transaksi tertaut). Saat migrasi ada 20 transaksi hutang di dompet bersama yang tadinya terbaca anggota. Klien mencerminkannya lewat `sharedOrFilter(…, { excludeDebt: true })`. (2) RPC `delete_transaction(p_transaction_id) → jsonb {wallet_id, balance}` dan `update_transaction(p_transaction_id, p_amount, p_category, p_wallet_id, p_merchant, p_note, p_method, p_date, p_time) → transactions` — lihat "Bekas anggota / viewer & saldo" di bagian Task 2. `update_transaction` mengunci kedua dompet dalam urutan id (anti-deadlock); `p_date`/`p_time` NULL = nilai lama (tidak ada fallback `CURRENT_DATE`). Efek samping: rollback `useDebts.addPayment` kini ikut membalik saldo (dulu transaksinya terhapus tapi efek `record_transaction` ke saldo tertinggal).
+
+**Konsekuensi yang perlu diketahui:** transaksi hutang yang dicatat di dompet bersama tetap **menggerakkan saldo dompet itu**, tapi barisnya tidak terlihat oleh anggota lain — dari sisi mereka saldo berubah tanpa transaksi yang menjelaskan. `AddDebtModal` masih menawarkan dompet bersama ber-peran editor (`writableAccounts`).
 
 #### `leave_wallet(p_wallet_id)` & `remove_wallet_member(p_wallet_id, p_user_id)`
 

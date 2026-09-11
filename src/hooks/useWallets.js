@@ -2,7 +2,6 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../supabase';
 import { usePaywall } from '../components/PaywallModal';
-import { logError } from '../lib/errorLogger';
 import { fetchSharedMemberships, sharedOrFilter } from '../lib/walletAccess';
 
 const FALLBACK_COLORS = ["#2A6FDB","#1FA8A0","#1B8A3F","#9A6BD9","#B26A4A","#B68A3E","#5C6B4C","#C9886D"];
@@ -246,46 +245,14 @@ export function useWallets(userId, limits) {
     return { error };
   }
 
-  // Balance adjustment: SATU panggilan RPC atomik — lihat migrasi
-  // 20260911000000_add_atomic_adjust_wallet_balance.sql. Postgres yang menghitung
-  // `balance = balance + delta` di dalam satu UPDATE terkunci, jadi nilai basi tidak
-  // pernah singgah di JavaScript. Ini menggantikan pola SELECT-lalu-UPDATE lama yang
-  // rawan lost update: dua penulis bersamaan (dua device, atau tab + widget) sama-sama
-  // membaca saldo yang sama lalu saling menimpa hasil hitungan masing-masing.
-  //
-  // Kontrak return SENGAJA tetap { error } (bukan throw) seperti versi lama. Pemanggil
-  // di useDebts.js — createDebt/addPayment/deleteDebt — memperlakukan kegagalan saldo
-  // sebagai best-effort: catatan hutang yang sudah terlanjur tersimpan TIDAK boleh
-  // dibatalkan, cukup dicatat (high) untuk rekonsiliasi manual. Kalau fungsi ini
-  // melempar, throw-nya lolos ke tengah createDebt setelah baris debts + transaksi
-  // pokok commit, dan justru melewati logError yang dipasang untuk kasus itu.
-  async function adjustBalance(walletId, delta) {
-    if (!walletId || !delta) return { error: null };
-
-    // Identitas pemanggil diambil server dari auth.uid(); userId TIDAK dikirim sebagai
-    // argumen supaya tidak bisa dipalsukan. Cek kepemilikan dompet ada di dalam RPC.
-    const { data: newBalance, error } = await supabase.rpc('adjust_wallet_balance', {
-      p_wallet_id: walletId,
-      p_delta:     delta,
-    });
-
-    if (error) {
-      // Gagal update saldo = uang/data permanen terdampak → catat (high).
-      console.error('[useWallets] adjustBalance RPC FAILED:', error.code, error.message);
-      logError('adjustBalance', error.message, {
-        wallet_id: walletId, delta, code: error.code,
-      }, 'high');
-      return { error };
-    }
-
-    // Saldo baru datang dari server (otoritatif hasil UPDATE terkunci), bukan hitungan
-    // lokal — jadi state tetap benar walau ada penulis lain yang commit di sela-sela.
-    const balance = Number(newBalance);
-    setAccounts(prev => prev.map(a =>
-      a.id === walletId ? { ...a, balance } : a
-    ));
-    return { error: null, balance };
-  }
+  // adjustBalance() (penyesuaian saldo terpisah lewat RPC adjust_wallet_balance)
+  // SENGAJA DIHAPUS dari hook ini (Task 4, 11 Sep 2026). Semua perubahan saldo
+  // kini menempel pada baris transaksinya di satu RPC atomik: record_transaction,
+  // update_transaction, delete_transaction. Pola "tulis baris, lalu sesuaikan
+  // saldo terpisah" adalah akar bug saldo dobel (11 Sep) DAN saldo korup di
+  // dompet bersama (baris ditolak RLS sebagai 0 baris, adjustBalance tetap
+  // jalan). Jangan dihidupkan lagi — kalau butuh operasi saldo baru, buat RPC
+  // yang menurunkan delta dari baris datanya sendiri.
 
   // Dompet yang boleh dipakai mencatat transaksi: milik sendiri + dompet
   // bersama ber-peran editor. Dipakai semua picker dompet untuk MENULIS
@@ -293,5 +260,5 @@ export function useWallets(userId, limits) {
   // record_transaction.
   const writableAccounts = React.useMemo(() => accounts.filter(a => a.canWrite), [accounts]);
 
-  return { accounts, writableAccounts, loading, createAccount, setPrimary, deleteAccount, adjustBalance };
+  return { accounts, writableAccounts, loading, createAccount, setPrimary, deleteAccount };
 }

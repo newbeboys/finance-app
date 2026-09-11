@@ -60,29 +60,40 @@ export async function fetchSharedMemberships(userId) {
 }
 
 /**
- * Boleh-tidaknya user MENGUBAH/MENGHAPUS sebuah transaksi dari klien.
+ * Boleh-tidaknya user MENGHAPUS sebuah transaksi.
  *
- * Dua syarat, dua-duanya wajib:
- *  1. Transaksi itu dicatat user sendiri. Policy UPDATE/DELETE `transactions`
- *     hanya mengizinkan `user_id = auth.uid()` (keputusan Task 2 #2 — owner
- *     pun tidak bisa override transaksi anggota). Menulis ke baris orang lain
- *     TIDAK menghasilkan error, cuma 0 baris — dan alur hapus/edit di app.jsx
- *     lalu memanggil adjustBalance, sehingga saldo bergeser padahal
- *     transaksinya masih ada.
- *  2. Dompetnya masih bisa ditulis (milik sendiri, atau anggota ber-peran
- *     editor). Bekas anggota / viewer MASIH lolos policy DELETE (cuma cek
- *     user_id), tapi adjust_wallet_balance menolak mereka — hasilnya baris
- *     terhapus sementara saldo owner tidak ikut dibalik.
+ * Syaratnya cuma satu: transaksi itu dicatat user sendiri — cerminan RPC
+ * delete_transaction dan policy DELETE (keputusan Task 2 #2: owner pun tidak
+ * bisa menghapus transaksi anggota). Transaksi yang dicatat orang lain di
+ * dompet bersama ikut ada di daftar klien, tapi TIDAK boleh ditawari tombol
+ * hapus.
  *
- * Transaksi tanpa wallet_id (data lama) selalu boleh — tidak ada saldo dompet
- * yang ikut disentuh.
+ * Peran di dompet SENGAJA tidak dicek: bekas anggota / viewer tetap boleh
+ * menghapus transaksinya sendiri (Task 2 #3), dan delete_transaction membalik
+ * saldo tanpa mensyaratkan peran aktif (migrasi 20260916000000).
  *
- * @param {object} tx        transaksi format app (dari useTransactions)
+ * @param {object} tx     transaksi format app (dari useTransactions)
+ * @param {string} userId
+ */
+export function canDeleteTransaction(tx, userId) {
+  return !!tx && !!userId && tx.user_id === userId;
+}
+
+/**
+ * Boleh-tidaknya user MENGUBAH sebuah transaksi dari UI.
+ *
+ * Milik sendiri (sama seperti hapus) DAN dompetnya saat ini masih bisa
+ * ditulis (milik sendiri / editor). update_transaction mensyaratkan dompet
+ * TUJUAN bisa ditulis; modal edit hanya menawarkan dompet yang bisa ditulis,
+ * jadi transaksi di dompet yang aksesnya sudah hilang tidak ditawari edit —
+ * hapus lalu catat ulang di dompet sendiri.
+ *
+ * @param {object} tx
  * @param {string} userId
  * @param {object[]} accounts dompet format app (dari useWallets), dengan `canWrite`
  */
-export function canModifyTransaction(tx, userId, accounts = []) {
-  if (!tx || !userId || tx.user_id !== userId) return false;
+export function canEditTransaction(tx, userId, accounts = []) {
+  if (!canDeleteTransaction(tx, userId)) return false;
   if (!tx.wallet_id) return true;
   const wallet = accounts.find(a => a.id === tx.wallet_id);
   return !!wallet && wallet.canWrite === true;
@@ -99,9 +110,15 @@ export function canModifyTransaction(tx, userId, accounts = []) {
  * @param {string[]} sharedIds
  * @param {string} walletCol nama kolom dompet di tabel target ('id' di `wallets`,
  *                           'wallet_id' di `transactions`)
+ * @param {{excludeDebt?: boolean}} [opts] excludeDebt: cabang dompet bersama
+ *   hanya mengambil baris `debt_id IS NULL` — dipakai untuk `transactions`.
+ *   Transaksi tertaut hutang/piutang tidak pernah dibagikan ke anggota dompet
+ *   (Task 2 #4; policy SELECT sejak migrasi 20260916000000 juga begitu — ini
+ *   cerminan klien-nya, defense in depth).
  */
-export function sharedOrFilter(userId, sharedIds, walletCol) {
+export function sharedOrFilter(userId, sharedIds, walletCol, { excludeDebt = false } = {}) {
   if (!sharedIds.length) return null;
   // uuid tidak pernah mengandung koma/kurung, jadi aman digabung tanpa quoting.
-  return `user_id.eq.${userId},${walletCol}.in.(${sharedIds.join(',')})`;
+  const inShared = `${walletCol}.in.(${sharedIds.join(',')})`;
+  return `user_id.eq.${userId},${excludeDebt ? `and(${inShared},debt_id.is.null)` : inShared}`;
 }
