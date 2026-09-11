@@ -511,9 +511,9 @@ Realtime `useWallets` memakai **dua binding** di satu channel: `user_id=eq.<uid>
 
 ---
 
-### Shared Wallet — Alur Undangan, Task 3 (13 Sep 2026, sudah live)
+### Shared Wallet — Alur Undangan, Task 3 — tested end-to-end (bukan rollback), production-verified 11 Sep 2026
 
-Migrasi `20260913000000_add_wallet_invite_flow.sql`. Empat RPC baru: `generate_wallet_invite`, `accept_wallet_invite`, `leave_wallet`, `remove_wallet_member`.
+Migrasi `20260913000000_add_wallet_invite_flow.sql` + perbaikan `20260914000000_fix_accept_invite_rate_limit.sql`. Empat RPC: `generate_wallet_invite`, `accept_wallet_invite`, `leave_wallet`, `remove_wallet_member`.
 
 #### Tabel `wallet_invites` (terpisah dari `wallet_members`)
 
@@ -547,24 +547,53 @@ Pola identik `chat_rate_limits`: satu baris per user, dikunci `FOR UPDATE` di da
 
 #### `accept_wallet_invite(p_code, p_max_attempts DEFAULT 10, p_window_seconds DEFAULT 900)`
 
-- Rate limit dicek **sebelum** menyentuh `wallet_invites` sama sekali; percobaan gagal tetap menghabiskan jatah (esensi anti-brute-force).
-- Kode dicari dengan `status='active' AND expires_at > now()`; pesan error **sama persis** untuk "tidak ada", "sudah dipakai", dan "expired" — tidak membocorkan mana yang benar ke penebak (pola sama seperti `adjust_wallet_balance`).
+> ⚠️ **KONTRAK BERBEDA DARI RPC LAIN DI REPO INI — WAJIB DIBACA SEBELUM MENULIS KLIEN (Task 4).**
+> `accept_wallet_invite` **mengembalikan `jsonb`, bukan melempar exception**, untuk semua kegagalan yang diantisipasi. Jangan asumsikan dia `throw` seperti `adjust_wallet_balance`/`record_transaction`/`generate_wallet_invite`. Pemanggil **wajib memeriksa field `ok`** — `error` dari supabase-js akan `null` pada penolakan yang sah.
+> ```jsonc
+> { "ok": true,  "wallet_id": "…", "role": "editor" }
+> { "ok": false, "reason": "invalid_code" }                       // tidak ada / kedaluwarsa / sudah dipakai
+> { "ok": false, "reason": "already_member" }
+> { "ok": false, "reason": "rate_limited", "reset_at": "…" }
+> ```
+> Satu-satunya yang masih `RAISE`: **tidak ada sesi login**. Lihat "Kenapa `RETURN`, bukan `RAISE`" di bawah — bentuk ini bukan preferensi gaya, ini syarat supaya rate limiter-nya berfungsi.
+
+- Rate limit dicek **sebelum** menyentuh `wallet_invites` sama sekali; percobaan gagal tetap menghabiskan jatah (esensi anti-brute-force). `already_member` **juga** menghabiskan jatah — disengaja, supaya jalur rate-limit hanya punya satu bentuk tanpa cabang "refund" yang rawan salah-urut di kemudian hari.
+- Kode dicari dengan `status='active' AND expires_at > now()`; `reason` **sama persis** (`invalid_code`) untuk "tidak ada", "sudah dipakai", dan "expired" — tidak membocorkan mana yang benar ke penebak (pola sama seperti `adjust_wallet_balance`).
 - **MENOLAK bila pemanggil sudah anggota aktif** dompet itu — lihat "Keamanan: kenapa bukan UPSERT" di bawah.
 - Kode **sekali pakai**: begitu diterima, `status` → `'accepted'`, tidak bisa dipakai orang lain.
 - Member yang dulu `status='left'` dan menerima kode baru → rejoin dengan role dari kode yang baru dipakai (bisa beda dari role sebelumnya).
 
-**Keamanan: kenapa bukan `ON CONFLICT DO UPDATE`.** Draft awal RPC ini pakai UPSERT buta (`INSERT ... ON CONFLICT (wallet_id,user_id) DO UPDATE SET role=...`). Itu berbahaya: karena hanya ada satu kode aktif per dompet, seorang **viewer yang sudah jadi anggota** bisa menaikkan perannya sendiri ke editor hanya dengan submit ulang kode yang beredar untuk orang lain — privilege escalation. Fix: `SELECT ... FOR UPDATE` eksplisit dulu, lalu bercabang tiga arah (belum pernah jadi anggota → INSERT; `status='left'` → UPDATE jadi active; **`status='active'` → RAISE EXCEPTION**, ditolak). Perubahan role anggota aktif (kalau dibutuhkan nanti) harus lewat RPC terpisah yang jelas niatnya, bukan ditumpangkan ke jalur invite.
+**Kenapa `RETURN`, bukan `RAISE` — bug yang sudah terjadi dan terverifikasi.** Versi pertama RPC ini (migrasi `20260913000000`) menaikkan `attempt_count` lalu `RAISE EXCEPTION` beberapa baris kemudian saat kode salah. PostgREST membungkus tiap panggilan RPC dalam **satu transaksi**, jadi `RAISE` membatalkan seluruh transaksi — **termasuk increment counter yang baru saja ditulis**. Akibatnya setiap tebakan salah menghapus hitungannya sendiri, dan lockout **tidak akan pernah menyala di produksi**. Terbukti di server: 12 percobaan kode salah berturut-turut → `attempt_count` tetap `1`. Saat counter di-set manual ke 10, pesan lockout muncul normal — jadi logika ambangnya benar sejak awal, yang rusak murni persistensinya. `check_chat_rate_limit` tidak kena bug ini karena dia memang `RETURN jsonb {allowed:false}` dan tidak pernah `RAISE` di jalur penolakan; migrasi `20260914000000` menyelaraskan RPC ini ke pola yang sama.
+
+> **Aturan umum yang lahir dari sini:** di fungsi mana pun yang **menulis penghitung / jejak audit lalu menolak request** — jangan `RAISE` setelah menulis. `RAISE` = rollback = tulisan itu hilang. Pakai `RETURN` dengan nilai status. `RAISE` hanya boleh untuk kondisi yang memang tidak menyisakan apa pun untuk disimpan (mis. tidak ada sesi login), **atau** ketika rollback justru yang diinginkan — contohnya `generate_wallet_invite`, yang me-revoke kode lama lalu `RAISE` kalau gagal membuat kode unik: di situ rollback benar, karena kode lama memang harus tetap hidup kalau penggantinya gagal dibuat. `leave_wallet`/`remove_wallet_member` juga `UPDATE`-lalu-`RAISE`, tapi aman karena `RAISE`-nya hanya menyala saat `NOT FOUND`, yaitu ketika `UPDATE` menyentuh 0 baris — tidak ada tulisan yang hilang.
+
+**Keamanan: kenapa bukan `ON CONFLICT DO UPDATE`.** Draft awal RPC ini pakai UPSERT buta (`INSERT ... ON CONFLICT (wallet_id,user_id) DO UPDATE SET role=...`). Itu berbahaya: karena hanya ada satu kode aktif per dompet, seorang **viewer yang sudah jadi anggota** bisa menaikkan perannya sendiri ke editor hanya dengan submit ulang kode yang beredar untuk orang lain — privilege escalation. Fix: `SELECT ... FOR UPDATE` eksplisit dulu, lalu bercabang tiga arah (belum pernah jadi anggota → INSERT; `status='left'` → UPDATE jadi active; **`status='active'` → tolak** dengan `reason: 'already_member'`). Hasil `FOUND` disimpan ke variabel sendiri (`v_has_member_row`) karena nilainya berubah setiap ada SELECT/UPDATE berikutnya. Perubahan role anggota aktif (kalau dibutuhkan nanti) harus lewat RPC terpisah yang jelas niatnya, bukan ditumpangkan ke jalur invite.
 
 #### `leave_wallet(p_wallet_id)` & `remove_wallet_member(p_wallet_id, p_user_id)`
 
 `leave_wallet`: anggota aktif keluar atas inisiatif sendiri. Owner tidak bisa memanggilnya untuk dompetnya sendiri — dia tidak punya baris di `wallet_members` (keputusan Task 2 #1), jadi selalu jatuh ke `NOT FOUND`. `remove_wallet_member`: owner-only, mengeluarkan anggota tertentu. Keduanya set `status='left'` (bukan DELETE) — transaksi yang sudah dicatat anggota **tidak ikut terhapus**, konsisten dengan keputusan produk Task 2 #3.
 
-#### Diverifikasi di server (simulasi 2 akun test, semua di-rollback)
+#### Diverifikasi di server — 11 Sep 2026, **committed sungguhan** (bukan rollback)
 
-Owner basic ditolak generate invite; owner Pro berhasil; member accept kode pertama → `editor/active`; reuse kode yang sama (sudah `accepted`) ditolak; generate kode kedua otomatis me-revoke yang lama (`count(status='active') = 1`); **member aktif submit kode kedua untuk upgrade diam-diam ditolak, role tetap `editor`** (bukti fix UPSERT bekerja); `leave_wallet` berhasil sekali, ditolak kalau dipanggil dua kali; `remove_wallet_member` atas anggota yang sudah `left` ditolak (bukan `active`).
+Dijalankan terhadap dua akun test (`demofimance` = owner Pro, `reviewfinance32` = basic) di dompet "Mes Lampung CAA":
+
+| Uji | Hasil |
+|---|---|
+| Owner Pro generate kode | `513112`, `status=active`, expire tepat +24 jam |
+| Member accept | `wallet_members` baru `editor/active`, `invited_by` terisi; invite → `accepted` + `accepted_by`/`accepted_at`; counter naik ke 1 |
+| Reuse kode yang sama | ditolak `invalid_code` |
+| Generate ulang 2× | kode ke-2 → `revoked`, kode ke-3 → `active`; tepat satu `active` per dompet. Kode yang sudah `accepted` **tidak** ikut jadi `revoked` (klausa revoke hanya menyasar `status='active'`) |
+| Akun basic generate (di dompetnya sendiri) | ditolak "berbagi dompet khusus pengguna Pro" — lolos cek owner dulu, lalu kena gate Pro |
+| **11 kode salah berturut-turut, panggilan asli** | percobaan 1-10 → `invalid_code`, counter naik sendiri 0→10; **percobaan ke-11 → `rate_limited`** dengan `reset_at` tepat +900 detik |
+| Kode **benar** saat terkunci | tetap ditolak `rate_limited` — lockout benar-benar memproteksi, bukan sekadar pesan |
+| Counter saat terkunci | berhenti di 10, tidak naik ke 11 (jalur terkunci sengaja tidak increment) |
+| `already_member` | ditolak benar, **memakan jatah** (counter 0→1), kode tetap `active`, role tetap `editor` — tidak berubah diam-diam |
+
+Uji `leave_wallet` (berhasil sekali, ditolak kalau dipanggil dua kali) dan `remove_wallet_member` (ditolak atas anggota yang sudah `left`) diverifikasi lewat simulasi rollback sebelumnya.
 
 #### Untuk Task 4 (UI, belum dikerjakan)
 
+- **Wajib:** periksa field `ok` dari `accept_wallet_invite`, **jangan** andalkan `error` dari supabase-js — lihat kotak peringatan kontrak di atas. Petakan tiap `reason` ke pesan UI: `invalid_code` → "Kode salah atau sudah kedaluwarsa", `already_member` → "Kamu sudah jadi anggota dompet ini", `rate_limited` → tampilkan waktu dari `reset_at`.
 - **Wajib:** tampilkan status kode undangan (aktif / dipakai / kedaluwarsa) — data ada di `wallet_invites` (`status`, `expires_at`), owner bisa `SELECT` barisnya sendiri.
 - Belum ada RPC untuk mengubah role anggota aktif tanpa lewat leave+invite-ulang — kalau dibutuhkan, harus RPC baru (`set_wallet_member_role`, owner-only), bukan menumpang `accept_wallet_invite`.
 - `ON DELETE CASCADE` dari `wallets` ke `transactions` masih terbuka (lihat backlog roadmap) — belum ada guard di alur hapus dompet.
