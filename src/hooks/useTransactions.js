@@ -2,6 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../supabase';
 import { usePaywall } from '../components/PaywallModal';
+import { requireUserId } from '../lib/authIdentity';
 
 const MONTHS = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
 
@@ -90,10 +91,16 @@ export function useTransactions(userId, limits) {
       }
     }
 
+    // Identitas dari sesi aktif, bukan prop `userId` (lihat lib/authIdentity.js).
+    // Dicek SETELAH kuota supaya paywall tetap yang muncul duluan saat Basic
+    // mentok — pesan "sesi berakhir" di situ akan menyesatkan.
+    const { userId: authUserId, error: authError } = await requireUserId();
+    if (authError) return { error: authError };
+
     const { data, error: err } = await supabase
       .from('transactions')
       .insert({
-        user_id:   userId,
+        user_id:   authUserId,
         type:      tx.amount < 0 ? 'expense' : 'income',
         amount:    tx.amount,
         category:  tx.category,

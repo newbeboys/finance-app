@@ -3,6 +3,7 @@ import { supabase } from '../supabase';
 import { usePaywall } from '../components/PaywallModal';
 import { logError } from '../lib/errorLogger';
 import i18n from '../i18n';
+import { requireUserId } from '../lib/authIdentity';
 
 // ════════════════════════════════════════════════════════════════════
 //  useDebts — logic layer fitur Catatan Hutang & Piutang
@@ -260,11 +261,18 @@ export function useDebts(userId, limits, ledger = {}) {
       ? true
       : input.cash_disbursed_at_creation !== false;
 
+    // Identitas dari sesi aktif, bukan prop `userId` (lihat lib/authIdentity.js).
+    // Dicek SEBELUM insert pertama: createDebt menulis ke dua tabel berurutan
+    // (debts lalu transactions), dan gagal di tengah meninggalkan catatan
+    // hutang tanpa transaksinya.
+    const { userId: authUserId, error: authError } = await requireUserId();
+    if (authError) return { error: authError };
+
     // 1) Insert baris debts
     const { data: debtRow, error: dErr } = await supabase
       .from('debts')
       .insert({
-        user_id:     userId,
+        user_id:     authUserId,
         type:        input.type,
         person_name: input.person_name.trim(),
         note:        input.note || null,
@@ -343,6 +351,13 @@ export function useDebts(userId, limits, ledger = {}) {
       return { error: new Error(i18n.t('debts.error.paymentExceedsRemaining')) };
     }
 
+    // Identitas dari sesi aktif, bukan prop `userId` (lihat lib/authIdentity.js).
+    // Dicek SEBELUM transaksi cicilan dibuat: kalau dicek belakangan, transaksi
+    // sudah terlanjur tercatat dan saldo dompet sudah bergeser saat baris
+    // debt_payments-nya ditolak — cicilan hantu tanpa riwayat.
+    const { userId: authUserId, error: authError } = await requireUserId();
+    if (authError) return { error: authError };
+
     // 1) Transaksi cicilan tertaut
     const tx = txForEvent(debt.type, 'payment', absAmount);
     const { error: tErr, id: txId } = await createTransaction({
@@ -364,7 +379,7 @@ export function useDebts(userId, limits, ledger = {}) {
       .from('debt_payments')
       .insert({
         debt_id:        debtId,
-        user_id:        userId,
+        user_id:        authUserId,
         amount:         absAmount,
         date:           payment.date || undefined,
         note:           payment.note || null,
