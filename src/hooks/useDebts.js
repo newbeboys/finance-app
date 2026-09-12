@@ -2,7 +2,7 @@ import React from 'react';
 import { supabase } from '../supabase';
 import { usePaywall } from '../components/PaywallModal';
 import { logError } from '../lib/errorLogger';
-import { canDeleteTransaction } from '../lib/walletAccess';
+import { canDeleteOwnTransaction } from '../lib/walletAccess';
 import i18n from '../i18n';
 import { requireUserId } from '../lib/authIdentity';
 
@@ -499,8 +499,14 @@ export function useDebts(userId, limits, ledger = {}) {
     //     ditulis, tolak SEBELUM menghapus apa pun;
     //  2. kegagalan di tengah (mis. peran dicabut di antara pre-flight dan
     //     RPC) langsung menghentikan proses, dan soft-delete tidak dijalankan.
+    //  3. SENGAJA memakai canDeleteOwnTransaction, BUKAN canDeleteTransaction:
+    //     owner-override (13 Sep 2026) tidak berlaku di sini. Baris tertaut
+    //     hutang milik orang lain tidak pernah terlihat owner (filter
+    //     excludeDebt), jadi pre-flight yang memakai gerbang longgar akan
+    //     menjanjikan sesuatu yang RPC-nya tetap tolak — dan RPC memang
+    //     mengecualikan debt_id dari cabang owner.
     const linked = transactions.filter(t => t.debt_id === debtId);
-    if (linked.some(t => !canDeleteTransaction(t, userId, accounts))) {
+    if (linked.some(t => !canDeleteOwnTransaction(t, userId, accounts))) {
       return { error: new Error(i18n.t('debts.error.walletReadOnly')) };
     }
     for (const t of linked) {

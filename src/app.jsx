@@ -426,7 +426,7 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
   const {
     debts, loading: debtsLoading,
     createDebt, addPayment, markPaid, deleteDebt, getPayments,
-    // visibleAccounts: useDebts memakainya untuk canDeleteTransaction, yang
+    // visibleAccounts: useDebts memakainya untuk canDeleteOwnTransaction, yang
     // mencari dompet transaksi berdasarkan id. Dompet bersama harus ada di
     // daftar itu, kalau tidak setiap transaksi di dompet bersama dianggap
     // tidak bisa dihapus (gagal tertutup).
@@ -445,8 +445,9 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
   // Guard di depan: RPC-nya sudah menolak baris milik orang lain, tapi guard ini
   // menjaga UI tidak pernah mengirim permintaan yang pasti ditolak (transaksi
   // yang dicatat anggota lain di dompet bersama ikut ada di `transactions`).
-  // Hapus & ubah = milik sendiri + dompet asal bisa ditulis; ubah juga
-  // mensyaratkan dompet tujuan bisa ditulis (lihat canDeleteTransaction).
+  // Ubah = milik sendiri + dompet asal bisa ditulis, DAN dompet tujuan bisa
+  // ditulis (canEditTransaction). Hapus lebih longgar sejak 13 Sep 2026: milik
+  // sendiri ATAU saya owner dompetnya (canDeleteTransaction).
   //
   // WAJIB visibleAccounts, BUKAN accounts. Keduanya mencari dompet transaksi
   // lewat id lalu membaca `canWrite`. Dengan daftar milik-sendiri saja, dompet

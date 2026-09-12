@@ -195,10 +195,12 @@ export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, 
                 const color = c?.color || (isIncome ? "var(--sage)" : "var(--muted-2)");
                 const borderBottom = i < g.items.length - 1 ? "1px solid var(--line-soft)" : 0;
                 const isDeleting = deletingId === t.id;
-                // Transaksi yang dicatat orang lain di dompet bersama tampil
-                // read-only (tanpa edit/hapus). Transaksi sendiri di dompet yang
-                // hanya bisa dibaca / sudah ditinggalkan: juga read-only
-                // (keputusan 12 Sep 2026). Lihat canDeleteTransaction.
+                // Dua gerbang BERBEDA sejak 13 Sep 2026 — jangan disatukan lagi:
+                // transaksi yang dicatat orang lain di dompet bersama tidak
+                // pernah bisa DIUBAH, tapi BISA DIHAPUS kalau user adalah owner
+                // dompetnya. Transaksi sendiri di dompet yang hanya bisa dibaca /
+                // sudah ditinggalkan tetap read-only penuh (keputusan 12 Sep
+                // 2026). Lihat canDeleteTransaction vs canEditTransaction.
                 const canDelete = canDeleteTransaction(t, userId, accounts);
                 const canEdit = canEditTransaction(t, userId, accounts);
                 const openEdit = canEdit && onUpdate ? () => setEditingTx(t) : undefined;
