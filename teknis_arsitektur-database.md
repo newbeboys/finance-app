@@ -105,9 +105,9 @@ root/
 │   │   ├── 20260706000000_add_error_logs.sql
 │   │   ├── 20260716000000_add_chat_rate_limits.sql
 │   │   ├── 20260717000000_add_chat_unanswered_log.sql
-│   │   ├── 20260723000000_document_user_summary_view.sql       ← belum di-push
-│   │   ├── 20260723010000_harden_functions_search_path_and_grants.sql  ← belum di-push
-│   │   └── 20260723020000_revoke_rls_auto_enable_execute.sql   ← belum di-push
+│   │   ├── 20260723000000_document_user_summary_view.sql
+│   │   ├── 20260723010000_harden_functions_search_path_and_grants.sql
+│   │   └── 20260723020000_revoke_rls_auto_enable_execute.sql
 │   └── functions/
 │       ├── financial-chat/
 │       │   ├── index.ts, types.ts, guardrail.ts
@@ -644,12 +644,12 @@ Dijalankan terhadap dua akun test (`demofimance` = owner Pro, `reviewfinance32` 
 
 Uji `leave_wallet` (berhasil sekali, ditolak kalau dipanggil dua kali) dan `remove_wallet_member` (ditolak atas anggota yang sudah `left`) diverifikasi lewat simulasi rollback sebelumnya.
 
-#### Untuk Task 4 (UI, belum dikerjakan)
+#### Untuk Task 4 (UI) — status per 12 Sep 2026
 
-- **Wajib:** periksa field `ok` dari `accept_wallet_invite`, **jangan** andalkan `error` dari supabase-js — lihat kotak peringatan kontrak di atas. Petakan tiap `reason` ke pesan UI: `invalid_code` → "Kode salah atau sudah kedaluwarsa", `own_wallet` → "Ini kode dompetmu sendiri", `already_member` → "Kamu sudah jadi anggota dompet ini", `rate_limited` → tampilkan waktu dari `reset_at`.
-- **Wajib:** tampilkan status kode undangan (aktif / dipakai / kedaluwarsa) — data ada di `wallet_invites` (`status`, `expires_at`), owner bisa `SELECT` barisnya sendiri.
-- Belum ada RPC untuk mengubah role anggota aktif tanpa lewat leave+invite-ulang — kalau dibutuhkan, harus RPC baru (`set_wallet_member_role`, owner-only), bukan menumpang `accept_wallet_invite`.
-- `ON DELETE CASCADE` dari `wallets` ke `transactions` masih terbuka (lihat backlog roadmap) — belum ada guard di alur hapus dompet.
+- ✅ **Selesai (Commit B2).** Pemetaan `reason` → pesan UI dipusatkan di `src/components/wallets/memberErrors.js`; setiap sheet memakai tabel yang sama supaya `rate_limited` tidak berbunyi beda-beda di tiap layar. `acceptInviteCode()` di `useWalletMembers` memeriksa field `ok`, **bukan** `error` dari supabase-js.
+- ✅ **Selesai (Commit B2).** Status kode undangan (aktif / kedaluwarsa + sisa waktu) ditampilkan `InviteStatusBadge`. Catatan: kode **tidak** dimuat ulang saat panel dibuka — Task 3 sengaja tidak menyediakan RPC "ambil kode aktif", dan generate ulang otomatis me-revoke yang lama, jadi kode hanya pernah tampil sekali pada saat dibuat.
+- ⏳ Belum ada RPC untuk mengubah role anggota aktif tanpa lewat leave + invite ulang — kalau dibutuhkan, harus RPC baru (`set_wallet_member_role`, owner-only), bukan menumpang `accept_wallet_invite`.
+- ✅ **Sudah ditutup (migrasi `20260918000000`).** `ON DELETE CASCADE` dari `wallets` ke `wallet_members`/`transactions` dulu membuat penghapusan dompet menghapus keanggotaan dan transaksi orang lain diam-diam. Trigger `trigger_wallets_block_delete_with_members` (BEFORE DELETE) kini menolaknya dengan SQLSTATE `2BP01`, dan UI menonaktifkan barisnya di dropdown hapus dengan alasan tertulis. Trigger sengaja **melewatkan** cascade dari penghapusan AKUN owner (dideteksi dari `auth.users` yang sudah hilang) — tanpa itu, akun owner dompet bersama tidak akan pernah bisa dihapus.
 
 ---
 
