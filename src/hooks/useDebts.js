@@ -3,6 +3,7 @@ import { supabase } from '../supabase';
 import { usePaywall } from '../components/PaywallModal';
 import { logError } from '../lib/errorLogger';
 import i18n from '../i18n';
+import { requireUserId } from '../lib/authIdentity';
 
 // ════════════════════════════════════════════════════════════════════
 //  useDebts — logic layer fitur Catatan Hutang & Piutang
@@ -239,6 +240,14 @@ export function useDebts(userId, limits, ledger = {}) {
   //   komentar di dalam fungsi); diabaikan/dipaksa true utk type='payable'.
   // Output: { error, debtId, limitReached, cooldownUntilDate }
   async function createDebt(input) {
+    // Gerbang identitas PALING DEPAN — checkCreateAllowed() di bawah melakukan
+    // query rolling-window ke Supabase untuk akun Basic, dan sesi yang mati
+    // akan membuatnya terkirim lalu gagal 401 tanpa guna. Sekaligus menjaga
+    // createDebt tidak pernah menulis separuh jalan: fungsi ini mengisi dua
+    // tabel berurutan (debts lalu transactions).
+    const { userId: authUserId, error: authError } = await requireUserId();
+    if (authError) return { error: authError };
+
     const gate = await checkCreateAllowed();
     if (!gate.ok) {
       if (gate.reason === 'active') {
@@ -264,7 +273,7 @@ export function useDebts(userId, limits, ledger = {}) {
     const { data: debtRow, error: dErr } = await supabase
       .from('debts')
       .insert({
-        user_id:     userId,
+        user_id:     authUserId,
         type:        input.type,
         person_name: input.person_name.trim(),
         note:        input.note || null,
@@ -343,6 +352,13 @@ export function useDebts(userId, limits, ledger = {}) {
       return { error: new Error(i18n.t('debts.error.paymentExceedsRemaining')) };
     }
 
+    // Identitas dari sesi aktif, bukan prop `userId` (lihat lib/authIdentity.js).
+    // Dicek SEBELUM transaksi cicilan dibuat: kalau dicek belakangan, transaksi
+    // sudah terlanjur tercatat dan saldo dompet sudah bergeser saat baris
+    // debt_payments-nya ditolak — cicilan hantu tanpa riwayat.
+    const { userId: authUserId, error: authError } = await requireUserId();
+    if (authError) return { error: authError };
+
     // 1) Transaksi cicilan tertaut
     const tx = txForEvent(debt.type, 'payment', absAmount);
     const { error: tErr, id: txId } = await createTransaction({
@@ -364,7 +380,7 @@ export function useDebts(userId, limits, ledger = {}) {
       .from('debt_payments')
       .insert({
         debt_id:        debtId,
-        user_id:        userId,
+        user_id:        authUserId,
         amount:         absAmount,
         date:           payment.date || undefined,
         note:           payment.note || null,

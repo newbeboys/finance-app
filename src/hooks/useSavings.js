@@ -2,6 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../supabase';
 import { usePaywall } from '../components/PaywallModal';
+import { requireUserId } from '../lib/authIdentity';
 
 const MONTHS_ID = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
 const MONTH_MAP = {
@@ -94,9 +95,13 @@ export function useSavings(userId, limits) {
       return { error: null, limitReached: true };
     }
 
+    // Identitas dari sesi aktif, bukan prop `userId` (lihat lib/authIdentity.js).
+    const { userId: authUserId, error: authError } = await requireUserId();
+    if (authError) return { error: authError };
+
     // ── Kolom base schema (selalu ada) ────────────────────────────
     const basePayload = {
-      user_id:  userId,
+      user_id:  authUserId,
       name:     g.label   || '',
       icon:     g.icon    || 'star',
       color:    g.color   || '#5C6B4C',

@@ -385,17 +385,24 @@ export function AddAccountModal({ open, onClose, onCreate }) {
   const [last4, setLast4] = React.useState("");
   const [balance, setBalance] = React.useState("");
   const [color, setColor] = React.useState(ACCOUNT_COLORS[0]);
+  // Dulu submit() memanggil onCreate() TANPA await lalu langsung onClose():
+  // setiap kegagalan (sesi habis, RLS, jaringan) berakhir sebagai modal yang
+  // menutup rapi tanpa dompet yang bertambah dan tanpa pesan apa pun.
+  const [errorMsg, setErrorMsg] = React.useState("");
+  const [submitting, setSubmitting] = React.useState(false);
 
   React.useEffect(() => {
-    if (open) { setName(""); setType("bank"); setInstitution(""); setLast4(""); setBalance(""); setColor(ACCOUNT_COLORS[0]); }
+    if (open) { setName(""); setType("bank"); setInstitution(""); setLast4(""); setBalance(""); setColor(ACCOUNT_COLORS[0]); setErrorMsg(""); setSubmitting(false); }
   }, [open]);
 
   if (!open) return null;
 
   const valid = name.trim().length > 0;
-  const submit = () => {
-    if (!valid) return;
-    onCreate({
+  const submit = async () => {
+    if (!valid || submitting) return;
+    setErrorMsg("");
+    setSubmitting(true);
+    const res = await onCreate({
       id: "a" + Date.now(),
       name: name.trim(),
       type,
@@ -409,6 +416,11 @@ export function AddAccountModal({ open, onClose, onCreate }) {
       color,
       primary: false,
     });
+    setSubmitting(false);
+    // limitReached: paywall sudah dibuka hook, modal boleh menutup.
+    if (res?.limitReached) { onClose(); return; }
+    // Gagal → modal TETAP terbuka supaya isian tidak hilang dan user tahu.
+    if (res?.error) { setErrorMsg(res.error.message || t('umum.simpanGagal')); return; }
     onClose();
   };
 
@@ -471,9 +483,15 @@ export function AddAccountModal({ open, onClose, onCreate }) {
           </div>
         </div>
 
+        {errorMsg && (
+          <div role="alert" style={{ marginTop: 18, background: "color-mix(in oklch, var(--terra) 12%, transparent)", border: "1px solid color-mix(in oklch, var(--terra) 34%, transparent)", borderRadius: 10, padding: "10px 12px", fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.5 }}>
+            {errorMsg}
+          </div>
+        )}
+
         <div className="modal-actions" style={{ display: "flex", gap: 10, marginTop: 24 }}>
           <button onClick={onClose} style={{ flex: 1, padding: "11px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 12, fontSize: 13.5, color: "var(--ink-2)" }}>{t('umum.batal')}</button>
-          <button onClick={submit} disabled={!valid} style={{ flex: 2, padding: "11px", background: valid ? "var(--ink)" : "var(--line)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, cursor: valid ? "pointer" : "default" }}>{t('dompet.buatdompet')}</button>
+          <button onClick={submit} disabled={!valid || submitting} style={{ flex: 2, padding: "11px", background: (valid && !submitting) ? "var(--ink)" : "var(--line)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, cursor: (valid && !submitting) ? "pointer" : "default" }}>{submitting ? t('umum.menyimpan') : t('dompet.buatdompet')}</button>
         </div>
       </div>
     </div>
