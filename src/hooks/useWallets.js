@@ -36,8 +36,17 @@ function toAppWallet(row, userId, roleById) {
 }
 
 export function useWallets(userId, limits) {
-  const [accounts, setAccounts] = React.useState([]);
-  const [loading, setLoading]   = React.useState(true);
+  // State menyimpan SEMUA dompet yang boleh dilihat (milik + bersama). Tiga
+  // array publik di bawah diturunkan dari sini — lihat catatan "PEMISAHAN
+  // ARRAY" di dekat `return`.
+  const [allAccounts, setAccounts]   = React.useState([]);
+  const [memberCounts, setCounts]    = React.useState({});
+  const [loading, setLoading]        = React.useState(true);
+  // Dinaikkan oleh langganan realtime `wallet_members`. Menjalankan ULANG
+  // seluruh effect, bukan sekadar menambal state — dan itu memang yang
+  // dibutuhkan: kalau keanggotaan berubah, daftar id dompet bersama berubah,
+  // dan filter realtime `id=in.(...)` di bawah harus dirakit ulang juga.
+  const [reloadKey, setReloadKey]    = React.useState(0);
   const { openPaywall } = usePaywall();
   const { t } = useTranslation();
 
@@ -75,6 +84,37 @@ export function useWallets(userId, limits) {
       }
       setLoading(false);
 
+      // ── Jumlah anggota aktif per dompet MILIK SENDIRI ────────────────
+      // Dipakai dua tempat di UI: lencana "3 anggota" di kartu dompet, dan
+      // penjagaan tombol hapus (dompet yang masih punya anggota tidak boleh
+      // dihapus — trigger 20260918000000 menolaknya di server juga).
+      //
+      // Cukup query biasa, tidak perlu RPC: policy "wallet_members: read own
+      // or owned wallet" sudah mengizinkan owner membaca baris dompetnya.
+      // Yang butuh RPC hanyalah IDENTITAS anggota (email/nama ada di
+      // auth.users) — itu list_wallet_members di useWalletMembers.
+      //
+      // Kegagalan tidak dilempar, sejalan fetchSharedMemberships: tanpa angka
+      // ini UI cuma kehilangan lencana, dompetnya sendiri tetap berfungsi.
+      const ownedIds = (data || []).filter(r => r.user_id === userId).map(r => r.id);
+      if (ownedIds.length) {
+        const { data: memberRows, error: mErr } = await supabase
+          .from('wallet_members')
+          .select('wallet_id')
+          .eq('status', 'active')
+          .in('wallet_id', ownedIds);
+        if (!alive) return;
+        if (mErr) {
+          console.error('[useWallets] member count FAILED:', mErr.code, mErr.message);
+        } else {
+          const counts = {};
+          (memberRows || []).forEach(r => { counts[r.wallet_id] = (counts[r.wallet_id] || 0) + 1; });
+          setCounts(counts);
+        }
+      } else {
+        setCounts({});
+      }
+
       // Realtime UPDATE: picks up is_locked changes from lockExcessOnDowngrade/unlockAllOnUpgrade,
       // DAN setiap perubahan `balance` dari mana pun (adjust_wallet_balance /
       // record_transaction, tab lain, device lain, atau anggota dompet bersama).
@@ -98,12 +138,12 @@ export function useWallets(userId, limits) {
         ));
       };
 
-      // DUA binding, bukan satu. Dompet sendiri tetap disaring `user_id=eq.X`
+      // EMPAT binding di satu channel. Dompet sendiri disaring `user_id=eq.X`
       // supaya dompet yang dibuat SETELAH langganan ini tetap terpantau tanpa
       // perlu subscribe ulang. Dompet bersama tidak punya kolom yang bisa
-      // dipakai begitu, jadi harus daftar id eksplisit — konsekuensinya daftar
-      // itu snapshot: dompet yang dibagikan ke user SETELAH ini tidak terpantau
-      // sampai hook ini mount ulang.
+      // dipakai begitu, jadi harus daftar id eksplisit — daftar itu memang
+      // snapshot, TAPI binding ketiga di bawah membuatnya dirakit ulang setiap
+      // kali keanggotaan user berubah, jadi keterbatasannya sudah tidak ada.
       channel = supabase
         .channel(`wallets_lock:${userId}`)
         .on(
@@ -120,16 +160,59 @@ export function useWallets(userId, limits) {
         );
       }
 
+      // BINDING KETIGA — keanggotaan USER INI, di dompet mana pun.
+      //
+      // Ini yang memperbaiki keterbatasan yang dicatat di komentar binding
+      // kedua: daftar `sharedIds` dirakit sekali saat effect jalan, jadi dompet
+      // yang dibagikan ke user SETELAH itu dulu tidak terpantau sampai hook
+      // mount ulang. Sekarang setiap perubahan baris keanggotaannya sendiri
+      // menaikkan `reloadKey`, dan effect ini jalan ulang dari awal: memberships
+      // diambil lagi, query dompet diulang, dan binding `id=in.(...)` dirakit
+      // ulang dengan daftar yang baru.
+      //
+      // Mencakup tiga kejadian sekaligus: menerima undangan di device/tab lain,
+      // dikeluarkan owner (remove_wallet_member → status 'left' → dompetnya
+      // hilang dari daftar), dan keluar sendiri dari device lain. Ketiganya
+      // UPDATE/INSERT pada baris ber-`user_id` user ini, jadi satu filter cukup.
+      //
+      // Sengaja memuat ulang penuh, bukan menambal state: peran bisa ikut
+      // berubah (editor→viewer saat rejoin dengan kode lain), dan `canWrite`
+      // yang salah jauh lebih berbahaya daripada satu query ekstra — dia
+      // menentukan tombol edit/hapus transaksi mana yang ditawarkan.
+      channel = channel.on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'wallet_members', filter: `user_id=eq.${userId}` },
+        () => { if (alive) setReloadKey(k => k + 1); }
+      );
+
+      // BINDING KEEMPAT — anggota yang masuk/keluar dari dompet MILIK user ini,
+      // supaya lencana "N anggota" dan penjagaan tombol hapus ikut segar.
+      // Tidak bisa digabung dengan binding ketiga: yang itu menyaring
+      // `user_id` = user ini, sedangkan baris anggota orang lain justru
+      // ber-`user_id` orang lain. Penyaring yang cocok adalah wallet_id, dan
+      // hanya untuk dompet yang benar-benar dimiliki user ini.
+      if (ownedIds.length) {
+        channel = channel.on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'wallet_members', filter: `wallet_id=in.(${ownedIds.join(',')})` },
+          () => { if (alive) setReloadKey(k => k + 1); }
+        );
+      }
+
       channel.subscribe();
     })();
 
     // channel bisa masih null kalau effect dibersihkan sebelum fetch selesai;
     // `alive` di atas yang mencegah subscribe-nya terlanjur jalan.
     return () => { alive = false; if (channel) supabase.removeChannel(channel); };
-  }, [userId]);
+  }, [userId, reloadKey]);
 
   async function createAccount(a) {
     // ── Batas plan: tolak insert bila sudah mencapai limit ────────
+    // `accounts` (MILIK SENDIRI), bukan `visibleAccounts`: keputusan Q4 Task 4
+    // — dompet bersama tidak memakan jatah 1-dompet Basic. Sebelum pemisahan
+    // array ini, seorang Basic yang diundang ke satu dompet teman langsung
+    // kehabisan kuota dan tidak bisa membuat dompetnya sendiri.
     const maxWallets = limits?.maxWallets ?? Infinity;
     if (accounts.length >= maxWallets) {
       openPaywall(t('paywall.feature.walletTambahan'));
@@ -236,13 +319,27 @@ export function useWallets(userId, limits) {
       .from('wallets').delete()
       .eq('id', id).eq('user_id', userId)
       .select('id');
+
+    // Dompet yang masih punya anggota aktif ditolak trigger
+    // trigger_wallets_block_delete_with_members (migrasi 20260918000000).
+    // Ini penolakan yang WAJAR dan bisa ditindaklanjuti user, bukan kerusakan
+    // — jadi dibedakan lewat `reason` supaya UI bisa bilang "keluarkan anggota
+    // dulu" alih-alih pesan gagal generik.
+    //
+    // Dicocokkan lewat SQLSTATE, bukan teks pesan: teks di migrasi berbahasa
+    // Indonesia dan tidak ikut i18n, sedangkan kodenya adalah kontrak.
+    if (delErr?.code === '2BP01') {
+      console.warn('[useWallets] deleteAccount ditolak: dompet masih punya anggota aktif');
+      return { error: delErr, reason: 'has_members' };
+    }
+
     const error = delErr || (data?.length ? null : notAffected('deleteAccount'));
     if (error) {
       console.error('[useWallets] deleteAccount FAILED:', error.message);
-    } else {
-      setAccounts(prev => prev.filter(a => a.id !== id));
+      return { error, reason: 'failed' };
     }
-    return { error };
+    setAccounts(prev => prev.filter(a => a.id !== id));
+    return { error: null, reason: null };
   }
 
   // adjustBalance() (penyesuaian saldo terpisah lewat RPC adjust_wallet_balance)
@@ -254,11 +351,50 @@ export function useWallets(userId, limits) {
   // jalan). Jangan dihidupkan lagi — kalau butuh operasi saldo baru, buat RPC
   // yang menurunkan delta dari baris datanya sendiri.
 
-  // Dompet yang boleh dipakai mencatat transaksi: milik sendiri + dompet
-  // bersama ber-peran editor. Dipakai semua picker dompet untuk MENULIS
-  // (catat transaksi, transaksi berulang, hutang) — dompet viewer akan ditolak
-  // record_transaction.
-  const writableAccounts = React.useMemo(() => accounts.filter(a => a.canWrite), [accounts]);
+  // ════════════════════════════════════════════════════════════════════
+  //  PEMISAHAN ARRAY (keputusan Q1/Q2/Q4 Task 4) — BACA SEBELUM MENGUBAH
+  // ════════════════════════════════════════════════════════════════════
+  //  Hook ini mengembalikan TIGA array dompet. Memilih yang salah TIDAK akan
+  //  memunculkan error apa pun — bentuknya identik, isinya saja beda — jadi
+  //  salah pilih hanya terlihat sebagai perilaku yang aneh. Karena itu setiap
+  //  pemanggil harus sadar memilih:
+  //
+  //    accounts         MILIK SENDIRI saja.
+  //                     Untuk KUOTA dan AGREGAT UANG. Dompet bersama tidak
+  //                     boleh memakan jatah 1-dompet Basic (Q4: dompet bersama
+  //                     adalah bonus, bukan kuota), dan saldo orang lain tidak
+  //                     boleh masuk KPI/kekayaan bersih (Q2: dari sisi user,
+  //                     seolah orang lain tidak ada — mereka pun tidak
+  //                     menghitung saldo user ini).
+  //
+  //    visibleAccounts  milik + dompet bersama.
+  //                     Untuk MENAMPILKAN dan MENCARI: daftar kartu dompet,
+  //                     filter di Analitik/Budget/Laporan, dan — ini yang
+  //                     paling kritis — pencarian `find(a => a.id === ...)`
+  //                     di canEditTransaction/canDeleteTransaction. Memberi
+  //                     `accounts` ke sana akan membuat editor dompet bersama
+  //                     kehilangan tombol edit/hapus atas transaksinya sendiri,
+  //                     karena dompetnya tidak ketemu → gagal tertutup.
+  //
+  //    writableAccounts milik + dompet bersama ber-peran editor.
+  //                     Untuk setiap picker yang MENCATAT UANG (tambah
+  //                     transaksi, transaksi berulang, hutang). Dompet viewer
+  //                     akan ditolak record_transaction, jadi jangan pernah
+  //                     ditawarkan.
+  //
+  //  Jangan memakai `accounts.length` sebagai penanda "user ini Pro" — dua hal
+  //  yang berbeda. Status Pro dibaca dari useSubscription.
+  // ════════════════════════════════════════════════════════════════════
 
-  return { accounts, writableAccounts, loading, createAccount, setPrimary, deleteAccount };
+  // memberCount ditempelkan di sini (turunan), bukan di dalam toAppWallet:
+  // handler realtime saldo merakit ulang objek dompet dari payload dan akan
+  // menghapus field apa pun yang tidak berasal dari baris `wallets`.
+  const visibleAccounts = React.useMemo(
+    () => allAccounts.map(a => ({ ...a, memberCount: memberCounts[a.id] || 0 })),
+    [allAccounts, memberCounts]
+  );
+  const accounts         = React.useMemo(() => visibleAccounts.filter(a => !a.isShared), [visibleAccounts]);
+  const writableAccounts = React.useMemo(() => visibleAccounts.filter(a => a.canWrite),  [visibleAccounts]);
+
+  return { accounts, visibleAccounts, writableAccounts, loading, createAccount, setPrimary, deleteAccount };
 }

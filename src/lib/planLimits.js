@@ -21,6 +21,13 @@ export const PLAN_LIMITS = {
     reportsExportEnabled: false,
     receiptScanEnabled: false,
     aiInsightsEnabled: false,
+    // Dompet bersama: hanya Pro yang boleh MENGUNDANG. Gate sebenarnya ada di
+    // dalam RPC generate_wallet_invite (migrasi 20260913000000), karena
+    // melewatinya memberi akses permanen ke akun ketiga — beda dari kuota
+    // biasa yang habis lalu pulih. Flag ini yang menyembunyikan tombolnya
+    // supaya user Basic tidak menemui penolakan server sebagai jalan buntu.
+    // MENERIMA undangan tidak digerbangi: user Basic boleh jadi anggota.
+    sharedWalletInviteEnabled: false,
     availableFontThemes: ['modern-tech', 'soft-friendly'],
   },
   pro: {
@@ -35,6 +42,7 @@ export const PLAN_LIMITS = {
     reportsExportEnabled: true,
     receiptScanEnabled: true,
     aiInsightsEnabled: true,
+    sharedWalletInviteEnabled: true,
     availableFontThemes: 'all',
   },
 };
