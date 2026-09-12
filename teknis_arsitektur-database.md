@@ -477,7 +477,7 @@ Policy `FOR ALL` lama dipecah per-perintah (pola yang sudah dipakai `debts`/`deb
 
 | | `wallets` | `transactions` |
 |---|---|---|
-| SELECT | `wallet_access_role(id) IS NOT NULL` | `user_id = uid` **OR** (`debt_id IS NULL` AND `wallet_access_role(wallet_id) IS NOT NULL`) — syarat `debt_id` sejak `20260916000000` |
+| SELECT | `user_id = uid` **OR** `wallet_access_role(id) IS NOT NULL` — cabang pertama wajib, sejak `20260918010000` (lihat "Jebakan STABLE + RETURNING") | `user_id = uid` **OR** (`debt_id IS NULL` AND `wallet_access_role(wallet_id) IS NOT NULL`) — syarat `debt_id` sejak `20260916000000` |
 | INSERT | `user_id = uid` | `user_id = uid` AND role ∈ (owner, editor) |
 | UPDATE | `user_id = uid` (owner saja) | `user_id = uid` AND role ∈ (owner, editor) — di `USING` (dompet asal) **dan** `WITH CHECK` (dompet tujuan), sejak `20260917000000` |
 | DELETE | `user_id = uid` (owner saja) | `user_id = uid` AND role ∈ (owner, editor) sejak `20260917000000` — cerminan `delete_transaction`; penghapusan total policy ditunda (lihat keputusan #6) |
@@ -486,7 +486,36 @@ Efek per role atas dompet bersama: **owner** penuh; **editor** baca + catat tran
 
 `wallets` UPDATE/DELETE sengaja owner-only: satu-satunya tulis yang benar-benar dibutuhkan member adalah **saldo**, dan itu lewat RPC `SECURITY DEFINER` yang melewati RLS — jadi policy tidak perlu dilonggarkan untuk itu. Kedua RPC (`adjust_wallet_balance`, `record_transaction`) kini memakai `wallet_access_role(w.id) IN ('owner','editor')` menggantikan `w.user_id = v_user_id`; inilah "titik perluasan Fitur B" yang ditandai di migrasi 11 Sep.
 
-`user_id = uid` di SELECT `transactions` **dipertahankan sebagai cabang pertama**, bukan diganti: (a) setelah member keluar, dia harus tetap melihat transaksi yang dulu dia catat; (b) mayoritas mutlak baris adalah miliknya sendiri dan selesai di perbandingan murah itu tanpa memanggil helper.
+`user_id = uid` di SELECT `transactions` **dipertahankan sebagai cabang pertama**, bukan diganti: (a) setelah member keluar, dia harus tetap melihat transaksi yang dulu dia catat; (b) mayoritas mutlak baris adalah miliknya sendiri dan selesai di perbandingan murah itu tanpa memanggil helper; (c) — alasan yang baru diketahui 12 Sep 2026 dan ternyata paling menentukan — tanpa cabang itu, `INSERT ... RETURNING` pada tabel tersebut **selalu gagal**. Lihat di bawah.
+
+#### ⚠️ Jebakan: fungsi `STABLE` + `RETURNING` — policy SELECT yang hanya memanggil helper akan mematikan INSERT
+
+**Kejadian nyata (12 Sep 2026, P0 di produksi).** Selama beberapa hari, **tidak ada satu pun user** yang bisa membuat dompet — Basic maupun Pro, akun lama maupun baru. Errornya `42501 new row violates row-level security policy for table "wallets"`, yang membuat semua orang (termasuk investigasi awal) mengira ini masalah identitas `user_id` vs `auth.uid()`. Identitasnya tidak pernah salah.
+
+**Mekanismenya:**
+
+1. Klien memanggil `.insert(...).select()`; PostgREST menerjemahkannya jadi `INSERT ... RETURNING`.
+2. Pada INSERT ber-`RETURNING`, Postgres **ikut menerapkan policy SELECT** pada baris yang dikembalikan.
+3. Policy SELECT `wallets` saat itu hanya `wallet_access_role(id) IS NOT NULL`.
+4. `wallet_access_role()` bersifat **`STABLE`** dan di dalamnya melakukan `SELECT ... FROM wallets WHERE id = …`. Fungsi `STABLE` memakai snapshot query pemanggil, sehingga **tidak bisa melihat baris yang baru disisipkan oleh perintah yang sama** → `NULL` → policy gagal → INSERT ditolak.
+5. Pesan errornya identik dengan kegagalan `WITH CHECK`, jadi tidak ada petunjuk bahwa yang gagal sebenarnya policy SELECT.
+
+**Cara mengisolasinya** (kalau pola ini muncul lagi): jalankan sebagai role `authenticated` — bukan `postgres`, yang punya `rolbypassrls = true` **dan** memiliki tabelnya, sehingga tes apa pun sebagai `postgres` tidak pernah benar-benar mengevaluasi RLS. Lalu bandingkan `INSERT` polos vs `INSERT ... RETURNING`; kalau yang polos lolos dan yang ber-RETURNING gagal, ini penyebabnya.
+
+**ATURAN UNTUK SETIAP POLICY SELECT BARU (wajib):** selalu tulis cabang **perbandingan kolom langsung lebih dulu**, baru cabang keanggotaan:
+
+```sql
+USING (
+  user_id = (SELECT auth.uid())              -- WAJIB, dan wajib DULUAN
+  OR public.wallet_access_role(<kolom>) IS NOT NULL
+)
+```
+
+Cabang pertama dibaca dari baris yang sedang dikembalikan, tanpa lookup ke tabel, sehingga `RETURNING` lolos. Bonus: baris milik sendiri tidak lagi memanggil helper per baris.
+
+**Berlaku untuk perluasan Task 5+.** Kalau nanti `budgets` / `savings` / `debts` ikut dibagikan lewat `wallet_access_role()`, terapkan pola ini **sejak awal** — jangan menunggu bug yang sama muncul lagi. Keempat tabel itu saat ini aman justru karena policy SELECT-nya masih `auth.uid() = user_id` polos.
+
+**UPDATE dan DELETE tidak terkena** jebakan ini: barisnya sudah ada di snapshot, jadi helper bisa menemukannya seperti biasa. Yang khas INSERT adalah barisnya belum terlihat oleh query di dalam fungsi `STABLE`.
 
 #### Keputusan produk final (jangan diubah tanpa diskusi)
 
