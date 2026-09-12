@@ -650,6 +650,44 @@ Uji `leave_wallet` (berhasil sekali, ditolak kalau dipanggil dua kali) dan `remo
 - ✅ **Selesai (Commit B2).** Status kode undangan (aktif / kedaluwarsa + sisa waktu) ditampilkan `InviteStatusBadge`. Catatan: kode **tidak** dimuat ulang saat panel dibuka — Task 3 sengaja tidak menyediakan RPC "ambil kode aktif", dan generate ulang otomatis me-revoke yang lama, jadi kode hanya pernah tampil sekali pada saat dibuat.
 - ⏳ Belum ada RPC untuk mengubah role anggota aktif tanpa lewat leave + invite ulang — kalau dibutuhkan, harus RPC baru (`set_wallet_member_role`, owner-only), bukan menumpang `accept_wallet_invite`.
 - ✅ **Sudah ditutup (migrasi `20260918000000`).** `ON DELETE CASCADE` dari `wallets` ke `wallet_members`/`transactions` dulu membuat penghapusan dompet menghapus keanggotaan dan transaksi orang lain diam-diam. Trigger `trigger_wallets_block_delete_with_members` (BEFORE DELETE) kini menolaknya dengan SQLSTATE `2BP01`, dan UI menonaktifkan barisnya di dropdown hapus dengan alasan tertulis. Trigger sengaja **melewatkan** cascade dari penghapusan AKUN owner (dideteksi dari `auth.users` yang sudah hilang) — tanpa itu, akun owner dompet bersama tidak akan pernah bisa dihapus.
+- ⏳ **Masih terbuka.** Transaksi yang terkunci untuk viewer/bekas-anggota (keputusan #6 di atas) belum menampilkan pesan yang menjelaskan kenapa — `transactions-page.jsx` hanya menyembunyikan tombol Edit/Hapus (`onUpdate && canEdit`, `onDelete && canDelete`) tanpa teks apa pun. Dicek ulang di kode per 12 Sep 2026 saat menulis bagian ini: belum ada implementasinya.
+
+---
+
+### Shared Wallet — Task 4, Commit B1/B2: UI & Pemisahan Array Dompet (12 Sep 2026)
+
+Migrasi `20260918000000` (guard hapus dompet + `list_wallet_members`) dan `20260918010000` (perbaikan policy SELECT `wallets` vs `RETURNING`) sudah dibahas detail di atas — lihat "Jebakan STABLE + RETURNING" dan bullet migrasi `20260918000000` di status Task 4. Bagian ini mencatat sisanya: delapan pertanyaan/keputusan produk (Q1-Q8) yang jadi rujukan komentar kode di Commit B1/B2, dan pemisahan array dompet tiga-arah yang lahir dari situ.
+
+#### Katalog keputusan Q1-Q8
+
+Penomoran ini khusus sesi perencanaan Commit B1/B2 (12 Sep 2026) — **beda** dari "Keputusan produk final #1-#6" Task 2 di atas (penomoran itu milik Commit A, 11-12 Sep). Keduanya dirujuk terpisah di komentar kode; jangan disatukan jadi satu urutan.
+
+| # | Keputusan | Status / implementasi |
+|---|---|---|
+| Q1 | Dompet bersama harus ikut tampil untuk ditampilkan/difilter/dicari (kartu dompet, filter Analitik/Budget/Laporan, pencarian akses di `canEditTransaction`/`canDeleteTransaction`) | ✅ `visibleAccounts` di `useWallets` |
+| Q2 | Saldo dompet bersama TIDAK ikut agregat uang milik user sendiri (KPI, kekayaan bersih, rincian per tipe) — dari sisi user, seolah dompet orang lain tidak ada | ✅ `accounts` (milik sendiri saja) |
+| Q3 | Dompet yang masih punya anggota aktif tidak boleh dihapus, dan penjagaannya wajib di SERVER, bukan cuma tombol UI yang di-disable | ✅ trigger `wallets_block_delete_with_members` (BEFORE DELETE, migrasi `20260918000000`, SQLSTATE `2BP01`) |
+| Q4 | Dompet bersama tidak memakan jatah kuota 1-dompet Basic — dompet bersama itu bonus, bukan kuota | ✅ kuota (`maxWallets`) dicek dari `accounts.length`, bukan `visibleAccounts.length` |
+| Q5 | Sinkronisasi transaksi saat app kembali ke foreground: refetch manual, tidak bergantung realtime channel | ⏳ **Ditunda ke Task 5**, sengaja bukan scope Commit B — `useTransactions` saat itu belum punya realtime sama sekali (lihat catatan terkait di bagian Task 2 di atas), jadi digabung jadi satu desain refetch menyeluruh nanti (saldo + transaksi + member sekaligus) daripada dikerjakan setengah-setengah sekarang |
+| Q6 | Pesan error harus konsisten di semua sheet UI — `rate_limited` dkk tidak boleh berbunyi beda-beda tiap layar | ✅ `src/components/wallets/memberErrors.js`, satu tabel `reason` → kunci i18n dipakai `InviteMemberSheet`, `InviteStatusBadge`, `MemberListSheet` |
+| Q7 | Migrasi "M1" dikerjakan segera sebagai bagian Commit A, bukan ditunda — ada bug aktif yang perlu ditutup saat itu juga | ✅ Selesai & sudah di-push bersama migrasi Commit A (11 Sep 2026) |
+| Q8 | Owner downgrade Pro→Basic saat masih punya dompet bersama aktif — behavior ke dompet & anggotanya | 📋 **Backlog, belum didesain.** Sengaja ditunda, bukan blocker Commit B. Sampai didesain: tidak ada guard apa pun di jalur downgrade untuk kasus ini — wajib diperiksa ulang sebelum fitur downgrade self-service (kalau ada) dirilis. |
+
+#### Pemisahan array dompet tiga-arah (`useWallets`)
+
+Sebelum Commit B1, `useWallets` mengembalikan satu array `accounts` yang sudah bercampur dompet milik sendiri dan dompet bersama (sejak Task 2) — sumber tiga bug independen: dompet bersama ikut memakan jatah 1-dompet Basic (langgar Q4), saldo dompet orang lain masuk KPI/kekayaan bersih/rincian per tipe (langgar Q2), dan `AccountSwitcher` menampilkan total berbeda dari KPI untuk data yang sama. Commit B1 memecahnya jadi tiga:
+
+```
+accounts         = milik sendiri saja                     → kuota (maxWallets) & agregat uang (KPI, kekayaan bersih, rincian per tipe)
+visibleAccounts  = milik sendiri + dompet bersama          → tampilan (kartu dompet), filter (Analitik/Budget/Laporan), pencarian akses
+writableAccounts = milik sendiri + dompet bersama (editor)  → picker yang MENCATAT UANG (transaksi, transaksi berulang, hutang)
+```
+
+Ketiganya berbentuk identik (array objek dompet) — salah pilih **tidak melempar error**, hanya berperilaku aneh, jadi tiap pemanggil baru wajib sadar memilih yang benar (lihat komentar panjang di `useWallets.js` sebelum `return`). Yang paling gampang salah: memberi `accounts` ke `canEditTransaction`/`canDeleteTransaction` — dompetnya tidak ketemu di array itu untuk editor dompet bersama, sehingga tombol edit/hapus atas transaksinya **sendiri** ikut hilang (gagal tertutup, bukan gagal terbuka — beda arah dari bug yang biasanya dikhawatirkan).
+
+**`writableAccounts` sendiri bukan bagian dari Q1-Q8 asli** — dia sudah ada sejak Commit A (11 Sep 2026, `495a7f8`) sebagai "milik sendiri + editor" untuk mencegah dompet ber-peran viewer masuk ke picker yang menulis. Commit B1 tidak menciptakannya, hanya menata ulang derivasinya menjadi `visibleAccounts.filter(a => a.canWrite)` supaya konsisten dengan dua array baru lainnya.
+
+`accounts.length` **tidak boleh** dipakai sebagai penanda "user ini Pro" — itu hal berbeda; status Pro selalu dibaca dari `useSubscription`.
 
 ---
 

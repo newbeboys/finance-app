@@ -179,6 +179,35 @@ Kolom sensitif (`plan`, `expires_at`, RC fields) **hanya bisa diupdate** oleh Ed
 
 ---
 
+### 1.15 Hotfix: Identitas Basi di 8 Titik Tulis (12 September 2026)
+
+**Bug:** Tiap hook penulis (`useWallets.createAccount`, `useBudgets.createBudget`/`migrateFromLocalStorage`, `useSavings.createGoal`, `useDebts.createDebt`/`addPayment`, `useCustomCategories.addCustomCategory`, `useTransactions.createTransaction` sebelum pindah ke RPC) menerima `userId` sebagai **prop React** (`session.user.id` dari `app.jsx`), lalu menaruhnya langsung di payload INSERT. Prop itu state React — umurnya bisa berbeda dari token yang benar-benar dilampirkan Supabase SDK ke request (ganti akun di tab lain, sesi di-refresh). Kalau melenceng, RLS menolak dengan `42501` — pesan yang tidak menyebut identitas sama sekali, sehingga nyaris mustahil didiagnosis dari gejalanya saja (persis mirip bug P0 `wallets` SELECT-policy yang lain di hari yang sama — lihat `teknis_arsitektur-database.md` § "Jebakan STABLE + RETURNING").
+
+**Fix:** `src/lib/authIdentity.js` — `requireUserId()` mengambil identitas dari `supabase.auth.getSession()` (bukan `getUser()`, yang selalu roundtrip jaringan) di **baris pertama** tiap fungsi tulis, sebelum panggilan jaringan pertama apa pun. Sesi kosong → error `umum.sesiBerakhir` langsung, tidak pernah diteruskan sebagai `user_id` kosong. `useCustomCategories` pakai varian `requireUserIdAsText()` karena kontrak error-nya string, bukan objek `Error`.
+
+**Aturan turunan (berlaku untuk tulisan baru mana pun):**
+- Gerbang identitas harus mendahului **panggilan jaringan pertama** di fungsi itu — termasuk query kuota/cooldown yang hanya baca, karena sesi mati + request sia-sia tetap request yang terkirim. Ditemukan sebagai bug susulan sendiri (`createTransaction`/`createDebt` mengecek kuota Basic dulu, baru identitas) dan diperbaiki di commit `f003214`.
+- Tapi jangan naikkan gerbang lebih awal dari perlu: `addCustomCategory` sengaja tidak digerbangi di titik paling atas — deteksi duplikat di atasnya murni state lokal dan sah berhasil tanpa jaringan.
+- Untuk jalur ber-paywall, cek identitas diletakkan **setelah** cek kuota, supaya paywall tetap muncul duluan saat Basic mentok — bukan pesan "sesi berakhir" yang salah konteks.
+- `p_user_id` di RPC `SECURITY DEFINER` (mis. `EditCategoryModal`, `useSubscription`) **tidak termasuk** kelas bug ini — RPC itu memakai `auth.uid()` di dalam body, argumennya cuma dekorasi.
+- **Khusus `feature/shared-wallet-ui`:** jangan terapkan fix ini ke `useTransactions` — di branch itu transaksi sudah lewat RPC `record_transaction` yang menurunkan `user_id = auth.uid()` di server; payload klien tidak pernah membawa identitas sama sekali, jadi `requireUserId()` di sana cuma duplikasi percuma.
+
+**Verifikasi:** 8 titik ditelusuri mekanis (posisi `requireUserId()` vs kemunculan pertama `supabase.from`/`.rpc`), lolos user test Bagian A (7 jalur sesi normal, non-regresi) dan Bagian B (sesi habis → nol request `/rest/v1/*` yang benar-benar terkirim). Ikut tertutup di batch yang sama: `AddAccountModal`/`AddGoalModal` memanggil `onCreate()` tanpa `await` sehingga kegagalan apa pun (termasuk bug ini) berakhir senyap tanpa pesan — sekarang keduanya menunggu hasil dan menampilkan pesan merah bila gagal.
+
+---
+
+### 1.16 Hotfix: Tabrakan Nama Variabel `t` Mematikan Paywall (12 September 2026)
+
+**Bug:** Tiga gate plan Basic di `AuthenticatedApp` (`app.jsx`) — tambah dompet ke-2, goal ke-3, Scan Nota — memanggil `t('...')` sebagai fungsi terjemahan i18next. Tapi di komponen `AuthenticatedApp`, nama `t` sudah dipegang objek `TWEAKS` (`const [t, setTweakRaw] = useTweaks(defaults)`); `useTranslation()` memang ada di file yang sama tapi di komponen `App` yang berbeda. Memanggil objek sebagai fungsi melempar `t is not a function` dan mematikan layar **tepat** saat user Basic menyentuh batas plannya — `PaywallModal` tidak pernah sempat muncul, jadi bug ini juga menyembunyikan gejalanya sendiri (upgrade yang seharusnya ditawarkan malah jadi layar rusak).
+
+**Kenapa lolos lama:** masuk saat migrasi i18n klaster 2 (`2ea2615`) mengganti argumen `openPaywall(...)` dari string hardcode ke panggilan `t()`. Hanya terpicu oleh akun Basic yang sudah mentok limit, sedangkan pengembangan sehari-hari memakai akun Pro — jadi tidak pernah tersentuh manual testing.
+
+**Fix:** ganti ke `i18n.t()` — pola yang sama dengan `useDebts.js` dan `reports.jsx` untuk memanggil terjemahan di luar scope yang punya `t` dari `useTranslation()`. Nilai terjemahannya identik dengan string hardcode sebelumnya, jadi teks paywall tidak berubah.
+
+**Pelajaran umum:** nama variabel generik (`t`, `data`, `error`) yang punya makna berbeda di dua komponen dalam satu file adalah kelas bug yang gagal senyap — tidak ada type error karena JS tidak mengecek "apakah `t` ini fungsi", cuma crash saat dipanggil. Saat menambah kode baru di file dengan banyak komponen (`app.jsx` khususnya), cek dulu `t` di scope itu maksudnya apa sebelum memakainya sebagai fungsi terjemahan.
+
+---
+
 ## 2. Hal yang Diketahui Belum Sempurna / TODO
 
 ### 2.1 Kolom `spent` dan `enabled` di Tabel `budgets` Tidak Dipakai
