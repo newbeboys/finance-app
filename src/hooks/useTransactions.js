@@ -2,7 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../supabase';
 import { usePaywall } from '../components/PaywallModal';
-import { fetchSharedWalletIds, sharedOrFilter } from '../lib/walletAccess';
+import { fetchSharedWalletIds, fetchOwnedWalletIds, sharedOrFilter } from '../lib/walletAccess';
 
 const MONTHS = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
 
@@ -44,10 +44,20 @@ export function useTransactions(userId, limits) {
 
     (async () => {
       // Transaksi di dompet bersama dicatat atas nama ORANG LAIN (user_id-nya
-      // si pencatat), jadi `.eq('user_id', …)` saja akan menyembunyikannya.
-      // Disaring lewat wallet_id dompet yang boleh diakses.
-      const sharedIds = await fetchSharedWalletIds(userId);
+      // si pencatat), jadi `.eq('user_id', …)` saja akan menyembunyikannya —
+      // baik dompet ITU DIMILIKI user (owner tidak pernah punya baris di
+      // wallet_members untuk dompetnya sendiri, jadi fetchSharedWalletIds saja
+      // TIDAK CUKUP — lihat rationale fetchOwnedWalletIds di walletAccess.js)
+      // MAUPUN dompet itu dibagikan KE user (fetchSharedWalletIds). Kedua
+      // daftar digabung supaya cabang wallet_id.in.(…) di bawah mencerminkan
+      // persis policy SELECT server: wallet_access_role(wallet_id) IS NOT NULL
+      // (dompet yang saya miliki ATAU dompet yang saya jadi anggota aktifnya).
+      const [sharedIds, ownedIds] = await Promise.all([
+        fetchSharedWalletIds(userId),
+        fetchOwnedWalletIds(userId),
+      ]);
       if (!alive) return;
+      const walletIds = [...new Set([...sharedIds, ...ownedIds])];
 
       let query = supabase
         .from('transactions')
@@ -56,7 +66,7 @@ export function useTransactions(userId, limits) {
 
       // excludeDebt: transaksi hutang/piutang orang lain di dompet bersama
       // tidak pernah ikut terbaca (Task 2 #4) — cerminan policy SELECT.
-      const orFilter = sharedOrFilter(userId, sharedIds, 'wallet_id', { excludeDebt: true });
+      const orFilter = sharedOrFilter(userId, walletIds, 'wallet_id', { excludeDebt: true });
       // Cabang `user_id` tetap ada di dalam orFilter — bukan cuma wallet_id —
       // supaya transaksi yang dulu user catat di dompet yang aksesnya sudah
       // dicabut (dia keluar dari dompet itu) tetap muncul di riwayatnya sendiri.
