@@ -1,7 +1,11 @@
 ﻿import React from 'react';
 import { useTranslation } from 'react-i18next';
-// Dipakai di AuthenticatedApp, yang tidak bisa memakai useTranslation():
-// nama `t` di sana sudah dipegang objek tweaks. Lihat catatan di handleAddAcct.
+// i18n.t() dipakai LANGSUNG di dalam AuthenticatedApp. Bukan gaya, tapi
+// keharusan: di komponen itu nama `t` sudah dipakai objek TWEAKS
+// (`const [t, setTweakRaw] = useTweaks(defaults)`), jadi useTranslation()
+// tidak bisa dipasang di sana tanpa menabraknya. Pola yang sama dipakai
+// useDebts.js dan reports.jsx untuk alasan berbeda (bukan komponen React).
+// Lihat juga catatan di handleAddAcct/handleAddGoal/handleScan di bawah.
 import i18n from './i18n';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
@@ -48,6 +52,7 @@ import { validateUserStillExists, logoutDeletedUser } from './utils/sessionValid
 import { useTransactions } from './hooks/useTransactions';
 import { useSavings } from './hooks/useSavings';
 import { useWallets } from './hooks/useWallets';
+import { canEditTransaction, canDeleteTransaction } from './lib/walletAccess';
 import { useNotifications } from './hooks/useNotifications';
 import { useBudgets } from './hooks/useBudgets';
 import { useDebts } from './hooks/useDebts';
@@ -372,7 +377,13 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
   }, [fontResetToast]);
 
   // Multi-wallet state — sinkron dengan Supabase
-  const { accounts, createAccount, setPrimary, deleteAccount: _deleteAccount, adjustBalance } = useWallets(session.user.id, limits);
+  // TIGA array, bukan satu — lihat blok "PEMISAHAN ARRAY" di src/hooks/useWallets.js
+  // sebelum mengubah salah satu pemakaian di bawah. Ringkasnya:
+  //   accounts         = milik sendiri  → kuota & agregat uang (Q2, Q4)
+  //   visibleAccounts  = milik + bersama → tampilan, filter, pencarian izin (Q1)
+  //   writableAccounts = milik + editor  → setiap picker yang MENCATAT uang
+  // Memilih yang salah tidak menimbulkan error, hanya perilaku yang salah.
+  const { accounts, visibleAccounts, writableAccounts, createAccount, setPrimary, deleteAccount: _deleteAccount } = useWallets(session.user.id, limits);
 
   // Tombol "Tambah Wallet" tetap tampil + gemlock saat Basic sudah mencapai limit
   const walletAddLocked = accounts.length >= (limits?.maxWallets ?? Infinity);
@@ -380,9 +391,19 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
   const [addAcct, setAddAcct] = React.useState(false);
 
   const totalBalance = accounts.reduce((s, a) => s + a.balance, 0);
-  const deleteAccount = (id) => {
-    _deleteAccount(id);
-    setSelectedAcct(sel => sel === id ? "all" : sel);
+  // Mengembalikan hasilnya ke pemanggil (WalletsPage) alih-alih menampilkan
+  // pesan di sini: `t` di komponen ini adalah objek TWEAKS, bukan fungsi
+  // i18next — jadi tidak ada cara menyusun pesan terjemahan di scope ini.
+  // WalletsPage punya useTranslation sendiri dan sudah memiliki UI-nya.
+  //
+  // Pilihan dompet hanya direset kalau penghapusan BENAR-BENAR berhasil. Sejak
+  // trigger 20260918000000 penghapusan bisa ditolak (dompet masih punya anggota
+  // aktif); mereset saat itu akan melempar user ke "Semua dompet" seolah
+  // dompetnya sudah hilang, padahal masih ada.
+  const deleteAccount = async (id) => {
+    const res = await _deleteAccount(id);
+    if (!res?.error) setSelectedAcct(sel => sel === id ? "all" : sel);
+    return res;
   };
 
   // Notification preferences — lifted so both SettingsPage and useNotifications stay in sync
@@ -398,45 +419,55 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
   // Transactions — sinkron dengan Supabase per user yang login
   const { transactions, loading: txLoading, createTransaction, deleteTransaction, updateTransaction } = useTransactions(session.user.id, limits);
 
-  // Hutang/Piutang — butuh "ledger" dari transactions & wallets untuk orkestrasi
-  // + rollback. PENTING: pass createTransaction/deleteTransaction MENTAH (bukan
-  // wrapper handle* yang sudah adjustBalance) supaya saldo tidak dobel — useDebts
-  // memanggil adjustBalance sendiri.
+  // Hutang/Piutang — butuh "ledger" dari transactions untuk orkestrasi +
+  // rollback. create/delete di sini sudah atomik (RPC record_transaction /
+  // delete_transaction menulis baris + saldo sekaligus), jadi useDebts tidak
+  // pernah menyentuh saldo sendiri.
   const {
     debts, loading: debtsLoading,
     createDebt, addPayment, markPaid, deleteDebt, getPayments,
-  } = useDebts(session.user.id, limits, { transactions, createTransaction, deleteTransaction, adjustBalance });
+    // visibleAccounts: useDebts memakainya untuk canDeleteTransaction, yang
+    // mencari dompet transaksi berdasarkan id. Dompet bersama harus ada di
+    // daftar itu, kalau tidak setiap transaksi di dompet bersama dianggap
+    // tidak bisa dihapus (gagal tertutup).
+  } = useDebts(session.user.id, limits, { transactions, createTransaction, deleteTransaction, accounts: visibleAccounts });
 
-  // Wrapper: setelah create/update/delete transaksi, sesuaikan saldo dompet terkait.
-  // adjustBalance membaca saldo terbaru langsung dari DB, jadi aman dipanggil
-  // berturut-turut — TAPI harus di-`await` sequential (jangan Promise.all).
+  // CREATE / UPDATE / DELETE: saldo TIDAK disentuh di sini sama sekali. Ketiganya
+  // lewat RPC atomik (record_transaction 20260911010000, update_transaction &
+  // delete_transaction 20260916000000) yang menulis baris transaksi + saldo
+  // dompet dalam satu transaksi Postgres; saldo barunya sampai ke state lewat
+  // realtime useWallets. Jangan tambahkan adjustBalance() di sini (dobel di DB)
+  // ataupun penulis state berbasis delta (dobel di UI).
   const handleCreateTransaction = React.useCallback(async (tx) => {
-    const res = await createTransaction(tx);
-    if (!res.error && !res.limitReached && tx.wallet_id) {
-      await adjustBalance(tx.wallet_id, tx.amount);
-    }
-    return res;
-  }, [createTransaction, adjustBalance]); // eslint-disable-line react-hooks/exhaustive-deps
+    return await createTransaction(tx);
+  }, [createTransaction]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Guard di depan: RPC-nya sudah menolak baris milik orang lain, tapi guard ini
+  // menjaga UI tidak pernah mengirim permintaan yang pasti ditolak (transaksi
+  // yang dicatat anggota lain di dompet bersama ikut ada di `transactions`).
+  // Hapus & ubah = milik sendiri + dompet asal bisa ditulis; ubah juga
+  // mensyaratkan dompet tujuan bisa ditulis (lihat canDeleteTransaction).
+  //
+  // WAJIB visibleAccounts, BUKAN accounts. Keduanya mencari dompet transaksi
+  // lewat id lalu membaca `canWrite`. Dengan daftar milik-sendiri saja, dompet
+  // bersama tidak akan pernah ketemu → canWrite dianggap tidak ada → seorang
+  // EDITOR kehilangan tombol ubah/hapus atas transaksi yang dia catat sendiri.
   const handleUpdateTransaction = React.useCallback(async (id, updates, oldTx) => {
-    const res = await updateTransaction(id, updates);
-    if (!res.error) {
-      // Balik efek transaksi lama ke dompet lama
-      if (oldTx?.wallet_id) await adjustBalance(oldTx.wallet_id, -oldTx.amount);
-      // Terapkan efek transaksi baru ke dompet baru (bisa sama atau berbeda)
-      if (updates.wallet_id) await adjustBalance(updates.wallet_id, updates.amount);
+    const current = transactions.find(t => t.id === id) || oldTx;
+    const targetWallet = updates.wallet_id ? visibleAccounts.find(a => a.id === updates.wallet_id) : null;
+    if (!canEditTransaction(current, session.user.id, visibleAccounts) || (updates.wallet_id && !targetWallet?.canWrite)) {
+      return { error: new Error('Transaksi ini tidak bisa diubah dari akunmu') };
     }
-    return res;
-  }, [updateTransaction, adjustBalance]); // eslint-disable-line react-hooks/exhaustive-deps
+    return await updateTransaction(id, updates);
+  }, [updateTransaction, transactions, visibleAccounts]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDeleteTransaction = React.useCallback(async (id) => {
     const tx = transactions.find(t => t.id === id);
-    const res = await deleteTransaction(id);
-    if (!res.error && tx?.wallet_id) {
-      await adjustBalance(tx.wallet_id, -tx.amount); // balik efek ke saldo
+    if (!canDeleteTransaction(tx, session.user.id, visibleAccounts)) {
+      return { error: new Error('Transaksi ini tidak bisa dihapus dari akunmu') };
     }
-    return res;
-  }, [deleteTransaction, adjustBalance, transactions]); // eslint-disable-line react-hooks/exhaustive-deps
+    return await deleteTransaction(id);
+  }, [deleteTransaction, transactions, visibleAccounts]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Transaksi berulang — saat app dibuka, eksekusi jadwal yang sudah jatuh tempo.
   // Ref guard memastikan hanya jalan sekali per sesi app.
@@ -446,20 +477,26 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
     if (ranRecurringRef.current) return;
     if (!Capacitor.isNativePlatform()) return; // fitur "Transaksi Berulang" khusus Android native
     // Tunggu wallets ter-load dulu: eksekusi butuh wallet_id (kolom NOT NULL) —
-    // jalan terlalu awal (accounts kosong) akan melewati semua jadwal.
-    if (!accounts || accounts.length === 0) return;
+    // jalan terlalu awal (daftar kosong) akan melewati semua jadwal.
+    // Diperiksa lewat writableAccounts, array yang sama yang dipakai di bawah:
+    // memakai `accounts` di sini akan meloloskan guard untuk user yang HANYA
+    // punya akses dompet bersama editor (accounts kosong, tapi ada yang bisa
+    // ditulis) — dan sebaliknya menahan yang seharusnya jalan.
+    if (writableAccounts.length === 0) return;
     ranRecurringRef.current = true;
     (async () => {
       try {
         // handleCreateTransaction (bukan createTransaction mentah) supaya saldo
         // dompet ikut menyesuaikan — konsisten dengan transaksi manual.
-        const done = await checkRecurringTransactions(handleCreateTransaction, accounts);
+        // writableAccounts, bukan accounts: fallback resolveWalletId (dompet
+        // utama / dompet pertama) tidak boleh jatuh ke dompet bersama viewer.
+        const done = await checkRecurringTransactions(handleCreateTransaction, writableAccounts);
         if (done.length) {
           setRecurringToasts(done.map((d, i) => ({ ...d, id: `${Date.now()}-${i}` })));
         }
       } catch {}
     })();
-  }, [accounts]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [writableAccounts]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Budgets — Supabase
   const { budgets, createBudget, updateBudget, deleteBudget } = useBudgets(session.user.id, limits);
@@ -494,7 +531,11 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
   const handleDeleteCustomCategory = React.useCallback((id) => deleteCustomCategory(id, subscription.isPro), [deleteCustomCategory, subscription.isPro]);
 
   // Notifications
-  const { notifications, unreadCount, markAllRead, markRead, cleanupExpired } = useNotifications(transactions, notifSubs, budgets, debts, accounts);
+  // visibleAccounts: notifikasi budget memakai getBudgetSpent, yang menyaring
+  // transaksi per dompet. Budget boleh menargetkan dompet bersama (Q1), jadi
+  // daftarnya harus ikut memuatnya — kalau tidak, budget di dompet bersama
+  // tidak pernah memicu notifikasi.
+  const { notifications, unreadCount, markAllRead, markRead, cleanupExpired } = useNotifications(transactions, notifSubs, budgets, debts, visibleAccounts);
 
   // Savings goals — Supabase
   const { goals, createGoal, deleteGoal, depositToGoal } = useSavings(session.user.id, limits);
@@ -650,14 +691,20 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
   // ── Gate fitur (Basic vs Pro) — pre-check di tombol pemicu ─────────
   // Wallet/goal: cek limit SEBELUM membuka form supaya form tak terbuka
   // sia-sia (hook tetap punya guard otoritatif sebagai jaring pengaman).
-  // PENTING — kenapa i18n.t() dan bukan t():
-  // di komponen ini `t` adalah objek TWEAKS (`const [t, setTweakRaw] =
-  // useTweaks(defaults)`), BUKAN fungsi terjemahan. useTranslation() memang
-  // dipanggil di file ini, tapi di komponen App, bukan di sini. Memanggil
-  // `t('...')` di scope ini melempar "t is not a function" dan mematikan
-  // layar — tepat pada saat user Basic menyentuh batas plannya, sehingga
-  // paywall-nya tidak pernah sempat muncul.
-  // Jangan mengganti i18n.t() kembali menjadi t() di ketiga tempat ini.
+  // PERBAIKAN BUG (ditemukan independen di dua tempat — Task 4 & hotfix
+  // terpisah, keduanya berujung fix yang sama): ketiga gate di bawah dulu
+  // memanggil `t('...')`. Di komponen ini `t` adalah objek TWEAKS
+  // (`const [t, setTweakRaw] = useTweaks(defaults)`), BUKAN fungsi i18next —
+  // useTranslation() memang dipanggil di file ini, tapi di komponen App,
+  // bukan di sini. Ketiganya melempar "t is not a function" dan membuat layar
+  // putih, tepat saat user Basic menyentuh batas plannya (tambah dompet ke-2,
+  // goal ke-3, scan nota) — paywall-nya tidak pernah sempat muncul. Lolos lama
+  // karena hanya terpicu akun Basic yang sudah mentok, sedangkan pengembangan
+  // dilakukan dengan akun Pro. i18n.t() adalah fungsi yang benar di scope ini.
+  // JANGAN mengganti i18n.t() kembali menjadi t() di ketiga tempat ini.
+  //
+  // `accounts` di handleAddAcct = dompet MILIK SENDIRI (Q4): dompet bersama
+  // tidak boleh ikut menghabiskan jatah 1-dompet Basic.
   const handleAddAcct = React.useCallback(() => {
     if (accounts.length >= (limits?.maxWallets ?? Infinity)) { openPaywall(i18n.t('paywall.feature.walletTambahan')); return; }
     setAddAcct(true);
@@ -704,7 +751,11 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
             theme={t.theme}
             onTheme={() => setTweak("theme", t.theme === "dark" ? "light" : "dark")}
             onAdd={() => setModal(true)}
-            accounts={accounts}
+            // Pemilih dompet memuat dompet bersama (Q1) supaya bisa dipakai
+            // memfilter dashboard, tapi angka totalnya datang dari totalBalance
+            // (milik sendiri, Q2) — bukan dijumlah dari daftar ini.
+            accounts={visibleAccounts}
+            totalBalance={totalBalance}
             selectedAcct={selectedAcct}
             onSelectAcct={setSelectedAcct}
             onAddAcct={handleAddAcct}
@@ -732,31 +783,34 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
 
             <TransactionsCard onAdd={() => setModal(true)} onScan={handleScan} scanLocked={!limits.receiptScanEnabled} limit={8} onSeeAll={() => setActive("transactions")} transactions={transactions} loading={txLoading} customCategories={customCategories} />
             <SavingsCard goals={goals} onManage={() => setActive("savings")} />
-            <BudgetsCard onManage={() => setActive("budgets")} transactions={transactions} budgets={budgets} customCategories={customCategories} accounts={accounts} />
+            <BudgetsCard onManage={() => setActive("budgets")} transactions={transactions} budgets={budgets} customCategories={customCategories} accounts={visibleAccounts} />
             <DebtsCard debts={debts} onManage={() => setActive("debts")} />
             <WeeklySummaryCard transactions={transactions} />
           </div>
         )}
 
-        {active === "budgets" && <BudgetsPage transactions={transactions} budgets={budgets} onAdd={createBudget} onUpdate={updateBudget} onDelete={deleteBudget} customCategories={customCategories} onCreateCustom={addCustomCategory} onDeleteCustom={handleDeleteCustomCategory} isPro={subscription.isPro} isBasicAtMax={isBasicAtMax} userId={session.user.id} accounts={accounts} />}
+        {active === "budgets" && <BudgetsPage transactions={transactions} budgets={budgets} onAdd={createBudget} onUpdate={updateBudget} onDelete={deleteBudget} customCategories={customCategories} onCreateCustom={addCustomCategory} onDeleteCustom={handleDeleteCustomCategory} isPro={subscription.isPro} isBasicAtMax={isBasicAtMax} userId={session.user.id} accounts={visibleAccounts} />}
 
         {active === "wallets" && (
-          <WalletsPage accounts={accounts} onAdd={handleAddAcct} onSetPrimary={setPrimary} onDelete={deleteAccount} transactions={transactions} addLocked={walletAddLocked} customCategories={customCategories} />
+          <WalletsPage accounts={visibleAccounts} onAdd={handleAddAcct} onSetPrimary={setPrimary} onDelete={deleteAccount} transactions={transactions} addLocked={walletAddLocked} customCategories={customCategories}
+            userId={session.user.id}
+            canInvite={!!limits?.sharedWalletInviteEnabled}
+            onNeedPro={() => openPaywall(i18n.t('paywall.feature.dompetBersama'))} />
         )}
 
-        {active === "reports" && <ReportsPage transactions={transactions} customCategories={customCategories} canExport={limits.reportsExportEnabled} accounts={accounts} />}
+        {active === "reports" && <ReportsPage transactions={transactions} customCategories={customCategories} canExport={limits.reportsExportEnabled} accounts={visibleAccounts} />}
 
-        {active === "analytics" && <AnalyticsPage transactions={transactions} customCategories={customCategories} accounts={accounts} limits={limits} />}
+        {active === "analytics" && <AnalyticsPage transactions={transactions} customCategories={customCategories} accounts={visibleAccounts} limits={limits} />}
 
         {active === "savings" && (
           <SavingsPage goals={goals} onAdd={handleAddGoal} onDeposit={setDepositGoal} onDelete={deleteGoal} />
         )}
 
         {active === "transactions" && (
-          <TransactionsPage accounts={accounts} onAdd={() => setModal(true)} onScan={handleScan} scanLocked={!limits.receiptScanEnabled} transactions={transactions} loading={txLoading} onDelete={handleDeleteTransaction} onUpdate={handleUpdateTransaction} customCategories={customCategories} onCreateCustom={addCustomCategory} onDeleteCustom={handleDeleteCustomCategory} isPro={subscription.isPro} isBasicAtMax={isBasicAtMax} userId={session.user.id} />
+          <TransactionsPage accounts={visibleAccounts} onAdd={() => setModal(true)} onScan={handleScan} scanLocked={!limits.receiptScanEnabled} transactions={transactions} loading={txLoading} onDelete={handleDeleteTransaction} onUpdate={handleUpdateTransaction} customCategories={customCategories} onCreateCustom={addCustomCategory} onDeleteCustom={handleDeleteCustomCategory} isPro={subscription.isPro} isBasicAtMax={isBasicAtMax} userId={session.user.id} />
         )}
 
-        {active === "settings" && <SettingsPage t={t} setTweak={setTweak} user={session.user} notifSubs={notifSubs} onToggleNotifSub={toggleNotifSub} subscription={subscription} revenueCat={revenueCat} accounts={accounts} />}
+        {active === "settings" && <SettingsPage t={t} setTweak={setTweak} user={session.user} notifSubs={notifSubs} onToggleNotifSub={toggleNotifSub} subscription={subscription} revenueCat={revenueCat} accounts={writableAccounts} />}
 
         {active === "debts" && (
           <DebtsPage
@@ -767,7 +821,7 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
             markPaid={markPaid}
             deleteDebt={deleteDebt}
             getPayments={getPayments}
-            wallets={accounts}
+            wallets={writableAccounts}
             isPro={subscription.isPro}
           />
         )}
@@ -775,7 +829,7 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
         {active !== "dashboard" && active !== "budgets" && active !== "wallets" && active !== "reports" && active !== "analytics" && active !== "savings" && active !== "transactions" && active !== "settings" && active !== "debts" && <Placeholder section={active} />}
       </main>
 
-      <AddTransactionModal open={modal} onClose={closeAddModal} onSave={handleCreateTransaction} accounts={accounts} customCategories={customCategories} onCreateCustom={addCustomCategory} onDeleteCustom={handleDeleteCustomCategory} prefill={scanPrefill} notice={scanNotice} previewImage={scanPreview} isPro={subscription.isPro} isBasicAtMax={isBasicAtMax} userId={session.user.id} />
+      <AddTransactionModal open={modal} onClose={closeAddModal} onSave={handleCreateTransaction} accounts={writableAccounts} customCategories={customCategories} onCreateCustom={addCustomCategory} onDeleteCustom={handleDeleteCustomCategory} prefill={scanPrefill} notice={scanNotice} previewImage={scanPreview} isPro={subscription.isPro} isBasicAtMax={isBasicAtMax} userId={session.user.id} />
       <ScanStrukSheet open={scanOpen} onClose={() => setScanOpen(false)} onResult={handleScanResult} />
       <AddAccountModal open={addAcct} onClose={() => setAddAcct(false)} onCreate={createAccount} />
       <AddGoalModal open={addGoal} onClose={() => setAddGoal(false)} onCreate={createGoal} />

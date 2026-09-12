@@ -2,6 +2,7 @@ import React from 'react';
 import { supabase } from '../supabase';
 import { usePaywall } from '../components/PaywallModal';
 import { logError } from '../lib/errorLogger';
+import { canDeleteTransaction } from '../lib/walletAccess';
 import i18n from '../i18n';
 import { requireUserId } from '../lib/authIdentity';
 
@@ -16,17 +17,35 @@ import { requireUserId } from '../lib/authIdentity';
 //  (buat catatan / bayar cicilan) otomatis membuat baris transaksi tertaut
 //  (punya debt_id) dan menyesuaikan saldo dompet. Karena orkestrasi lintas
 //  tabel + rollback harus terjadi di satu tempat, hook menerima "ledger"
-//  (alat dari useTransactions & useWallets) sebagai argumen ke-3:
+//  (alat dari useTransactions) sebagai argumen ke-3:
 //
 //    const { createTransaction, deleteTransaction } = useTransactions(...);
-//    const { adjustBalance } = useWallets(...);
 //    const debts = useDebts(userId, limits, {
-//      transactions, createTransaction, deleteTransaction, adjustBalance,
+//      transactions, createTransaction, deleteTransaction,
+//      accounts,   // dari useWallets — gerbang peran di deleteDebt
 //    });
 //
 //  PENTING: createTransaction yang di-pass HARUS versi MENTAH dari
-//  useTransactions (yang TIDAK ikut menyesuaikan saldo). Penyesuaian saldo
-//  dilakukan hook ini sendiri via adjustBalance — supaya saldo tidak dobel.
+//  useTransactions, BUKAN wrapper handleCreateTransaction di app.jsx — wrapper
+//  itu ikut menyelaraskan saldo di state, jadi kalau dipakai di sini saldonya
+//  dobel di UI.
+//
+//  Sejak RPC record_transaction (migrasi 20260911010000), createTransaction
+//  SUDAH menyesuaikan saldo dompet di database secara atomik (INSERT transaksi
+//  + UPDATE saldo dalam satu transaksi Postgres). Jadi setelah createTransaction,
+//  hook ini TIDAK boleh menyentuh saldo lagi — sama sekali:
+//    - adjustBalance()      → dobel di DATABASE
+//    - penulis state delta  → dobel di UI (saldo state jadi 2x delta), karena
+//                             realtime useWallets sudah mengirim saldo absolut
+//                             yang baru dan urutannya tidak dijamin.
+//  Penyaluran saldo baru ke state adalah tugas subscription realtime di
+//  useWallets, titik.
+//
+//  Sejak RPC delete_transaction (migrasi 20260916000000), deleteTransaction
+//  JUGA membalik saldo secara atomik. Jadi deleteDebt() dan semua rollback di
+//  bawah (addPayment) cukup memanggil deleteTransaction — tidak ada lagi
+//  pembalikan saldo manual di hook ini. Dulu rollback addPayment menghapus
+//  transaksinya tanpa membalik efek record_transaction ke saldo.
 // ════════════════════════════════════════════════════════════════════
 
 // Kategori bawaan untuk transaksi hutang/piutang. Dipakai sebagai id kategori
@@ -92,7 +111,7 @@ export function useDebts(userId, limits, ledger = {}) {
     transactions = [],
     createTransaction,
     deleteTransaction,
-    adjustBalance,
+    accounts = [],
   } = ledger;
 
   const [debts, setDebts]     = React.useState([]);
@@ -321,16 +340,11 @@ export function useDebts(userId, limits, ledger = {}) {
       return { error: tErr };
     }
 
-    // 4) Sesuaikan saldo dompet (best-effort; kegagalan tidak membatalkan catatan).
-    //    Catatan sudah tersimpan + transaksi pokok sudah dibuat, tapi saldo dompet
-    //    jadi tidak sinkron → penting dicatat (high) untuk rekonsiliasi manual.
-    const { error: balErr } = (await adjustBalance?.(input.wallet_id, tx.amount)) || {};
-    if (balErr) {
-      logError('debts', balErr.message || String(balErr), {
-        op: 'createDebt', debt_id: debtRow.id, wallet_id: input.wallet_id,
-        delta: tx.amount, type: input.type,
-      }, 'high');
-    }
+    // 4) Saldo dompet TIDAK disentuh di sini sama sekali. createTransaction() di
+    //    langkah 2 menulis lewat RPC record_transaction() yang meng-INSERT
+    //    transaksi + meng-UPDATE saldo dalam satu transaksi Postgres, dan
+    //    subscription realtime di useWallets yang menyalurkan saldo barunya ke
+    //    state. Menambah penulis state kedua di sini (delta) = saldo dobel di UI.
 
     // 5) State lokal
     setDebts(prev => [toAppDebt(debtRow), ...prev]);
@@ -413,8 +427,10 @@ export function useDebts(userId, limits, ledger = {}) {
       return { error: uErr };
     }
 
-    // 4) Saldo dompet (best-effort)
-    await adjustBalance?.(debt.wallet_id, tx.amount);
+    // 4) Saldo dompet sudah diubah atomik oleh createTransaction() di langkah 1
+    //    (RPC record_transaction), dan realtime useWallets yang menyalurkannya ke
+    //    state. Jangan menyentuh saldo di sini — baik adjustBalance() (dobel di DB)
+    //    maupun penulis state berbasis delta (dobel di UI).
 
     // 5) State lokal — termasuk lastPaymentDate (untuk banner telat bayar §7)
     const payDate = payRow.date || null;
@@ -468,20 +484,36 @@ export function useDebts(userId, limits, ledger = {}) {
     if (!debt) return { error: new Error(i18n.t('debts.error.notFound')) };
     if (debt.is_locked) return { error: new Error(i18n.t('debts.error.locked')) };
 
-    // Balikkan tiap transaksi tertaut: koreksi saldo lalu hapus transaksinya.
-    // Menghapus transaksi otomatis meng-cascade debt_payments (FK transaction_id).
+    // Balikkan tiap transaksi tertaut. deleteTransaction (RPC delete_transaction)
+    // menghapus baris DAN membalik saldonya dalam satu transaksi Postgres, jadi
+    // tidak ada keadaan setengah jadi per transaksi: berhasil = keduanya, gagal =
+    // tidak satu pun. Menghapus transaksi otomatis meng-cascade debt_payments
+    // (FK transaction_id).
+    //
+    // Sejak 12 Sep 2026 delete_transaction mensyaratkan dompetnya bisa ditulis
+    // (owner/editor). Catatan hutang TIDAK boleh di-soft-delete selama ada
+    // transaksi tertaut yang tertinggal — kalau tidak, transaksinya tetap
+    // menempel di saldo dompet bersama tapi catatannya hilang dari daftar
+    // (dan transaksi hutang tidak terlihat owner). Karena itu:
+    //  1. pre-flight: kalau ada satu saja dompet tertaut yang tidak bisa
+    //     ditulis, tolak SEBELUM menghapus apa pun;
+    //  2. kegagalan di tengah (mis. peran dicabut di antara pre-flight dan
+    //     RPC) langsung menghentikan proses, dan soft-delete tidak dijalankan.
     const linked = transactions.filter(t => t.debt_id === debtId);
+    if (linked.some(t => !canDeleteTransaction(t, userId, accounts))) {
+      return { error: new Error(i18n.t('debts.error.walletReadOnly')) };
+    }
     for (const t of linked) {
-      const { error: balErr } = (await adjustBalance?.(t.wallet_id, -t.amount)) || {};   // balik efek ke saldo
-      if (balErr) {
-        // Reversal saldo gagal → saldo dompet bisa tertinggal salah setelah hapus
-        // catatan. Catat (high) supaya bisa dikoreksi manual.
-        logError('debts', balErr.message || String(balErr), {
-          op: 'deleteDebt', debt_id: debtId, wallet_id: t.wallet_id,
-          delta: -t.amount, transaction_id: t.id,
+      const { error: delErr } = (await deleteTransaction?.(t.id)) || {};
+      if (delErr) {
+        // Transaksi ini & saldonya tetap utuh (atomik); yang sebelumnya
+        // sudah terhapus tetap terhapus. Catat (high) supaya bisa dibereskan
+        // manual, dan JANGAN soft-delete catatannya.
+        logError('debts', delErr.message || String(delErr), {
+          op: 'deleteDebt', debt_id: debtId, wallet_id: t.wallet_id, transaction_id: t.id,
         }, 'high');
+        return { error: new Error(i18n.t('debts.error.walletReadOnly')) };
       }
-      await deleteTransaction?.(t.id);
     }
 
     // Soft delete baris debts (jejak created_at tetap untuk hitungan cooldown)

@@ -7,6 +7,7 @@ import { AddTransactionModal } from './transactions';
 import { LockBadge } from './components/PaywallModal';
 import { resolveCategory, categoryLabel } from './category-field';
 import { MonthYearPicker } from './components/MonthYearPicker';
+import { canEditTransaction, canDeleteTransaction } from './lib/walletAccess';
 
 export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, transactions: txProp, loading = false, onDelete, onUpdate, customCategories = [], onCreateCustom, onDeleteCustom, isPro = false, isBasicAtMax = false, userId }) {
   const { t: tr, i18n } = useTranslation();
@@ -27,6 +28,8 @@ export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, 
   const [pickerOpen, setPickerOpen] = React.useState(false);
   // Filter dompet — pola sama seperti AnalyticsPage: default "all", state lokal.
   const [selectedWalletId, setSelectedWalletId] = React.useState("all");
+  // Modal edit hanya boleh menawarkan dompet yang bisa ditulis (bukan viewer).
+  const writableAccounts = React.useMemo(() => accounts.filter(a => a.canWrite), [accounts]);
 
   // Edge case: dompet yang dipilih dihapus → fallback ke "all" tanpa error
   // (pola sama seperti AnalyticsPage).
@@ -192,23 +195,31 @@ export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, 
                 const color = c?.color || (isIncome ? "var(--sage)" : "var(--muted-2)");
                 const borderBottom = i < g.items.length - 1 ? "1px solid var(--line-soft)" : 0;
                 const isDeleting = deletingId === t.id;
+                // Transaksi yang dicatat orang lain di dompet bersama tampil
+                // read-only (tanpa edit/hapus). Transaksi sendiri di dompet yang
+                // hanya bisa dibaca / sudah ditinggalkan: juga read-only
+                // (keputusan 12 Sep 2026). Lihat canDeleteTransaction.
+                const canDelete = canDeleteTransaction(t, userId, accounts);
+                const canEdit = canEditTransaction(t, userId, accounts);
+                const openEdit = canEdit && onUpdate ? () => setEditingTx(t) : undefined;
+                const editCursor = openEdit ? "pointer" : "default";
 
                 return (
                   <React.Fragment key={t.id}>
                     {/* ── Mobile compact row ── */}
                     <div className="tx-row-mobile"
                       style={{ alignItems: "center", gap: 10, padding: "12px 2px", borderBottom }}>
-                      <span onClick={() => setEditingTx(t)} style={{ width: 38, height: 38, borderRadius: 10, background: `color-mix(in oklch, ${color} 14%, var(--ivory))`, color, display: "grid", placeItems: "center", flexShrink: 0, cursor: "pointer" }}>
+                      <span onClick={openEdit} style={{ width: 38, height: 38, borderRadius: 10, background: `color-mix(in oklch, ${color} 14%, var(--ivory))`, color, display: "grid", placeItems: "center", flexShrink: 0, cursor: editCursor }}>
                         <CatIcon kind={c?.icon || t.category} size={16} />
                       </span>
-                      <div onClick={() => setEditingTx(t)} style={{ flex: 1, minWidth: 0, cursor: "pointer" }}>
+                      <div onClick={openEdit} style={{ flex: 1, minWidth: 0, cursor: editCursor }}>
                         <div style={{ fontSize: 14, fontWeight: 500, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.merchant}</div>
                         <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 1 }}>{categoryLabel(c, tr, t.category)} · {t.method} · {t.time}</div>
                       </div>
                       <div className="tnum" style={{ fontSize: 13.5, fontWeight: 600, color: isIncome ? "var(--sage)" : "var(--ink)", flexShrink: 0 }}>
                         {isIncome ? "+" : "−"}{fmt(Math.abs(t.amount))}
                       </div>
-                      {onDelete && (
+                      {onDelete && canDelete && (
                         <button onClick={() => setDeletingId(t.id)} title={tr('umum.hapus')}
                           style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid var(--line-soft)", background: "var(--paper)", color: "var(--terra)", display: "grid", placeItems: "center", flexShrink: 0 }}>
                           <IconClose size={12} />
@@ -220,7 +231,7 @@ export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, 
                     <div className="tx-row-desktop"
                       onMouseEnter={() => setHover(t.id)} onMouseLeave={() => setHover(null)}
                       style={{ display: "grid", gridTemplateColumns: "minmax(220px,1.6fr) 1fr 1fr 0.7fr 130px 72px", alignItems: "center", padding: "12px 4px", borderBottom, background: hover === t.id ? "var(--paper)" : "transparent", transition: "background .15s ease" }}>
-                      <div onClick={() => setEditingTx(t)} style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0, cursor: "pointer" }}>
+                      <div onClick={openEdit} style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0, cursor: editCursor }}>
                         <span style={{ width: 34, height: 34, borderRadius: 10, background: `color-mix(in oklch, ${color} 14%, var(--ivory))`, color, display: "grid", placeItems: "center", flexShrink: 0 }}>
                           <CatIcon kind={c?.icon || t.category} size={15} />
                         </span>
@@ -237,13 +248,13 @@ export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, 
                       </div>
                       {/* Edit + Hapus — tampil saat hover */}
                       <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", opacity: hover === t.id ? 1 : 0, transition: "opacity .15s" }}>
-                        {onUpdate && (
+                        {onUpdate && canEdit && (
                           <button onClick={() => setEditingTx(t)} title={tr('umum.edit')}
                             style={{ padding: "5px 10px", borderRadius: 8, border: "1px solid var(--line-soft)", background: "var(--paper)", color: "var(--ink-2)", fontSize: 11, cursor: "pointer" }}>
                             {tr('umum.edit')}
                           </button>
                         )}
-                        {onDelete && (
+                        {onDelete && canDelete && (
                           <button onClick={() => setDeletingId(t.id)} title={tr('umum.hapus')}
                             style={{ width: 28, height: 28, borderRadius: 8, border: "1px solid var(--line-soft)", background: "var(--paper)", color: "var(--terra)", display: "grid", placeItems: "center", cursor: "pointer" }}>
                             <IconClose size={12} />
@@ -303,7 +314,7 @@ export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, 
         initial={editingTx}
         onClose={() => setEditingTx(null)}
         onUpdate={onUpdate}
-        accounts={accounts}
+        accounts={writableAccounts}
         customCategories={customCategories}
         onCreateCustom={onCreateCustom}
         onDeleteCustom={onDeleteCustom}

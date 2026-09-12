@@ -12,7 +12,7 @@ function greetingKey(hour) {
   return 'sapaan.malam';
 }
 
-export function TopBar({ theme, onTheme, onAdd, accounts, selectedAcct, onSelectAcct, onAddAcct, addAcctLocked = false, notifEnabled, user, notifications = [], unreadCount = 0, onMarkAllRead, onMarkRead, onOpenNotif }) {
+export function TopBar({ theme, onTheme, onAdd, accounts, totalBalance = null, selectedAcct, onSelectAcct, onAddAcct, addAcctLocked = false, notifEnabled, user, notifications = [], unreadCount = 0, onMarkAllRead, onMarkRead, onOpenNotif }) {
   const { t, i18n } = useTranslation();
   const [q, setQ] = React.useState("");
   const [bell, setBell] = React.useState(false);
@@ -93,7 +93,7 @@ export function TopBar({ theme, onTheme, onAdd, accounts, selectedAcct, onSelect
       </div>
 
       {accounts && (
-        <AccountSwitcher accounts={accounts} selected={selectedAcct} onSelect={onSelectAcct} onAdd={onAddAcct} addLocked={addAcctLocked} />
+        <AccountSwitcher accounts={accounts} totalBalance={totalBalance} selected={selectedAcct} onSelect={onSelectAcct} onAdd={onAddAcct} addLocked={addAcctLocked} />
       )}
 
       {bellBtn(17, iconBtn)}

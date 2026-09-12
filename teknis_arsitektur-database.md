@@ -105,9 +105,9 @@ root/
 │   │   ├── 20260706000000_add_error_logs.sql
 │   │   ├── 20260716000000_add_chat_rate_limits.sql
 │   │   ├── 20260717000000_add_chat_unanswered_log.sql
-│   │   ├── 20260723000000_document_user_summary_view.sql       ← belum di-push
-│   │   ├── 20260723010000_harden_functions_search_path_and_grants.sql  ← belum di-push
-│   │   └── 20260723020000_revoke_rls_auto_enable_execute.sql   ← belum di-push
+│   │   ├── 20260723000000_document_user_summary_view.sql
+│   │   ├── 20260723010000_harden_functions_search_path_and_grants.sql
+│   │   └── 20260723020000_revoke_rls_auto_enable_execute.sql
 │   └── functions/
 │       ├── financial-chat/
 │       │   ├── index.ts, types.ts, guardrail.ts
@@ -201,7 +201,7 @@ id              uuid            PRIMARY KEY
 user_id         uuid            NOT NULL, FK → auth.users
 name            text            Nama dompet (tampil di UI)
 bank            text            Nama bank/institusi (field klien: `institution`)
-balance         numeric         Saldo — diupdate manual via adjustBalance()
+balance         numeric         Saldo — diupdate di dalam RPC atomik transaksi (record/update/delete_transaction)
 type            text            'bank' | 'ewallet' | 'cash' | 'investment'
 is_primary      boolean         Maksimal satu per user
 color           text            Kode warna hex
@@ -212,7 +212,7 @@ created_at      timestamptz
 
 ⚠️ **Kolom `bank` tidak boleh diisi teks yang ikut bahasa UI.** Saat user tidak mengisi nama bank, `wallets.jsx` memakai `typeLabel(type)` — label tipe dompet versi **Bahasa Indonesia mentah** dari `ACCOUNT_TYPES`, BUKAN `typeLabelI18n()`. Kalau ikut bahasa UI, dompet yang dibuat saat UI English tersimpan `"Bank Account"` dan saat UI Indonesia `"Rekening Bank"` → nilai tidak konsisten antar-baris di database. Berlaku umum: **teks apa pun yang ditulis ke DB harus bebas bahasa UI.**
 
-**Saldo bukan dihitung:** Saldo **tidak** otomatis dari transaksi — tidak ada trigger Supabase. Diupdate client-side via `adjustBalance(walletId, delta)` setiap transaksi dibuat/diedit/dihapus. Atomik-safe: baca saldo dari state React (sudah realtime sync), hitung di client, tulis ke Supabase sekaligus.
+**Saldo bukan dihitung:** Saldo **tidak** otomatis dari transaksi — tidak ada trigger Supabase. Diupdate di server oleh RPC transaksi yang menulis baris **dan** saldo dalam satu transaksi Postgres: `record_transaction` (buat), `update_transaction` & `delete_transaction` (ubah/hapus, sejak `20260916000000`). Klien tidak lagi menyesuaikan saldo terpisah — `useWallets.adjustBalance()` dihapus 11 Sep 2026. Detail RPC & trade-off realtime: lihat bagian "RPC Saldo Atomik" di bawah.
 
 ### Tabel `budgets`
 ```sql
@@ -408,9 +408,9 @@ Definisi di migration adalah salinan persis dari yang live di production per 23 
 
 ---
 
-### Function Security Hardening (23 Juli 2026 — Belum Di-push)
+### Function Security Hardening (23 Juli 2026 — SUDAH Di-push)
 
-Hasil audit Security Advisor Supabase menghasilkan 2 migration file tambahan (dibuat lokal, **belum dieksekusi/push**):
+Hasil audit Security Advisor Supabase menghasilkan 2 migration file tambahan. **Keduanya sudah ter-apply di production** — diverifikasi 11 Sep 2026 lewat `list_migrations` (versi `20260723010000` & `20260723020000` tercatat) dan pengecekan langsung `pg_proc`: `set_plan_for_testing` kini hanya bisa dieksekusi `service_role`, sudah tidak lagi oleh `authenticated`. Heading ini sebelumnya menyebut "belum di-push" — itu keliru dan sudah dikoreksi.
 
 **`20260723010000_harden_functions_search_path_and_grants.sql`:**
 - **Search path mutable fix:** Semua fungsi di schema `public` yang belum punya `search_path` eksplisit di-set ke `search_path = public, pg_temp` (loop otomatis, bukan hardcode per nama) — mencegah fungsi "ditipu" baca objek dari schema lain kalau `search_path` dimanipulasi pemanggil.
@@ -420,6 +420,274 @@ Hasil audit Security Advisor Supabase menghasilkan 2 migration file tambahan (di
 
 **`20260723020000_revoke_rls_auto_enable_execute.sql`:**
 - `rls_auto_enable` adalah event trigger function (auto-enable RLS pada tabel baru) — Postgres sendiri menolak pemanggilan langsung fungsi `RETURNS event_trigger`, jadi ini murni hygiene fix untuk warning linter, tidak ada risiko fungsional.
+
+---
+
+### RPC Saldo Atomik (11 Sep 2026)
+
+Dua RPC `SECURITY DEFINER` (`search_path = public, pg_temp`, execute di-revoke dari `public, anon`, grant hanya `authenticated`) menggantikan pola SELECT-lalu-UPDATE saldo di klien yang rawan *lost update* antar-device.
+
+**`adjust_wallet_balance(p_wallet_id uuid, p_delta numeric) → numeric`** (`20260911000000`, **sudah live**)
+Satu `UPDATE wallets SET balance = balance + p_delta` terkunci; mengembalikan saldo baru. **Sejak 11 Sep 2026 tidak dipakai klien lagi** — `useWallets.adjustBalance()` dihapus karena pola "tulis baris lalu sesuaikan saldo terpisah" adalah akar bug saldo dobel dan saldo korup di dompet bersama. RPC-nya masih ada di server (lihat catatan keamanan di bagian Task 4).
+
+**`record_transaction(p_amount, p_category, p_date, p_wallet_id, p_merchant, p_note, p_time, p_method, p_debt_id) → uuid`** (`20260911010000`, **sudah live**)
+INSERT baris `transactions` + UPDATE saldo dompet dalam **satu transaksi Postgres**, jadi tidak ada lagi jendela di mana transaksi tercatat tapi saldo belum berubah. Dipanggil dari `useTransactions.createTransaction()` (dipakai `app.jsx` lewat wrapper `handleCreateTransaction`).
+
+Catatan penting:
+- Identitas selalu dari `auth.uid()`, tidak pernah dari argumen (tidak ada `p_user_id` — IDOR).
+- **Kuota plan Basic TIDAK dicek di dalam RPC.** Gating tetap di `useTransactions.createTransaction()` dengan `planLimits.js` sebagai sumber tunggal; jangan duplikasi ambangnya ke SQL.
+- `amount` sudah bertanda (negatif = pengeluaran), jadi saldo cukup `balance + amount` **tanpa** `CASE WHEN type='income'`. Kolom `type` diturunkan dari tanda `amount` di dalam fungsi, supaya baris tidak bisa menyimpan `type` yang bertentangan dengan `amount`.
+- `p_date` bertipe `date` dan **wajib** dikirim klien — sengaja tidak ada fallback `CURRENT_DATE`, karena `CURRENT_DATE` di server adalah UTC dan akan salah satu hari untuk WIB (lihat bagian 2).
+- Setelah `record_transaction` / `update_transaction` / `delete_transaction`, klien **tidak boleh** menyesuaikan saldo lagi (dobel) — RPC sudah mengurus saldo di server.
+
+**`patchLocalBalance()` DIHAPUS.** Sebelumnya dipakai untuk menulis delta saldo langsung ke state React sebagai optimistic update, sejajar dengan realtime subscription yang menulis nilai absolut. Dua penulis saldo itu race — urutan datang tidak terjamin, dan kalau realtime menang duluan lalu delta menyusul, saldo di layar dobel. Bug ini sudah diverifikasi manual (reproducible) dan fix-nya (menghapus patch delta, murni andalkan realtime) sudah divalidasi termasuk skenario 2x cicilan berturut-turut cepat. **Trade-off:** saldo di UI sekarang 100% bergantung koneksi realtime — kalau channel terputus (sinyal jelek, app lama di background), saldo di layar telat update sampai app dibuka ulang; data di DB sendiri tetap benar.
+
+---
+
+### Shared Wallet / Dompet Bersama — Task 2 (12 Sep 2026, sudah live)
+
+Migrasi `20260912000000_add_wallet_members_and_shared_rls.sql`. Satu file untuk seluruh tahap ini — `supabase db push` menjalankan tiap file dalam satu transaksi, jadi tabel + policy + RPC commit bersama atau batal bersama.
+
+#### Tabel `wallet_members`
+```sql
+id          uuid        PRIMARY KEY
+wallet_id   uuid        NOT NULL, FK → wallets      ON DELETE CASCADE
+user_id     uuid        NOT NULL, FK → auth.users   ON DELETE CASCADE
+role        text        'owner' | 'editor' | 'viewer'   (default 'editor')
+status      text        'pending' | 'active' | 'left'   (default 'pending')
+invited_by  uuid        FK → auth.users ON DELETE SET NULL
+created_at  timestamptz
+joined_at   timestamptz
+UNIQUE (wallet_id, user_id)
+```
+
+**Owner TIDAK punya baris di sini** — `wallets.user_id` tetap satu-satunya sumber kepemilikan, karena dua sumber kebenaran akan drift. Nilai `role = 'owner'` dicadangkan dan belum dipakai. Baris ber-`status='left'` sengaja disimpan (bukan dihapus) supaya riwayat undangan terlacak; konsekuensinya undangan ulang harus UPSERT, bukan INSERT, karena kena `UNIQUE (wallet_id, user_id)`.
+
+Tiga index: `(wallet_id, user_id, status)` (pola query persis `wallet_access_role()`), `(user_id, status)` (arah "dompet apa yang saya ikuti", dipakai klien), dan **`transactions(wallet_id)`** — yang terakhir wajib, bukan optimasi: tabel `transactions` sebelumnya tidak punya index apa pun selain PK dan `idx_transactions_debt_id`, dan policy SELECT yang melebar akan seq-scan penuh tanpanya.
+
+#### Helper `wallet_access_role(p_wallet_id uuid) → text`
+
+`SECURITY DEFINER`, `STABLE`, `search_path = public, pg_temp`, execute di-revoke dari `public, anon`. Mengembalikan `'owner'` (dari `wallets.user_id`), `'editor'`/`'viewer'` (dari `wallet_members` ber-`status='active'`), atau `NULL` bila tidak punya akses.
+
+**Kenapa helper, bukan `EXISTS()` langsung di policy:** policy `wallets` perlu membaca `wallet_members`, dan policy `wallet_members` perlu tahu siapa owner dompetnya. Kalau keduanya ditulis sebagai `EXISTS()` biasa, evaluasi policy saling memanggil dan Postgres melempar `infinite recursion detected in policy for relation "wallets"` — yang mematikan **seluruh** akses dompet, bukan cuma fitur berbagi. `SECURITY DEFINER` melewati RLS di dalam badan fungsi sehingga rantainya putus. **Jangan pernah** mengganti pemanggilan helper ini di policy dengan `EXISTS(SELECT … FROM wallet_members)` "supaya lebih eksplisit".
+
+#### RLS: dari owner-only jadi owner OR anggota aktif
+
+Policy `FOR ALL` lama dipecah per-perintah (pola yang sudah dipakai `debts`/`debt_payments`), karena satu `FOR ALL` memakai `USING` yang sama untuk baca dan tulis — tidak bisa menyatakan "boleh baca semua transaksi dompet, tapi hanya boleh hapus milik sendiri".
+
+| | `wallets` | `transactions` |
+|---|---|---|
+| SELECT | `user_id = uid` **OR** `wallet_access_role(id) IS NOT NULL` — cabang pertama wajib, sejak `20260918010000` (lihat "Jebakan STABLE + RETURNING") | `user_id = uid` **OR** (`debt_id IS NULL` AND `wallet_access_role(wallet_id) IS NOT NULL`) — syarat `debt_id` sejak `20260916000000` |
+| INSERT | `user_id = uid` | `user_id = uid` AND role ∈ (owner, editor) |
+| UPDATE | `user_id = uid` (owner saja) | `user_id = uid` AND role ∈ (owner, editor) — di `USING` (dompet asal) **dan** `WITH CHECK` (dompet tujuan), sejak `20260917000000` |
+| DELETE | `user_id = uid` (owner saja) | `user_id = uid` AND role ∈ (owner, editor) sejak `20260917000000` — cerminan `delete_transaction`; penghapusan total policy ditunda (lihat keputusan #6) |
+
+Efek per role atas dompet bersama: **owner** penuh; **editor** baca + catat transaksi (dan ubah/hapus transaksinya sendiri); **viewer** dan **bekas anggota** baca saja — termasuk transaksi yang dulu mereka catat sendiri (keputusan #6). Ditolak fail-closed, karena `NULL IN (...)` bernilai `NULL` dan `NULL` di policy = ditolak.
+
+`wallets` UPDATE/DELETE sengaja owner-only: satu-satunya tulis yang benar-benar dibutuhkan member adalah **saldo**, dan itu lewat RPC `SECURITY DEFINER` yang melewati RLS — jadi policy tidak perlu dilonggarkan untuk itu. Kedua RPC (`adjust_wallet_balance`, `record_transaction`) kini memakai `wallet_access_role(w.id) IN ('owner','editor')` menggantikan `w.user_id = v_user_id`; inilah "titik perluasan Fitur B" yang ditandai di migrasi 11 Sep.
+
+`user_id = uid` di SELECT `transactions` **dipertahankan sebagai cabang pertama**, bukan diganti: (a) setelah member keluar, dia harus tetap melihat transaksi yang dulu dia catat; (b) mayoritas mutlak baris adalah miliknya sendiri dan selesai di perbandingan murah itu tanpa memanggil helper; (c) — alasan yang baru diketahui 12 Sep 2026 dan ternyata paling menentukan — tanpa cabang itu, `INSERT ... RETURNING` pada tabel tersebut **selalu gagal**. Lihat di bawah.
+
+#### ⚠️ Jebakan: fungsi `STABLE` + `RETURNING` — policy SELECT yang hanya memanggil helper akan mematikan INSERT
+
+**Kejadian nyata (12 Sep 2026, P0 di produksi).** Selama beberapa hari, **tidak ada satu pun user** yang bisa membuat dompet — Basic maupun Pro, akun lama maupun baru. Errornya `42501 new row violates row-level security policy for table "wallets"`, yang membuat semua orang (termasuk investigasi awal) mengira ini masalah identitas `user_id` vs `auth.uid()`. Identitasnya tidak pernah salah.
+
+**Mekanismenya:**
+
+1. Klien memanggil `.insert(...).select()`; PostgREST menerjemahkannya jadi `INSERT ... RETURNING`.
+2. Pada INSERT ber-`RETURNING`, Postgres **ikut menerapkan policy SELECT** pada baris yang dikembalikan.
+3. Policy SELECT `wallets` saat itu hanya `wallet_access_role(id) IS NOT NULL`.
+4. `wallet_access_role()` bersifat **`STABLE`** dan di dalamnya melakukan `SELECT ... FROM wallets WHERE id = …`. Fungsi `STABLE` memakai snapshot query pemanggil, sehingga **tidak bisa melihat baris yang baru disisipkan oleh perintah yang sama** → `NULL` → policy gagal → INSERT ditolak.
+5. Pesan errornya identik dengan kegagalan `WITH CHECK`, jadi tidak ada petunjuk bahwa yang gagal sebenarnya policy SELECT.
+
+**Cara mengisolasinya** (kalau pola ini muncul lagi): jalankan sebagai role `authenticated` — bukan `postgres`, yang punya `rolbypassrls = true` **dan** memiliki tabelnya, sehingga tes apa pun sebagai `postgres` tidak pernah benar-benar mengevaluasi RLS. Lalu bandingkan `INSERT` polos vs `INSERT ... RETURNING`; kalau yang polos lolos dan yang ber-RETURNING gagal, ini penyebabnya.
+
+**ATURAN UNTUK SETIAP POLICY SELECT BARU (wajib):** selalu tulis cabang **perbandingan kolom langsung lebih dulu**, baru cabang keanggotaan:
+
+```sql
+USING (
+  user_id = (SELECT auth.uid())              -- WAJIB, dan wajib DULUAN
+  OR public.wallet_access_role(<kolom>) IS NOT NULL
+)
+```
+
+Cabang pertama dibaca dari baris yang sedang dikembalikan, tanpa lookup ke tabel, sehingga `RETURNING` lolos. Bonus: baris milik sendiri tidak lagi memanggil helper per baris.
+
+**Berlaku untuk perluasan Task 5+.** Kalau nanti `budgets` / `savings` / `debts` ikut dibagikan lewat `wallet_access_role()`, terapkan pola ini **sejak awal** — jangan menunggu bug yang sama muncul lagi. Keempat tabel itu saat ini aman justru karena policy SELECT-nya masih `auth.uid() = user_id` polos.
+
+**UPDATE dan DELETE tidak terkena** jebakan ini: barisnya sudah ada di snapshot, jadi helper bisa menemukannya seperti biasa. Yang khas INSERT adalah barisnya belum terlihat oleh query di dalam fungsi `STABLE`.
+
+#### Keputusan produk final (jangan diubah tanpa diskusi)
+
+1. **Transaksi member atas nama member.** `record_transaction` menulis `user_id = auth.uid()`, bukan owner dompet — riwayat harus jelas siapa yang mencatat.
+2. **Hapus/edit transaksi SIMETRIS.** Semua orang hanya boleh menyentuh transaksi ber-`user_id` miliknya sendiri — **termasuk owner, yang TIDAK punya hak override** atas transaksi yang dicatat member. `USING` pada policy UPDATE/DELETE sengaja tanpa cabang owner.
+3. **Transaksi member tetap ada setelah dia keluar** dari dompet — barisnya tidak ikut terhapus dan tetap atas namanya. ~~Dia masih boleh menghapusnya; policy UPDATE/DELETE sengaja tidak dipersempit ke peran aktif (keputusan 11 Sep 2026).~~ **DISUPERSEDE oleh keputusan #6 (12 Sep 2026)** — bukan regresi: bekas anggota tidak lagi bisa mengubah/menghapus transaksi itu.
+4. **Hutang/piutang TETAP PRIVAT, tidak ikut terbagi.** Cek `p_debt_id` di `record_transaction` sengaja tetap `d.user_id = v_user_id`, bukan cek peran dompet. Sejak `20260916000000` ini berlaku juga untuk **transaksi tertautnya**: baris ber-`debt_id` hanya terlihat oleh pencatatnya, sekalipun dicatat di dompet bersama.
+5. **Anggota baru BOLEH melihat riwayat dompet sebelum dia bergabung** (keputusan 11 Sep 2026) — policy SELECT memang tidak memfilter tanggal. Satu-satunya pengecualian adalah #4 (transaksi hutang), yang privat selamanya.
+6. **Viewer & bekas anggota diblokir dari SEMUA tulisan transaksi di dompet itu** (keputusan 12 Sep 2026, migrasi `20260917000000`) — insert, update, **dan** delete, siapa pun pencatat barisnya. `delete_transaction` dan `update_transaction` mensyaratkan `wallet_access_role()` ∈ (owner, editor) atas dompet **asal** (plus dompet tujuan untuk update); policy UPDATE (`USING`) dan DELETE mencerminkannya. Transaksi di dompet milik sendiri tidak terdampak (`wallet_id` NOT NULL dan role-nya selalu `'owner'`). Klien: `canDeleteTransaction()`/`canEditTransaction()` kini sama-sama mensyaratkan `canWrite`, dan `useDebts.deleteDebt` **menolak sebelum menghapus apa pun** bila ada transaksi tertaut di dompet yang tidak bisa ditulis — tidak pernah soft-delete catatan hutang dengan transaksi yang tertinggal.
+   - **Trade-off yang disengaja (bukan bug, tanpa pengecualian tambahan):** transaksi viewer/bekas anggota di dompet owner jadi **tidak bisa dihapus siapa pun** — pencatatnya ditolak karena peran, owner ditolak karena bukan miliknya (#2). Pemulihan hanya lewat owner menaikkan peran kembali ke editor (atau mengundang ulang bekas anggota).
+   - **TODO Task 4 (UI):** transaksi yang terkunci seperti ini wajib menampilkan pesan yang menjelaskan *kenapa* terkunci dan cara memulihkannya — saat ini tombolnya cuma disembunyikan tanpa penjelasan.
+   - **Policy DELETE dipersempit, BUKAN dihapus (varian B, keputusan 12 Sep 2026).** Build klien lama (`main` s/d `ba03016`) masih menghapus lewat `.delete()` langsung lalu `adjustBalance` terpisah, dan build itu mungkin masih terpasang di device reviewer Google Play (`reviewfinance32@gmail.com`). Tanpa policy DELETE, `.delete()` untuk transaksi milik sendiri "berhasil" 0 baris tanpa error dan saldo tetap digeser → saldo korup (terverifikasi dry-run, uji T26: varian A 26/27, varian B 27/27). **TODO migrasi lanjutan:** hapus policy DELETE total (hapus HANYA lewat RPC) — baru setelah dikonfirmasi build berbasis RPC terpasang di semua device yang relevan lewat rilis Closed Testing baru, bukan asumsi.
+
+#### Sisi klien
+
+`src/lib/walletAccess.js` (`fetchSharedWalletIds`, `sharedOrFilter`) dipakai `useWallets` dan `useTransactions`. Daftar id dompet bersama harus dihitung di klien karena filter realtime Supabase tidak mengerti keanggotaan — dia hanya bisa membandingkan satu kolom. Tanpa dompet bersama, kedua hook jatuh kembali ke `.eq('user_id', userId)` persis seperti sebelum fitur ini ada.
+
+Realtime `useWallets` memakai **dua binding** di satu channel: `user_id=eq.<uid>` untuk dompet sendiri (otomatis mencakup dompet yang dibuat setelah subscribe) dan `id=in.(…)` untuk dompet bersama. Konsekuensinya daftar id itu **snapshot**: dompet yang dibagikan ke user *setelah* hook mount tidak terpantau sampai mount ulang.
+
+⚠️ `useTransactions` **tidak punya realtime sama sekali** (sudah begitu sejak sebelum fitur ini) — transaksi yang dicatat member baru muncul di layar owner setelah refetch. Meski begitu tabel `transactions` **tetap terdaftar** di publication `supabase_realtime` (tanpa subscriber di klien; Realtime menurut dokumentasi Supabase mengevaluasi policy SELECT per subscriber) — kandidat dicabut dari publication kalau memang tidak akan dipakai.
+
+⚠️ **Peran & keanggotaan juga snapshot saat mount.** `roleById` di `useWallets` diambil sekali; `wallet_members` tidak ada di publication dan tidak di-subscribe. Perubahan role/status (termasuk edit manual lewat Table Editor dashboard) baru terlihat di UI setelah `AuthenticatedApp` mount ulang (logout/login) — sebelum itu UI bisa masih menawarkan tombol yang akan ditolak server. Terverifikasi 12 Sep 2026: tombol Edit "hilang setelah login ulang" ternyata karena role member di dompet itu diturunkan editor→viewer di luar RPC, bukan cache basi.
+
+**Tulis yang ditolak RLS = 0 baris, BUKAN error (perbaikan Task 4 Commit A, 11 Sep 2026) — ✅ VERIFIED 12 Sep 2026.** Bukti: 27/27 uji server (`BEGIN…ROLLBACK`) terhadap fungsi & policy yang terpasang setelah `20260917000000`; uji manual UI viewer/editor/owner/hutang; retest Temuan 2 dengan dua browser terpisah + DevTools WebSocket — tidak ada frame `"table":"transactions"` di sesi member dan transaksi hutang owner tidak muncul setelah refresh berulang. Temuan 1 ("tombol Edit hilang") ternyata peran member diturunkan editor→viewer di luar RPC, bukan cache basi; ditindaklanjuti sebagai keputusan #6. Sejak `accounts`/`transactions` di klien memuat baris milik orang lain, empat jalur tulis diam-diam "berhasil" padahal tidak menyentuh apa pun: hapus transaksi anggota oleh owner (lalu `adjustBalance` tetap jalan → **saldo bergeser permanen**, terverifikasi di server), "Set utama" di dompet bersama (dompet utama milik sendiri ikut terkosongkan), hapus dompet bersama, dan `is_primary` milik owner yang terbawa ke daftar anggota (dompet teman bisa jadi default catat transaksi). Aturannya sekarang: `setPrimary`/`deleteAccount` memakai `.select('id')` dan mengubah 0 baris jadi error; hapus/ubah transaksi lewat RPC `delete_transaction`/`update_transaction` yang RAISE untuk baris bukan milik pemanggil (jadi tidak pernah "sukses kosong") dan menulis saldo di dalam transaksi Postgres yang sama — `adjustBalance()` klien dihapus. `toAppWallet` membawa `ownerId`/`isShared`/`role`/`canWrite` dan memaksa `primary=false` untuk dompet bersama; `writableAccounts` (milik sendiri + editor) dipakai semua picker yang menulis. `canDeleteTransaction()` dan `canEditTransaction()` di `walletAccess.js` (sejak 12 Sep keduanya: milik sendiri + dompetnya bisa ditulis — keputusan #6) menggerbangi UI **dan** handler `app.jsx`.
+
+**Bekas anggota / viewer & saldo (keputusan 11 Sep 2026) — DISUPERSEDE oleh keputusan #6 (12 Sep 2026).** Paragraf ini dipertahankan sebagai riwayat; pembebasan cek peran untuk dompet asal sudah dicabut di `20260917000000`. Dry-run isi file final migrasi itu (varian B, 12 Sep, `BEGIN…ROLLBACK`, 27/27 lolos): viewer & bekas anggota → 42501 di RPC hapus/ubah/pindah dan 0 baris di DELETE/UPDATE langsung; editor catat/ubah/pindah/hapus → saldo kembali persis; owner & dompet non-bersama tanpa regresi; owner tetap tidak bisa menyentuh transaksi anggota. Teks lama: Policy DELETE `transactions` cuma cek `user_id`, sedangkan `adjust_wallet_balance` mensyaratkan peran aktif — dulu bekas anggota bisa menghapus transaksinya tapi saldo owner tidak ikut dibalik (terverifikasi: baris hilang, saldo tetap memuat −1000). Policy **tidak** dipersempit (itu membalik keputusan #3); perbaikannya di RPC — pembalikan untuk baris milik sendiri tidak mensyaratkan peran, dan besarnya diturunkan dari baris, bukan argumen. Menaruh dana ke dompet tujuan (`update_transaction`) tetap wajib owner/editor. Terverifikasi di server (rollback): bekas anggota memindahkan + menghapus transaksinya → saldo owner kembali persis ke angka awal; owner menghapus/mengubah transaksi anggota → 42501; bekas anggota mengedit transaksi yang tetap di dompet bersama → 42501.
+
+⚠️ **Masih terbuka (belum diputuskan):** `adjust_wallet_balance` masih bisa dipanggil langsung oleh **editor** dengan delta sembarang atas dompet bersama — mengubah saldo teman tanpa jejak transaksi apa pun. Kode klien di branch shared-wallet tidak memanggilnya lagi, **tetapi build `main` yang sudah terpasang masih memakainya** (`adjustBalance` setelah create/update/delete) — mencabut `EXECUTE`-nya baru aman setelah semua klien terpasang memakai RPC. Hal serupa: `UPDATE transactions` langsung (lolos policy untuk baris sendiri di dompet yang bisa ditulis) bisa mengubah `amount`/`wallet_id` tanpa menyesuaikan saldo.
+
+#### Catatan lain
+
+- `user_summary` (view, `security_invoker=on`) **tidak terpengaruh**: dia tidak menyentuh tabel `wallets` sama sekali (`total_saldo_dompet` ternyata `sum(transactions.amount)`), agregasinya di-key pada `t.user_id` sehingga atribusi tidak bergeser, dan grant-nya hanya `postgres`/`service_role` yang keduanya `rolbypassrls`. Kalau suatu saat view ini di-`GRANT` ke `authenticated`, pelebaran policy `transactions` akan membuat user melihat baris user lain lengkap dengan email-nya — jangan lakukan itu.
+- Security advisor memunculkan `wallet_access_role` di daftar "authenticated bisa eksekusi SECURITY DEFINER". Tidak bisa dihindari: policy dievaluasi sebagai role pemanggil, jadi `authenticated` wajib punya EXECUTE. Jinak — dipanggil langsung, fungsi ini hanya mengembalikan peran si pemanggil sendiri, dan UUID acak mengembalikan `NULL` baik dompetnya ada maupun tidak.
+- Kuota plan Basic (`accounts.length` di `useWallets`) **belum** mengecualikan dompet bersama — dompet orang lain ikut memakan kuota member. Diketahui, ditunda ke Task 4.
+
+---
+
+### Shared Wallet — Alur Undangan, Task 3 — tested end-to-end (bukan rollback), production-verified 11 Sep 2026
+
+Migrasi `20260913000000_add_wallet_invite_flow.sql` + perbaikan `20260914000000_fix_accept_invite_rate_limit.sql`. Empat RPC: `generate_wallet_invite`, `accept_wallet_invite`, `leave_wallet`, `remove_wallet_member`.
+
+#### Tabel `wallet_invites` (terpisah dari `wallet_members`)
+
+Kode 6 digit **tidak** disimpan di `wallet_members` — siklus hidupnya beda (kode: dibuat → ditebak → dipakai sekali/revoke/expired; keanggotaan: aktif → keluar), dan `wallet_members.user_id` NOT NULL tidak cocok untuk baris "penerima belum diketahui".
+
+```sql
+id          uuid        PRIMARY KEY
+wallet_id   uuid        NOT NULL, FK → wallets ON DELETE CASCADE
+code        text        NOT NULL
+role        text        'editor' | 'viewer'          (TIDAK ADA 'owner')
+status      text        'active' | 'accepted' | 'revoked'   (default 'active')
+created_by  uuid        NOT NULL, FK → auth.users
+accepted_by uuid        FK → auth.users ON DELETE SET NULL
+expires_at  timestamptz NOT NULL
+accepted_at timestamptz
+created_at  timestamptz
+```
+
+Unique index **parsial**: `UNIQUE (code) WHERE status = 'active'` — kode yang sudah `accepted`/`revoked` boleh muncul lagi di kombinasi acak berikutnya, keunikan hanya berlaku di antara kode yang masih bisa ditebak. RLS: SELECT hanya untuk owner dompetnya (`wallet_access_role(wallet_id) = 'owner'`); tidak ada policy INSERT/UPDATE/DELETE sama sekali — tulis murni lewat RPC.
+
+#### Tabel `wallet_invite_attempts` — rate limit brute force
+
+Pola identik `chat_rate_limits`: satu baris per user, dikunci `FOR UPDATE` di dalam `accept_wallet_invite` untuk cek+increment atomik (default 10 percobaan / 15 menit, dua-duanya parameter RPC). **Kenapa per-user, bukan per-kode:** kode salah tidak match baris manapun di `wallet_invites`, jadi tidak ada baris invite untuk ditempeli penalti — beda dari brute force PIN yang menyerang satu target. Satu-satunya pertahanan RPC yang berfungsi adalah membatasi kecepatan tebak satu akun; melawan banyak akun sybil paralel di luar cakupan lapisan SQL.
+
+#### `generate_wallet_invite(p_wallet_id, p_role DEFAULT 'editor', p_expires_in_hours DEFAULT 24)`
+
+- **Fitur Pro-only, dicek DI DALAM RPC** (join `user_subscriptions`: `plan='pro' AND (expires_at IS NULL OR expires_at > now())`), bukan cuma client-side seperti limit transaksi/dompet Basic — ini gerbang fitur yang kalau dilewati lewat panggilan RPC langsung membuka akses **permanen** ke akun ketiga, beda dari kuota transient yang reset tiap bulan.
+- Hanya owner (`wallet_access_role(p_wallet_id) = 'owner'`) yang boleh memanggil.
+- **Satu kode aktif per dompet** — memanggil ulang otomatis me-revoke kode `active` lama milik dompet yang sama. Ini sekaligus jawaban "owner generate ulang karena kode hilang": tidak ada RPC `regenerate` terpisah, panggil `generate_wallet_invite` lagi sudah cukup, dan kode lama langsung mati sehingga tidak ada dua kode valid bersamaan.
+- Expiry default **24 jam** (keputusan produk, param bisa di-override).
+
+#### `accept_wallet_invite(p_code, p_max_attempts DEFAULT 10, p_window_seconds DEFAULT 900)`
+
+> ⚠️ **KONTRAK BERBEDA DARI RPC LAIN DI REPO INI — WAJIB DIBACA SEBELUM MENULIS KLIEN (Task 4).**
+> `accept_wallet_invite` **mengembalikan `jsonb`, bukan melempar exception**, untuk semua kegagalan yang diantisipasi. Jangan asumsikan dia `throw` seperti `adjust_wallet_balance`/`record_transaction`/`generate_wallet_invite`. Pemanggil **wajib memeriksa field `ok`** — `error` dari supabase-js akan `null` pada penolakan yang sah.
+> ```jsonc
+> { "ok": true,  "wallet_id": "…", "role": "editor" }
+> { "ok": false, "reason": "invalid_code" }                       // tidak ada / kedaluwarsa / sudah dipakai
+> { "ok": false, "reason": "own_wallet" }                         // owner memasukkan kode dompetnya sendiri (sejak 20260915000000)
+> { "ok": false, "reason": "already_member" }
+> { "ok": false, "reason": "rate_limited", "reset_at": "…" }
+> ```
+> Satu-satunya yang masih `RAISE`: **tidak ada sesi login**. Lihat "Kenapa `RETURN`, bukan `RAISE`" di bawah — bentuk ini bukan preferensi gaya, ini syarat supaya rate limiter-nya berfungsi.
+
+- Rate limit dicek **sebelum** menyentuh `wallet_invites` sama sekali; percobaan gagal tetap menghabiskan jatah (esensi anti-brute-force). `already_member` **juga** menghabiskan jatah — disengaja, supaya jalur rate-limit hanya punya satu bentuk tanpa cabang "refund" yang rawan salah-urut di kemudian hari.
+- Kode dicari dengan `status='active' AND expires_at > now()`; `reason` **sama persis** (`invalid_code`) untuk "tidak ada", "sudah dipakai", dan "expired" — tidak membocorkan mana yang benar ke penebak (pola sama seperti `adjust_wallet_balance`).
+- **MENOLAK bila pemanggil sudah anggota aktif** dompet itu — lihat "Keamanan: kenapa bukan UPSERT" di bawah.
+- Kode **sekali pakai**: begitu diterima, `status` → `'accepted'`, tidak bisa dipakai orang lain.
+- Member yang dulu `status='left'` dan menerima kode baru → rejoin dengan role dari kode yang baru dipakai (bisa beda dari role sebelumnya).
+
+**Kenapa `RETURN`, bukan `RAISE` — bug yang sudah terjadi dan terverifikasi.** Versi pertama RPC ini (migrasi `20260913000000`) menaikkan `attempt_count` lalu `RAISE EXCEPTION` beberapa baris kemudian saat kode salah. PostgREST membungkus tiap panggilan RPC dalam **satu transaksi**, jadi `RAISE` membatalkan seluruh transaksi — **termasuk increment counter yang baru saja ditulis**. Akibatnya setiap tebakan salah menghapus hitungannya sendiri, dan lockout **tidak akan pernah menyala di produksi**. Terbukti di server: 12 percobaan kode salah berturut-turut → `attempt_count` tetap `1`. Saat counter di-set manual ke 10, pesan lockout muncul normal — jadi logika ambangnya benar sejak awal, yang rusak murni persistensinya. `check_chat_rate_limit` tidak kena bug ini karena dia memang `RETURN jsonb {allowed:false}` dan tidak pernah `RAISE` di jalur penolakan; migrasi `20260914000000` menyelaraskan RPC ini ke pola yang sama.
+
+> **Aturan umum yang lahir dari sini:** di fungsi mana pun yang **menulis penghitung / jejak audit lalu menolak request** — jangan `RAISE` setelah menulis. `RAISE` = rollback = tulisan itu hilang. Pakai `RETURN` dengan nilai status. `RAISE` hanya boleh untuk kondisi yang memang tidak menyisakan apa pun untuk disimpan (mis. tidak ada sesi login), **atau** ketika rollback justru yang diinginkan — contohnya `generate_wallet_invite`, yang me-revoke kode lama lalu `RAISE` kalau gagal membuat kode unik: di situ rollback benar, karena kode lama memang harus tetap hidup kalau penggantinya gagal dibuat. `leave_wallet`/`remove_wallet_member` juga `UPDATE`-lalu-`RAISE`, tapi aman karena `RAISE`-nya hanya menyala saat `NOT FOUND`, yaitu ketika `UPDATE` menyentuh 0 baris — tidak ada tulisan yang hilang.
+
+**Keamanan: kenapa bukan `ON CONFLICT DO UPDATE`.** Draft awal RPC ini pakai UPSERT buta (`INSERT ... ON CONFLICT (wallet_id,user_id) DO UPDATE SET role=...`). Itu berbahaya: karena hanya ada satu kode aktif per dompet, seorang **viewer yang sudah jadi anggota** bisa menaikkan perannya sendiri ke editor hanya dengan submit ulang kode yang beredar untuk orang lain — privilege escalation. Fix: `SELECT ... FOR UPDATE` eksplisit dulu, lalu bercabang tiga arah (belum pernah jadi anggota → INSERT; `status='left'` → UPDATE jadi active; **`status='active'` → tolak** dengan `reason: 'already_member'`). Hasil `FOUND` disimpan ke variabel sendiri (`v_has_member_row`) karena nilainya berubah setiap ada SELECT/UPDATE berikutnya. Perubahan role anggota aktif (kalau dibutuhkan nanti) harus lewat RPC terpisah yang jelas niatnya, bukan ditumpangkan ke jalur invite.
+
+#### Hardening `wallet_members` — migrasi `20260915000000_harden_wallet_members_writes.sql` (11 Sep 2026, live)
+
+Dua jalur yang merusak invariant "owner tidak punya baris di `wallet_members`" ditutup. (1) `accept_wallet_invite` kini mengembalikan `reason:'own_wallet'` saat owner memakai kode dompetnya sendiri — dicek setelah increment counter (RETURN, bukan RAISE) dan **sebelum** menyentuh `wallet_members`, jadi kodenya tetap `active`. (2) Policy `"wallet_members: owner manages"` (FOR ALL, Task 2) **dihapus**: dengan policy itu owner — termasuk user Basic — bisa INSERT/UPDATE langsung lewat PostgREST, melewati gate Pro di `generate_wallet_invite`, menambahkan user mana pun tanpa persetujuannya, atau menulis `role='owner'` (yang oleh `wallet_access_role` dikembalikan apa adanya → hak setara owner). Sekarang `wallet_members` hanya punya policy SELECT; semua tulis lewat RPC SECURITY DEFINER, sama seperti `wallet_invites`. Terverifikasi di server (rollback): owner-accept-own-code → `own_wallet` dan kode tetap aktif; INSERT langsung (orang lain / diri sendiri) → 42501; UPDATE langsung → 0 baris; owner masih bisa SELECT anggotanya; `already_member`/`invalid_code` tidak berubah.
+
+#### Transaksi hutang privat + hapus/edit atomik — migrasi `20260916000000_private_debt_tx_and_atomic_tx_rpcs.sql` (11 Sep 2026, live)
+
+(1) Policy SELECT `transactions`: cabang anggota dompet kini mensyaratkan `debt_id IS NULL` (keputusan Task 2 #4 diperluas ke transaksi tertaut). Saat migrasi ada 20 transaksi hutang di dompet bersama yang tadinya terbaca anggota. Klien mencerminkannya lewat `sharedOrFilter(…, { excludeDebt: true })`. (2) RPC `delete_transaction(p_transaction_id) → jsonb {wallet_id, balance}` dan `update_transaction(p_transaction_id, p_amount, p_category, p_wallet_id, p_merchant, p_note, p_method, p_date, p_time) → transactions` — lihat "Bekas anggota / viewer & saldo" di bagian Task 2. `update_transaction` mengunci kedua dompet dalam urutan id (anti-deadlock); `p_date`/`p_time` NULL = nilai lama (tidak ada fallback `CURRENT_DATE`). Efek samping: rollback `useDebts.addPayment` kini ikut membalik saldo (dulu transaksinya terhapus tapi efek `record_transaction` ke saldo tertinggal).
+
+**Konsekuensi yang perlu diketahui:** transaksi hutang yang dicatat di dompet bersama tetap **menggerakkan saldo dompet itu**, tapi barisnya tidak terlihat oleh anggota lain — dari sisi mereka saldo berubah tanpa transaksi yang menjelaskan. `AddDebtModal` masih menawarkan dompet bersama ber-peran editor (`writableAccounts`).
+
+#### `leave_wallet(p_wallet_id)` & `remove_wallet_member(p_wallet_id, p_user_id)`
+
+`leave_wallet`: anggota aktif keluar atas inisiatif sendiri. Owner tidak bisa memanggilnya untuk dompetnya sendiri — dia tidak punya baris di `wallet_members` (keputusan Task 2 #1), jadi selalu jatuh ke `NOT FOUND`. `remove_wallet_member`: owner-only, mengeluarkan anggota tertentu. Keduanya set `status='left'` (bukan DELETE) — transaksi yang sudah dicatat anggota **tidak ikut terhapus**, konsisten dengan keputusan produk Task 2 #3 — tapi sejak keputusan #6 (12 Sep 2026) bekas anggota tidak bisa lagi mengubah/menghapusnya.
+
+#### Diverifikasi di server — 11 Sep 2026, **committed sungguhan** (bukan rollback)
+
+Dijalankan terhadap dua akun test (`demofimance` = owner Pro, `reviewfinance32` = basic) di dompet "Mes Lampung CAA":
+
+| Uji | Hasil |
+|---|---|
+| Owner Pro generate kode | `513112`, `status=active`, expire tepat +24 jam |
+| Member accept | `wallet_members` baru `editor/active`, `invited_by` terisi; invite → `accepted` + `accepted_by`/`accepted_at`; counter naik ke 1 |
+| Reuse kode yang sama | ditolak `invalid_code` |
+| Generate ulang 2× | kode ke-2 → `revoked`, kode ke-3 → `active`; tepat satu `active` per dompet. Kode yang sudah `accepted` **tidak** ikut jadi `revoked` (klausa revoke hanya menyasar `status='active'`) |
+| Akun basic generate (di dompetnya sendiri) | ditolak "berbagi dompet khusus pengguna Pro" — lolos cek owner dulu, lalu kena gate Pro |
+| **11 kode salah berturut-turut, panggilan asli** | percobaan 1-10 → `invalid_code`, counter naik sendiri 0→10; **percobaan ke-11 → `rate_limited`** dengan `reset_at` tepat +900 detik |
+| Kode **benar** saat terkunci | tetap ditolak `rate_limited` — lockout benar-benar memproteksi, bukan sekadar pesan |
+| Counter saat terkunci | berhenti di 10, tidak naik ke 11 (jalur terkunci sengaja tidak increment) |
+| `already_member` | ditolak benar, **memakan jatah** (counter 0→1), kode tetap `active`, role tetap `editor` — tidak berubah diam-diam |
+
+Uji `leave_wallet` (berhasil sekali, ditolak kalau dipanggil dua kali) dan `remove_wallet_member` (ditolak atas anggota yang sudah `left`) diverifikasi lewat simulasi rollback sebelumnya.
+
+#### Untuk Task 4 (UI) — status per 12 Sep 2026
+
+- ✅ **Selesai (Commit B2).** Pemetaan `reason` → pesan UI dipusatkan di `src/components/wallets/memberErrors.js`; setiap sheet memakai tabel yang sama supaya `rate_limited` tidak berbunyi beda-beda di tiap layar. `acceptInviteCode()` di `useWalletMembers` memeriksa field `ok`, **bukan** `error` dari supabase-js.
+- ✅ **Selesai (Commit B2).** Status kode undangan (aktif / kedaluwarsa + sisa waktu) ditampilkan `InviteStatusBadge`. Catatan: kode **tidak** dimuat ulang saat panel dibuka — Task 3 sengaja tidak menyediakan RPC "ambil kode aktif", dan generate ulang otomatis me-revoke yang lama, jadi kode hanya pernah tampil sekali pada saat dibuat.
+- ⏳ Belum ada RPC untuk mengubah role anggota aktif tanpa lewat leave + invite ulang — kalau dibutuhkan, harus RPC baru (`set_wallet_member_role`, owner-only), bukan menumpang `accept_wallet_invite`.
+- ✅ **Sudah ditutup (migrasi `20260918000000`).** `ON DELETE CASCADE` dari `wallets` ke `wallet_members`/`transactions` dulu membuat penghapusan dompet menghapus keanggotaan dan transaksi orang lain diam-diam. Trigger `trigger_wallets_block_delete_with_members` (BEFORE DELETE) kini menolaknya dengan SQLSTATE `2BP01`, dan UI menonaktifkan barisnya di dropdown hapus dengan alasan tertulis. Trigger sengaja **melewatkan** cascade dari penghapusan AKUN owner (dideteksi dari `auth.users` yang sudah hilang) — tanpa itu, akun owner dompet bersama tidak akan pernah bisa dihapus.
+- ⏳ **Masih terbuka.** Transaksi yang terkunci untuk viewer/bekas-anggota (keputusan #6 di atas) belum menampilkan pesan yang menjelaskan kenapa — `transactions-page.jsx` hanya menyembunyikan tombol Edit/Hapus (`onUpdate && canEdit`, `onDelete && canDelete`) tanpa teks apa pun. Dicek ulang di kode per 12 Sep 2026 saat menulis bagian ini: belum ada implementasinya.
+
+---
+
+### Shared Wallet — Task 4, Commit B1/B2: UI & Pemisahan Array Dompet (12 Sep 2026)
+
+Migrasi `20260918000000` (guard hapus dompet + `list_wallet_members`) dan `20260918010000` (perbaikan policy SELECT `wallets` vs `RETURNING`) sudah dibahas detail di atas — lihat "Jebakan STABLE + RETURNING" dan bullet migrasi `20260918000000` di status Task 4. Bagian ini mencatat sisanya: delapan pertanyaan/keputusan produk (Q1-Q8) yang jadi rujukan komentar kode di Commit B1/B2, dan pemisahan array dompet tiga-arah yang lahir dari situ.
+
+#### Katalog keputusan Q1-Q8
+
+Penomoran ini khusus sesi perencanaan Commit B1/B2 (12 Sep 2026) — **beda** dari "Keputusan produk final #1-#6" Task 2 di atas (penomoran itu milik Commit A, 11-12 Sep). Keduanya dirujuk terpisah di komentar kode; jangan disatukan jadi satu urutan.
+
+| # | Keputusan | Status / implementasi |
+|---|---|---|
+| Q1 | Dompet bersama harus ikut tampil untuk ditampilkan/difilter/dicari (kartu dompet, filter Analitik/Budget/Laporan, pencarian akses di `canEditTransaction`/`canDeleteTransaction`) | ✅ `visibleAccounts` di `useWallets` |
+| Q2 | Saldo dompet bersama TIDAK ikut agregat uang milik user sendiri (KPI, kekayaan bersih, rincian per tipe) — dari sisi user, seolah dompet orang lain tidak ada | ✅ `accounts` (milik sendiri saja) |
+| Q3 | Dompet yang masih punya anggota aktif tidak boleh dihapus, dan penjagaannya wajib di SERVER, bukan cuma tombol UI yang di-disable | ✅ trigger `wallets_block_delete_with_members` (BEFORE DELETE, migrasi `20260918000000`, SQLSTATE `2BP01`) |
+| Q4 | Dompet bersama tidak memakan jatah kuota 1-dompet Basic — dompet bersama itu bonus, bukan kuota | ✅ kuota (`maxWallets`) dicek dari `accounts.length`, bukan `visibleAccounts.length` |
+| Q5 | Sinkronisasi transaksi saat app kembali ke foreground: refetch manual, tidak bergantung realtime channel | ⏳ **Ditunda ke Task 5**, sengaja bukan scope Commit B — `useTransactions` saat itu belum punya realtime sama sekali (lihat catatan terkait di bagian Task 2 di atas), jadi digabung jadi satu desain refetch menyeluruh nanti (saldo + transaksi + member sekaligus) daripada dikerjakan setengah-setengah sekarang |
+| Q6 | Pesan error harus konsisten di semua sheet UI — `rate_limited` dkk tidak boleh berbunyi beda-beda tiap layar | ✅ `src/components/wallets/memberErrors.js`, satu tabel `reason` → kunci i18n dipakai `InviteMemberSheet`, `InviteStatusBadge`, `MemberListSheet` |
+| Q7 | Migrasi "M1" dikerjakan segera sebagai bagian Commit A, bukan ditunda — ada bug aktif yang perlu ditutup saat itu juga | ✅ Selesai & sudah di-push bersama migrasi Commit A (11 Sep 2026) |
+| Q8 | Owner downgrade Pro→Basic saat masih punya dompet bersama aktif — behavior ke dompet & anggotanya | 📋 **Backlog, belum didesain.** Sengaja ditunda, bukan blocker Commit B. Sampai didesain: tidak ada guard apa pun di jalur downgrade untuk kasus ini — wajib diperiksa ulang sebelum fitur downgrade self-service (kalau ada) dirilis. |
+
+#### Pemisahan array dompet tiga-arah (`useWallets`)
+
+Sebelum Commit B1, `useWallets` mengembalikan satu array `accounts` yang sudah bercampur dompet milik sendiri dan dompet bersama (sejak Task 2) — sumber tiga bug independen: dompet bersama ikut memakan jatah 1-dompet Basic (langgar Q4), saldo dompet orang lain masuk KPI/kekayaan bersih/rincian per tipe (langgar Q2), dan `AccountSwitcher` menampilkan total berbeda dari KPI untuk data yang sama. Commit B1 memecahnya jadi tiga:
+
+```
+accounts         = milik sendiri saja                     → kuota (maxWallets) & agregat uang (KPI, kekayaan bersih, rincian per tipe)
+visibleAccounts  = milik sendiri + dompet bersama          → tampilan (kartu dompet), filter (Analitik/Budget/Laporan), pencarian akses
+writableAccounts = milik sendiri + dompet bersama (editor)  → picker yang MENCATAT UANG (transaksi, transaksi berulang, hutang)
+```
+
+Ketiganya berbentuk identik (array objek dompet) — salah pilih **tidak melempar error**, hanya berperilaku aneh, jadi tiap pemanggil baru wajib sadar memilih yang benar (lihat komentar panjang di `useWallets.js` sebelum `return`). Yang paling gampang salah: memberi `accounts` ke `canEditTransaction`/`canDeleteTransaction` — dompetnya tidak ketemu di array itu untuk editor dompet bersama, sehingga tombol edit/hapus atas transaksinya **sendiri** ikut hilang (gagal tertutup, bukan gagal terbuka — beda arah dari bug yang biasanya dikhawatirkan).
+
+**`writableAccounts` sendiri bukan bagian dari Q1-Q8 asli** — dia sudah ada sejak Commit A (11 Sep 2026, `495a7f8`) sebagai "milik sendiri + editor" untuk mencegah dompet ber-peran viewer masuk ke picker yang menulis. Commit B1 tidak menciptakannya, hanya menata ulang derivasinya menjadi `visibleAccounts.filter(a => a.canWrite)` supaya konsisten dengan dua array baru lainnya.
+
+`accounts.length` **tidak boleh** dipakai sebagai penanda "user ini Pro" — itu hal berbeda; status Pro selalu dibaca dari `useSubscription`.
 
 ---
 

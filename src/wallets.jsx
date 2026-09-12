@@ -5,6 +5,8 @@ import { IconBudget, IconPlus, IconChev, IconClose, CatIcon } from './icons';
 import { useScrollLock } from './hooks/useScrollLock';
 import { LockBadge } from './components/PaywallModal';
 import { resolveCategory, categoryLabel } from './category-field';
+import MemberListSheet from './components/wallets/MemberListSheet';
+import InviteMemberSheet from './components/wallets/InviteMemberSheet';
 
 const WALLET_GLYPH = {
   bank:       <><rect x="3" y="6" width="18" height="13" rx="2" /><path d="M3 10h18" /><path d="M7 15h4" /></>,
@@ -36,10 +38,19 @@ const TYPE_LABEL_KEY = {
 const typeLabelI18n = (id, translate) =>
   translate(TYPE_LABEL_KEY[id] || '', { defaultValue: typeLabel(id) });
 
-export function AccountSwitcher({ accounts, selected, onSelect, onAdd, addLocked = false }) {
+// `accounts` di sini adalah visibleAccounts (milik + bersama): pemilih ini
+// dipakai untuk MEMFILTER tampilan, dan dompet bersama harus bisa dipilih (Q1).
+//
+// `totalBalance` sengaja diminta sebagai prop terpisah alih-alih dijumlah dari
+// `accounts`: komponen ini satu-satunya tempat Q1 dan Q2 bertabrakan — daftarnya
+// harus memuat dompet bersama, tapi angka "Semua dompet" TIDAK boleh (Q2: saldo
+// orang lain bukan kekayaan user ini). Menjumlah dari `accounts` di sini akan
+// menampilkan total yang berbeda dari KPI dashboard untuk data yang sama.
+export function AccountSwitcher({ accounts, selected, onSelect, onAdd, addLocked = false, totalBalance = null }) {
   const { t } = useTranslation();
   const [open, setOpen] = React.useState(false);
-  const total = accounts.reduce((s, a) => s + a.balance, 0);
+  // ?? bukan ||: total 0 adalah nilai sah dan tidak boleh jatuh ke penjumlahan.
+  const total = totalBalance ?? accounts.reduce((s, a) => s + a.balance, 0);
   const current = selected === "all" ? null : accounts.find(a => a.id === selected);
 
   return (
@@ -131,15 +142,35 @@ function txForAccount(account, transactions) {
   );
 }
 
-export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transactions = [], addLocked = false, customCategories = [] }) {
+export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transactions = [], addLocked = false, customCategories = [], userId = null, canInvite = false, onNeedPro }) {
   const { t } = useTranslation();
   const [txSheet, setTxSheet] = React.useState(null);
+  const [memberSheet, setMemberSheet] = React.useState(null);   // dompet yang anggotanya dikelola
+  const [joinOpen, setJoinOpen] = React.useState(false);        // sheet masukkan kode
+  // Toast dipegang halaman ini, bukan diangkat ke app.jsx: pesannya butuh
+  // useTranslation, dan di AuthenticatedApp nama `t` sudah dipakai objek tweaks.
+  const [toast, setToast] = React.useState(null);
+  React.useEffect(() => {
+    if (!toast) return;
+    const id = setTimeout(() => setToast(null), 3500);
+    return () => clearTimeout(id);
+  }, [toast]);
   const [deletingWallet, setDeletingWallet] = React.useState(null);
+  const [deleteError, setDeleteError] = React.useState(null);
   const [deleteDropdownOpen, setDeleteDropdownOpen] = React.useState(false);
-  const total = accounts.reduce((s, a) => s + a.balance, 0);
+  // Hanya dompet MILIK SENDIRI yang boleh dihapus — DELETE `wallets` owner-only
+  // di RLS, dan penolakannya berupa 0 baris (bukan error), jadi dompet bersama
+  // yang ikut di daftar ini dulu "hilang" dari layar lalu muncul lagi saat
+  // reload. Guard "sisakan minimal satu dompet" juga dihitung dari sini.
+  const ownedAccounts = accounts.filter(a => !a.isShared);
+  const canDeleteAny = ownedAccounts.length > 1;
+  // Kekayaan bersih & rincian per tipe dihitung dari dompet MILIK SENDIRI saja
+  // (Q2). Kartu dompet bersama tetap ditampilkan di grid bawah — user memang
+  // perlu melihatnya — tapi saldonya bukan miliknya, jadi tidak dijumlahkan.
+  const total = ownedAccounts.reduce((s, a) => s + a.balance, 0);
   const byType = ACCOUNT_TYPES.map(t => ({
-    ...t, sum: accounts.filter(a => a.type === t.id).reduce((s, a) => s + a.balance, 0),
-    count: accounts.filter(a => a.type === t.id).length,
+    ...t, sum: ownedAccounts.filter(a => a.type === t.id).reduce((s, a) => s + a.balance, 0),
+    count: ownedAccounts.filter(a => a.type === t.id).length,
   })).filter(t => t.count > 0);
 
   return (
@@ -158,10 +189,17 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => accounts.length > 1 && setDeleteDropdownOpen(o => !o)}
+          <button onClick={() => canDeleteAny && setDeleteDropdownOpen(o => !o)}
             title={t('dompet.hapusDompet', { defaultValue: 'Hapus Dompet' })}
-            style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--terra)", color: "#fff", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, opacity: accounts.length < 2 ? 0.5 : 1, cursor: accounts.length < 2 ? "not-allowed" : "pointer" }}>
+            style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--terra)", color: "#fff", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, opacity: canDeleteAny ? 1 : 0.5, cursor: canDeleteAny ? "pointer" : "not-allowed" }}>
             🗑️ {t('dompet.hapusDompet', { defaultValue: 'Hapus Dompet' })}
+          </button>
+          {/* "Gabung" TIDAK digerbangi Pro — yang berbayar adalah MENGUNDANG.
+              Kalau menerima undangan juga butuh Pro, fitur ini tidak akan
+              pernah terpakai: yang diundang justru biasanya pengguna baru. */}
+          <button onClick={() => setJoinOpen(true)}
+            style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--paper)", color: "var(--ink-2)", border: "1px solid var(--line-soft)", borderRadius: 12, fontSize: 13.5, fontWeight: 500, fontFamily: "inherit", cursor: "pointer" }}>
+            🤝 {t('dompetBersama.gabung.tombolHeader')}
           </button>
           <button data-tour="wallets-add" onClick={onAdd} style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, opacity: addLocked ? 0.6 : 1, cursor: addLocked ? "not-allowed" : "pointer" }}>
             <IconPlus size={15} /> {t('dompet.tambahdompet')}
@@ -169,26 +207,41 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
           </button>
         </div>
 
-        {deleteDropdownOpen && accounts.length > 1 && (
+        {deleteDropdownOpen && canDeleteAny && (
           <>
             <div onClick={() => setDeleteDropdownOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(42,44,32,.45)", zIndex: 150 }} />
             <div className="card rise" style={{ position: "absolute", top: "100%", right: 0, width: 320, zIndex: 200, padding: 12, marginTop: 8 }}>
               <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)", paddingBottom: 10, borderBottom: "1px solid var(--line-soft)", marginBottom: 10 }}>
                 Pilih Dompet untuk Dihapus
               </div>
-              {accounts.map(a => (
-                <button key={a.id}
-                  onClick={() => { setDeletingWallet(a); setDeleteDropdownOpen(false); }}
-                  style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "10px", marginBottom: 6, borderRadius: 10, border: 0, background: "var(--paper)", color: "var(--ink)", fontSize: 13, cursor: "pointer", textAlign: "left" }}>
+              {/* Dompet yang masih punya anggota aktif TETAP DITAMPILKAN, tapi
+                  nonaktif dengan alasannya tertulis di baris itu sendiri.
+                  Sengaja bukan tooltip `title=` — ini aplikasi Android
+                  (Capacitor), dan tooltip hover tidak pernah muncul di layar
+                  sentuh, jadi user hanya akan menemui tombol mati tanpa
+                  penjelasan. Sengaja juga bukan disembunyikan: user perlu tahu
+                  dompetnya masih ada dan apa yang harus dilakukan dulu.
+                  Trigger 20260918000000 menjaga hal yang sama di server. */}
+              {ownedAccounts.map(a => {
+                const blocked = (a.memberCount || 0) > 0;
+                return (
+                <button key={a.id} disabled={blocked}
+                  onClick={() => { if (!blocked) { setDeletingWallet(a); setDeleteDropdownOpen(false); } }}
+                  style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "10px", marginBottom: 6, borderRadius: 10, border: 0, background: "var(--paper)", color: "var(--ink)", fontSize: 13, cursor: blocked ? "not-allowed" : "pointer", textAlign: "left", opacity: blocked ? 0.55 : 1 }}>
                   <span style={{ width: 32, height: 32, borderRadius: 8, background: `color-mix(in oklch, ${a.color} 18%, var(--ivory))`, color: a.color, display: "grid", placeItems: "center", flexShrink: 0 }}>
                     <WalletGlyph type={a.type} size={14} />
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 500 }}>{a.name}</div>
-                    <div style={{ fontSize: 11, color: "var(--muted)" }}>{fmtShort(a.balance)}</div>
+                    <div style={{ fontSize: 11, color: blocked ? "var(--terra)" : "var(--muted)" }}>
+                      {blocked
+                        ? t('dompet.hapusTerkunciAnggota', { count: a.memberCount })
+                        : fmtShort(a.balance)}
+                    </div>
                   </div>
                 </button>
-              ))}
+                );
+              })}
             </div>
           </>
         )}
@@ -223,8 +276,12 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
                 <span style={{ width: 40, height: 40, borderRadius: 11, background: `color-mix(in oklch, ${a.color} 16%, var(--ivory))`, color: a.color, display: "grid", placeItems: "center" }}>
                   <WalletGlyph type={a.type} size={19} />
                 </span>
+                {/* Dompet bersama: tidak ada "Set utama" — UPDATE `wallets` owner-only,
+                    dan setPrimary mengosongkan dompet utama milik sendiri lebih dulu. */}
                 {a.is_locked
                   ? <span style={{ fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--muted)", background: "var(--paper)", padding: "3px 8px", borderRadius: 999, fontWeight: 500, border: "1px solid var(--line-soft)" }}>Soft Lock</span>
+                  : a.isShared
+                  ? <span style={{ fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--muted)", background: "var(--paper)", padding: "3px 8px", borderRadius: 999, fontWeight: 500, border: "1px solid var(--line-soft)" }}>{t('dompet.dibagikan')}</span>
                   : a.primary
                     ? <span style={{ fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--sage)", background: "rgba(92,107,76,.14)", padding: "3px 8px", borderRadius: 999, fontWeight: 500 }}>{t('dompet.utama')}</span>
                     : <button onClick={() => onSetPrimary(a.id)} title={t('dompet.setUtama')} style={{ fontSize: 11, color: "var(--muted)", background: "transparent", border: "1px solid var(--line-soft)", borderRadius: 999, padding: "3px 9px" }}>{t('dompet.setUtama')}</button>}
@@ -242,6 +299,17 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
             </div>
             <div className="hairline" style={{ display: "flex" }}>
               <button data-tour={i === 0 ? "wallets-tx-first" : undefined} onClick={() => setTxSheet(a)} style={{ ...cardFootBtn, flex: 1 }}>{t('dompet.transaksi')}</button>
+              {/* Tombol ini ada untuk SEMUA dompet, termasuk milik user Basic.
+                  Gerbang Pro-nya ada di dalam (InviteStatusBadge → onNeedPro),
+                  bukan di sini: menyembunyikan tombolnya membuat user Basic
+                  tidak pernah tahu fitur ini ada. Untuk dompet bersama,
+                  tombol yang sama dipakai anggota untuk melihat siapa saja
+                  yang punya akses dan untuk keluar. */}
+              <button onClick={() => setMemberSheet(a)} style={{ ...cardFootBtn, flex: 1, borderLeft: "1px solid var(--line-soft)" }}>
+                {a.memberCount > 0
+                  ? t('dompetBersama.kartu.anggotaCount', { count: a.memberCount })
+                  : t('dompetBersama.kartu.anggota')}
+              </button>
             </div>
           </div>
         ))}
@@ -266,15 +334,54 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
         onClose={() => setTxSheet(null)}
       />
     )}
+    {memberSheet && (
+      <MemberListSheet
+        wallet={memberSheet}
+        userId={userId}
+        // canInvite = Pro DAN pemilik dompet ini. Keduanya wajib: RPC
+        // generate_wallet_invite juga memeriksa keduanya, jadi UI yang lebih
+        // longgar hanya akan memunculkan penolakan server.
+        canInvite={canInvite && !memberSheet.isShared}
+        onNeedPro={onNeedPro}
+        onToast={setToast}
+        onClose={() => setMemberSheet(null)}
+        onLeft={() => setMemberSheet(null)}
+      />
+    )}
+    {joinOpen && (
+      <InviteMemberSheet
+        onClose={() => setJoinOpen(false)}
+        onJoined={() => setToast(t('dompetBersama.toast.berhasilGabung'))}
+      />
+    )}
+    {toast && (
+      <div role="status" style={{ position: "fixed", left: "50%", transform: "translateX(-50%)", bottom: 92, zIndex: 260, maxWidth: "min(92vw, 420px)", background: "var(--ink)", color: "var(--cream)", padding: "11px 16px", borderRadius: 12, fontSize: 13, lineHeight: 1.45, boxShadow: "0 8px 28px -8px rgba(42,44,32,.45)" }}>
+        {toast}
+      </div>
+    )}
     {deletingWallet && (
       <WalletDeleteConfirmation
         wallet={deletingWallet}
         transactionCount={txForAccount(deletingWallet, transactions).length}
-        onConfirm={() => {
-          onDelete(deletingWallet.id);
+        onConfirm={async () => {
+          // Menunggu hasilnya, bukan fire-and-forget: sejak trigger
+          // 20260918000000 penghapusan bisa DITOLAK server (dompet masih punya
+          // anggota aktif). Menutup modal tanpa memeriksa akan terlihat seperti
+          // berhasil, lalu dompetnya muncul lagi begitu layar disegarkan.
+          const res = await onDelete(deletingWallet.id);
+          if (res?.reason === 'has_members') {
+            setDeleteError(t('dompet.hapusDitolakAdaAnggota'));
+            return;   // modal tetap terbuka, pesannya tampil di dalamnya
+          }
+          if (res?.error) {
+            setDeleteError(t('dompet.hapusGagal'));
+            return;
+          }
+          setDeleteError(null);
           setDeletingWallet(null);
         }}
-        onCancel={() => setDeletingWallet(null)}
+        errorMessage={deleteError}
+        onCancel={() => { setDeleteError(null); setDeletingWallet(null); }}
       />
     )}
     </>
@@ -332,7 +439,7 @@ function AccountTxSheet({ account, transactions, customCategories = [], onClose 
   );
 }
 
-function WalletDeleteConfirmation({ wallet, transactionCount, onConfirm, onCancel }) {
+function WalletDeleteConfirmation({ wallet, transactionCount, onConfirm, onCancel, errorMessage = null }) {
   const { t } = useTranslation();
   return (
     <>
@@ -356,6 +463,15 @@ function WalletDeleteConfirmation({ wallet, transactionCount, onConfirm, onCance
             ⚠️ <strong>{transactionCount} transaksi</strong> terhubung ke dompet ini akan <strong>hilang selamanya</strong>. Pastikan Anda sudah backup data yang penting.
           </div>
         </div>
+
+        {/* Penolakan server (mis. dompet masih punya anggota aktif). Tampil DI
+            DALAM modal, bukan sebagai toast yang lewat: user sedang menatap
+            modal ini, dan pesannya berisi tindakan yang harus dia lakukan. */}
+        {errorMessage && (
+          <div role="alert" style={{ background: "color-mix(in oklch, var(--terra) 12%, transparent)", border: "1px solid color-mix(in oklch, var(--terra) 34%, transparent)", borderRadius: 12, padding: "11px 13px", marginBottom: 14, fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.5 }}>
+            {errorMessage}
+          </div>
+        )}
 
         <div style={{ display: "flex", gap: 10 }}>
           <button onClick={onCancel}
