@@ -60,6 +60,46 @@ export async function fetchSharedMemberships(userId) {
 }
 
 /**
+ * Daftar id dompet yang DIMILIKI user (`wallets.user_id = userId`).
+ *
+ * KENAPA INI PERLU, padahal `fetchSharedWalletIds` di atas sengaja TIDAK
+ * memuat dompet sendiri: alasan "pemanggil sudah menyaringnya lewat user_id"
+ * itu benar untuk tabel `wallets` (baris dompet selalu ditulis pemiliknya
+ * sendiri, jadi `user_id=eq.me` pasti menemukannya), tapi TIDAK berlaku untuk
+ * tabel `transactions` — sejak dompet bersama, baris transaksi di dompet SAYA
+ * bisa ditulis ORANG LAIN, dan `user_id`-nya adalah si pencatat, bukan saya.
+ * Tanpa daftar ini, query owner (`user_id.eq.me`) tidak akan pernah cocok
+ * dengan transaksi anggotanya — owner tidak pernah melihat belanja anggota di
+ * dompetnya sendiri, di initial load maupun refetch. (Terverifikasi lewat
+ * e2e dompet bersama, 13 Sep 2026; RLS server sudah mengizinkannya lewat
+ * `wallet_access_role`, yang kurang cuma permintaannya di sisi klien.)
+ *
+ * Dipakai `useTransactions` DIGABUNG dengan `fetchSharedWalletIds`, supaya
+ * cabang `wallet_id.in.(…)` di klien mencerminkan persis policy SELECT
+ * server: `wallet_access_role(wallet_id) IS NOT NULL` = dompet yang saya
+ * miliki ATAU dompet yang saya jadi anggota aktifnya.
+ *
+ * Kegagalan TIDAK dilempar — alasan sama dengan fetchSharedMemberships.
+ *
+ * @param {string} userId
+ * @returns {Promise<string[]>} uuid dompet milik user
+ */
+export async function fetchOwnedWalletIds(userId) {
+  if (!userId) return [];
+
+  const { data, error } = await supabase
+    .from('wallets')
+    .select('id')
+    .eq('user_id', userId);
+
+  if (error) {
+    console.error('[walletAccess] fetchOwnedWalletIds FAILED:', error.code, error.message);
+    return [];
+  }
+  return (data || []).map(r => r.id).filter(Boolean);
+}
+
+/**
  * Boleh-tidaknya user MENGHAPUS sebuah transaksi.
  *
  * Dua syarat — cerminan RPC delete_transaction (migrasi 20260917000000):
