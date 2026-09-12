@@ -47,7 +47,7 @@ import { fmt } from './data';
 import PinLock from './components/PinLock';
 import BiometricLock from './components/BiometricLock';
 import { isPinActive, isBiometricEnabled, clearPin } from './lib/pin';
-import { useAutoLock } from './hooks/useAutoLock';
+import { useAutoLock, setAppLocked, subscribeAppLock } from './hooks/useAutoLock';
 import { validateUserStillExists, logoutDeletedUser } from './utils/sessionValidator';
 import { useTransactions } from './hooks/useTransactions';
 import { useSavings } from './hooks/useSavings';
@@ -97,10 +97,17 @@ export default function App() {
   const [showSplash, setShowSplash] = React.useState(false);
 
   // Tentukan gerbang saat app pertama dibuka (PIN & biometrik saling eksklusif)
+  // setAppLocked() mendampingi SETIAP perubahan showPin/showBiometric di file
+  // ini. Itu cermin status gerbang yang dibaca modul lain (auto-refetch
+  // transaksi) tanpa harus ikut siklus render React — lihat useAutoLock.js.
+  // Kalau nanti ada jalur baru yang memunculkan/menutup gerbang, jalur itu
+  // WAJIB ikut memanggilnya, kalau tidak refetch bisa jalan di balik layar kunci.
   React.useEffect(() => {
     if (isPinActive()) {
+      setAppLocked(true);
       setShowPin(true);          // PIN dulu, splash menyusul setelah benar
     } else if (isBiometricEnabled()) {
+      setAppLocked(true);
       setShowBiometric(true);    // biometrik dulu, splash menyusul setelah berhasil
     } else {
       setShowSplash(true);       // tanpa keamanan → langsung splash
@@ -143,10 +150,12 @@ export default function App() {
 
   // Verifikasi berhasil → lepas gerbang, tampilkan splash 3 detik
   const onPinSuccess = React.useCallback(() => {
+    setAppLocked(false);
     setShowPin(false);
     setShowSplash(true);
   }, []);
   const onBiometricSuccess = React.useCallback(() => {
+    setAppLocked(false);
     setShowBiometric(false);
     setShowSplash(true);
   }, []);
@@ -155,6 +164,7 @@ export default function App() {
   // Lupa PIN / 5× gagal → reset keamanan, lanjut splash, paksa login ulang Supabase
   const handleForgotPin = React.useCallback(async () => {
     clearPin();
+    setAppLocked(false);
     setShowPin(false);
     setShowSplash(true);
     try { await supabase.auth.signOut(); } catch {}
@@ -163,6 +173,7 @@ export default function App() {
   // Biometrik gagal total / tak tersedia → reset keamanan, lanjut splash, login ulang
   const handleBiometricEscape = React.useCallback(async () => {
     clearPin();
+    setAppLocked(false);
     setShowBiometric(false);
     setShowSplash(true);
     try { await supabase.auth.signOut(); } catch {}
@@ -171,8 +182,8 @@ export default function App() {
   // Auto-lock: setelah app lama di background, munculkan kembali gerbang keamanan.
   // No-op bila tak ada metode keamanan aktif (PIN/biometrik mati).
   const lockNow = React.useCallback(() => {
-    if (isPinActive()) { setShowSplash(false); setShowPin(true); }
-    else if (isBiometricEnabled()) { setShowSplash(false); setShowBiometric(true); }
+    if (isPinActive()) { setAppLocked(true); setShowSplash(false); setShowPin(true); }
+    else if (isBiometricEnabled()) { setAppLocked(true); setShowSplash(false); setShowBiometric(true); }
   }, []);
   useAutoLock(lockNow);
 
@@ -417,7 +428,7 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
   }, []);
 
   // Transactions — sinkron dengan Supabase per user yang login
-  const { transactions, loading: txLoading, createTransaction, deleteTransaction, updateTransaction } = useTransactions(session.user.id, limits);
+  const { transactions, loading: txLoading, refreshing: txRefreshing, createTransaction, deleteTransaction, updateTransaction, autoRefetchTransactions, refreshTransactions } = useTransactions(session.user.id, limits);
 
   // Hutang/Piutang — butuh "ledger" dari transactions untuk orkestrasi +
   // rollback. create/delete di sini sudah atomik (RPC record_transaction /
@@ -506,7 +517,15 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
     syncWidget(transactions, budgets);
   }, [transactions, budgets]);
 
-  // Buka form tambah transaksi bila app diluncurkan dari tombol "Catat Transaksi" pada widget.
+  // App kembali ke foreground → dua pekerjaan, SATU pasang listener.
+  //  1. Buka form tambah transaksi bila app diluncurkan dari tombol
+  //     "Catat Transaksi" pada widget home-screen.
+  //  2. Refetch transaksi (sinkronisasi dompet bersama Fase 1): perubahan yang
+  //     dibuat anggota lain selagi app di background baru terlihat di sini.
+  // Sengaja menumpang listener yang sudah ada dan bukan memasang pasangan
+  // visibilitychange/focus kedua — dua pasang berarti dua handler yang urutan
+  // jalannya tidak dijamin, dan gampang satu ikut dibersihkan tapi satu lagi
+  // tidak saat effect ini nanti diubah.
   React.useEffect(() => {
     let alive = true;
     const check = async () => {
@@ -514,7 +533,16 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
       if (alive && action === 'add_tx') setModal(true);
     };
     check(); // saat app pertama dibuka
-    const onVisible = () => { if (document.visibilityState === 'visible') check(); };
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      check();
+      // Ditunda satu tick (macrotask), BUKAN dipanggil langsung: useAutoLock
+      // memasang handler untuk event yang SAMA dan baru men-set status lock di
+      // dalamnya. Dibaca sinkron di sini, isAppLocked() masih bernilai lama →
+      // refetch lolos tepat pada resume yang seharusnya memunculkan PIN.
+      // setTimeout menjamin semua handler event ini sudah selesai jalan.
+      setTimeout(() => { if (alive) autoRefetchTransactions().catch(() => {}); }, 0);
+    };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('focus', onVisible);
     return () => {
@@ -522,7 +550,20 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('focus', onVisible);
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [autoRefetchTransactions]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Unlock (PIN/biometrik benar) → data bisa saja sudah basi karena app lama
+  // di background. Debounce di autoRefetch tetap berlaku, jadi ini tidak akan
+  // dobel dengan fetch yang baru saja jalan.
+  //
+  // Catatan jujur: saat ini gerbang keamanan meng-UNMOUNT seluruh
+  // AuthenticatedApp (App `return <PinLock/>` lebih dulu), jadi unlock sudah
+  // otomatis memicu load awal dan jalur ini jarang terpakai. Dipasang sebagai
+  // jaring pengaman kalau gerbangnya nanti diubah jadi overlay di atas konten.
+  React.useEffect(
+    () => subscribeAppLock(locked => { if (!locked) autoRefetchTransactions().catch(() => {}); }),
+    [autoRefetchTransactions]
+  );
 
   // Kategori kustom — dipakai bersama menu Anggaran & Transaksi (realtime)
   const { customCategories, addCustomCategory, deleteCustomCategory } = useCustomCategories(session.user.id, limits);
@@ -807,7 +848,7 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
         )}
 
         {active === "transactions" && (
-          <TransactionsPage accounts={visibleAccounts} onAdd={() => setModal(true)} onScan={handleScan} scanLocked={!limits.receiptScanEnabled} transactions={transactions} loading={txLoading} onDelete={handleDeleteTransaction} onUpdate={handleUpdateTransaction} customCategories={customCategories} onCreateCustom={addCustomCategory} onDeleteCustom={handleDeleteCustomCategory} isPro={subscription.isPro} isBasicAtMax={isBasicAtMax} userId={session.user.id} />
+          <TransactionsPage accounts={visibleAccounts} onAdd={() => setModal(true)} onScan={handleScan} scanLocked={!limits.receiptScanEnabled} transactions={transactions} loading={txLoading} onRefresh={refreshTransactions} refreshing={txRefreshing} onDelete={handleDeleteTransaction} onUpdate={handleUpdateTransaction} customCategories={customCategories} onCreateCustom={addCustomCategory} onDeleteCustom={handleDeleteCustomCategory} isPro={subscription.isPro} isBasicAtMax={isBasicAtMax} userId={session.user.id} />
         )}
 
         {active === "settings" && <SettingsPage t={t} setTweak={setTweak} user={session.user} notifSubs={notifSubs} onToggleNotifSub={toggleNotifSub} subscription={subscription} revenueCat={revenueCat} accounts={writableAccounts} />}

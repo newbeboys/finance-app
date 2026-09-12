@@ -184,7 +184,9 @@
     "pratinjauStruk": "Pratinjau struk",
     "gagalKategoriKustom": "Gagal menyimpan kategori kustom. Coba lagi.",
     "gagalSimpan": "Gagal menyimpan transaksi. Periksa koneksi lalu coba lagi.",
-    "tanggal": "Tanggal"
+    "tanggal": "Tanggal",
+    "segarkan": "Segarkan",
+    "segarkanTooltip": "Ambil ulang data transaksi terbaru"
   },
   "kategori": {
     "pilihKategori": "Pilih kategori",

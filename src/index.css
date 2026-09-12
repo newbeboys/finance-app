@@ -149,6 +149,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+/* Ikon berputar selagi pull-to-refresh manual berjalan (halaman Transaksi). */
+.spin { animation: spin .9s linear infinite; }
 
 
 /* Mobile transaction rows hidden on desktop */

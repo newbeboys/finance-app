@@ -47,3 +47,34 @@ export function useAutoLock(onLock, { timeoutMs = AUTO_LOCK_MS, enabled = true }
     };
   }, [enabled, timeoutMs]);
 }
+
+// ── Status gerbang keamanan (dipakai di luar hook ini) ───────────────
+// Disimpan di level MODUL, bukan state React, dan itu disengaja: pembacanya
+// (auto-refetch transaksi) berjalan di dalam handler `visibilitychange`/
+// `focus` yang SAMA dengan yang memicu lock. Di titik itu state React belum
+// ter-commit, jadi `showPin` masih bernilai lama → refetch akan lolos persis
+// saat app mau terkunci. Flag modul berubah sinkron, jadi pembaca yang
+// menunda satu tick (lihat pemakaiannya di app.jsx) selalu melihat nilai final.
+//
+// Sumber kebenarannya tetap App: dia yang memanggil setAppLocked() saat
+// memunculkan/menutup PinLock & BiometricLock. Hook ini cuma menampungnya
+// supaya modul lain tidak perlu impor dari app.jsx (lingkaran impor).
+let appLocked = false;
+const lockSubs = new Set();
+
+export function isAppLocked() {
+  return appLocked;
+}
+
+export function setAppLocked(next) {
+  const v = !!next;
+  if (v === appLocked) return;
+  appLocked = v;
+  lockSubs.forEach(fn => { try { fn(v); } catch {} });
+}
+
+/** Dipanggil tiap status lock BERUBAH. Mengembalikan fungsi unsubscribe. */
+export function subscribeAppLock(fn) {
+  lockSubs.add(fn);
+  return () => { lockSubs.delete(fn); };
+}
