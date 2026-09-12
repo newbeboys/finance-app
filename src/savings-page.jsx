@@ -183,18 +183,27 @@ export function AddGoalModal({ open, onClose, onCreate }) {
   const [deadlineISO, setDeadlineISO] = React.useState(null);       // ISO lokal: 2026-01-31 atau null
   const [showDeadlinePicker, setShowDeadlinePicker] = React.useState(false);
   const [color, setColor] = React.useState(GOAL_COLORS[0]);
+  // Sama seperti AddAccountModal: dulu onCreate() dipanggil tanpa await lalu
+  // modal langsung ditutup, jadi kegagalan apa pun berakhir senyap.
+  const [errorMsg, setErrorMsg] = React.useState("");
+  const [submitting, setSubmitting] = React.useState(false);
 
   React.useEffect(() => {
-    if (open) { setLabel(""); setIcon("star"); setTarget(""); setCurrent(""); setDeadlineLabel(""); setDeadlineISO(null); setShowDeadlinePicker(false); setColor(GOAL_COLORS[0]); }
+    if (open) { setLabel(""); setIcon("star"); setTarget(""); setCurrent(""); setDeadlineLabel(""); setDeadlineISO(null); setShowDeadlinePicker(false); setColor(GOAL_COLORS[0]); setErrorMsg(""); setSubmitting(false); }
   }, [open]);
 
   if (!open) return null;
 
   const num = (v) => +String(v).replace(/\D/g, "") || 0;
   const valid = label.trim() && num(target) > 0;
-  const submit = () => {
-    if (!valid) return;
-    onCreate({ id: "g" + Date.now(), label: label.trim(), icon, color, target: num(target), current: num(current), deadline: deadlineLabel || tr('tabungan.tanpaTenggat'), deadlineISO });
+  const submit = async () => {
+    if (!valid || submitting) return;
+    setErrorMsg("");
+    setSubmitting(true);
+    const res = await onCreate({ id: "g" + Date.now(), label: label.trim(), icon, color, target: num(target), current: num(current), deadline: deadlineLabel || tr('tabungan.tanpaTenggat'), deadlineISO });
+    setSubmitting(false);
+    if (res?.limitReached) { onClose(); return; }   // paywall sudah dibuka hook
+    if (res?.error) { setErrorMsg(res.error.message || tr('umum.simpanGagal')); return; }
     onClose();
   };
 
@@ -295,9 +304,15 @@ export function AddGoalModal({ open, onClose, onCreate }) {
           </div>
         </div>
 
+        {errorMsg && (
+          <div role="alert" style={{ marginTop: 18, background: "color-mix(in oklch, var(--terra) 12%, transparent)", border: "1px solid color-mix(in oklch, var(--terra) 34%, transparent)", borderRadius: 10, padding: "10px 12px", fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.5 }}>
+            {errorMsg}
+          </div>
+        )}
+
         <div className="goal-modal-actions">
           <button onClick={onClose} style={{ flex: 1, padding: "11px", background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 12, fontSize: 13.5, color: "var(--ink-2)" }}>{tr('umum.batal')}</button>
-          <button onClick={submit} disabled={!valid} style={{ flex: 2, padding: "11px", background: valid ? "var(--ink)" : "var(--line)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, cursor: valid ? "pointer" : "default" }}>{tr('tabungan.buatGoal')}</button>
+          <button onClick={submit} disabled={!valid || submitting} style={{ flex: 2, padding: "11px", background: (valid && !submitting) ? "var(--ink)" : "var(--line)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, cursor: (valid && !submitting) ? "pointer" : "default" }}>{submitting ? tr('umum.menyimpan') : tr('tabungan.buatGoal')}</button>
         </div>
       </div>
     </div>

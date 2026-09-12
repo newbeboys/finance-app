@@ -36,7 +36,8 @@
     "lanjut": "Lanjut",
     "selesai": "Selesai",
     "menyimpan": "Menyimpan…",
-    "sesiBerakhir": "Sesi kamu sudah berakhir. Masuk lagi, lalu coba sekali lagi ya."
+    "sesiBerakhir": "Sesi kamu sudah berakhir. Masuk lagi, lalu coba sekali lagi ya.",
+    "simpanGagal": "Gagal menyimpan. Coba lagi sebentar lagi."
   },
   "sapaan": {
     "pagi": "Selamat pagi",
