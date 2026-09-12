@@ -57,6 +57,18 @@ export function useTransactions(userId, limits) {
   }, [userId]);
 
   async function createTransaction(tx) {
+    // ── Gerbang identitas: PALING DEPAN, sebelum panggilan jaringan apa pun ──
+    // Cek kuota di bawah melakukan query hitung ke Supabase. Kalau gerbang ini
+    // ditaruh setelahnya, sesi yang sudah mati akan tetap mengirim query itu
+    // dan memunculkan 401 di Network — permintaan yang sudah pasti sia-sia.
+    //
+    // Sengaja MENDAHULUI paywall: kalau sesinya mati, "sesi berakhir" adalah
+    // pesan yang benar, bukan tawaran upgrade. User tidak sedang terhalang
+    // plan-nya, dia sedang tidak login. (Urutan sebaliknya sempat dipakai dan
+    // itu keliru.)
+    const { userId: authUserId, error: authError } = await requireUserId();
+    if (authError) return { error: authError };
+
     const now = new Date();
     const todayISO = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
     // Tanggal pilihan user (ISO yyyy-mm-dd); fallback ke hari ini
@@ -90,12 +102,6 @@ export function useTransactions(userId, limits) {
         return { error: null, limitReached: true };
       }
     }
-
-    // Identitas dari sesi aktif, bukan prop `userId` (lihat lib/authIdentity.js).
-    // Dicek SETELAH kuota supaya paywall tetap yang muncul duluan saat Basic
-    // mentok — pesan "sesi berakhir" di situ akan menyesatkan.
-    const { userId: authUserId, error: authError } = await requireUserId();
-    if (authError) return { error: authError };
 
     const { data, error: err } = await supabase
       .from('transactions')

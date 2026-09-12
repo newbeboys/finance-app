@@ -240,6 +240,14 @@ export function useDebts(userId, limits, ledger = {}) {
   //   komentar di dalam fungsi); diabaikan/dipaksa true utk type='payable'.
   // Output: { error, debtId, limitReached, cooldownUntilDate }
   async function createDebt(input) {
+    // Gerbang identitas PALING DEPAN — checkCreateAllowed() di bawah melakukan
+    // query rolling-window ke Supabase untuk akun Basic, dan sesi yang mati
+    // akan membuatnya terkirim lalu gagal 401 tanpa guna. Sekaligus menjaga
+    // createDebt tidak pernah menulis separuh jalan: fungsi ini mengisi dua
+    // tabel berurutan (debts lalu transactions).
+    const { userId: authUserId, error: authError } = await requireUserId();
+    if (authError) return { error: authError };
+
     const gate = await checkCreateAllowed();
     if (!gate.ok) {
       if (gate.reason === 'active') {
@@ -260,13 +268,6 @@ export function useDebts(userId, limits, ledger = {}) {
     const cashDisbursedAtCreation = input.type === 'payable'
       ? true
       : input.cash_disbursed_at_creation !== false;
-
-    // Identitas dari sesi aktif, bukan prop `userId` (lihat lib/authIdentity.js).
-    // Dicek SEBELUM insert pertama: createDebt menulis ke dua tabel berurutan
-    // (debts lalu transactions), dan gagal di tengah meninggalkan catatan
-    // hutang tanpa transaksinya.
-    const { userId: authUserId, error: authError } = await requireUserId();
-    if (authError) return { error: authError };
 
     // 1) Insert baris debts
     const { data: debtRow, error: dErr } = await supabase
