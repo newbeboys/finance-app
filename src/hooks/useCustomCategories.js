@@ -4,6 +4,7 @@ import { supabase } from '../supabase';
 import { CATEGORIES, INCOME_CATEGORIES } from '../data';
 import { DEFAULT_CATEGORY_ICON } from '../icons';
 import { usePaywall } from '../components/PaywallModal';
+import { requireUserIdAsText } from '../lib/authIdentity';
 
 // Supabase row → bentuk kategori yang dipakai komponen (sama seperti CATEGORIES)
 function toCustomCat(row) {
@@ -100,9 +101,16 @@ export function useCustomCategories(userId, limits) {
       return { error: null, category: null, limitReached: true };
     }
 
+    // Identitas dari sesi aktif, bukan prop `userId` (lihat lib/authIdentity.js).
+    // Varian ...AsText dipakai di sini karena kontrak hook ini mengembalikan
+    // `error` berupa STRING, bukan objek Error — memberi Error ke pemanggilnya
+    // akan merender "[object Error]".
+    const { userId: authUserId, error: authError } = await requireUserIdAsText();
+    if (authError) return { error: authError, category: null };
+
     const { data, error } = await supabase
       .from('custom_categories')
-      .insert({ user_id: userId, name: clean, color: color || 'var(--sage)', type, icon: icon || DEFAULT_CATEGORY_ICON })
+      .insert({ user_id: authUserId, name: clean, color: color || 'var(--sage)', type, icon: icon || DEFAULT_CATEGORY_ICON })
       .select()
       .single();
 

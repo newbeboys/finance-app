@@ -2,6 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../supabase';
 import { usePaywall } from '../components/PaywallModal';
+import { requireUserId } from '../lib/authIdentity';
 
 // Actual Supabase columns: id, user_id, category, label, color, limit, enabled, spent, wallet_id, created_at
 // Note: no "period" column in DB — periode is UI-only, defaults to "monthly"
@@ -20,7 +21,8 @@ function toBudget(row) {
 }
 
 // Migrate old localStorage budgets to Supabase (runs once, then clears localStorage key)
-async function migrateFromLocalStorage(userId) {
+// Tidak lagi menerima `userId`: identitasnya diambil sendiri dari sesi aktif.
+async function migrateFromLocalStorage() {
   const LS_KEY = 'finance_budgets';
   try {
     const raw = localStorage.getItem(LS_KEY);
@@ -28,8 +30,19 @@ async function migrateFromLocalStorage(userId) {
     const old = JSON.parse(raw);
     if (!Array.isArray(old) || old.length === 0) return [];
 
+    // Identitas dari sesi aktif. Beda dari jalur lain: kegagalan di sini
+    // TIDAK dimunculkan ke user — ini migrasi legacy sekali-jalan yang berjalan
+    // saat mount, bukan aksi yang diminta user, jadi pesan error di sini hanya
+    // membingungkan. Dilewati diam-diam; localStorage TIDAK dihapus sehingga
+    // migrasinya dicoba lagi pada mount berikutnya saat sesi sudah sehat.
+    const { userId: authUserId, error: authError } = await requireUserId();
+    if (authError) {
+      console.warn('[useBudgets] migrasi localStorage dilewati: tidak ada sesi aktif');
+      return [];
+    }
+
     const rows = old.map(b => ({
-      user_id:  userId,
+      user_id:  authUserId,
       category: b.categoryId || null,
       label:    b.label      || 'Anggaran',
       color:    b.color      || 'var(--sage)',
@@ -71,7 +84,7 @@ export function useBudgets(userId, limits) {
 
         // If Supabase is empty but localStorage has data → migrate once
         if (existing.length === 0 && localStorage.getItem('finance_budgets')) {
-          const migrated = await migrateFromLocalStorage(userId);
+          const migrated = await migrateFromLocalStorage();
           if (!alive) return;
           setBudgets(migrated);
         } else {
@@ -93,10 +106,15 @@ export function useBudgets(userId, limits) {
       return { error: null, limitReached: true };
     }
 
+    // Identitas dari sesi aktif, bukan prop `userId` (lihat lib/authIdentity.js).
+    // Setelah cek kuota, supaya paywall tetap muncul duluan saat Basic mentok.
+    const { userId: authUserId, error: authError } = await requireUserId();
+    if (authError) return { error: authError };
+
     const { data, error } = await supabase
       .from('budgets')
       .insert({
-        user_id:  userId,
+        user_id:  authUserId,
         category: row.categoryId || null,
         label:    row.label,
         wallet_id: row.walletId || null,

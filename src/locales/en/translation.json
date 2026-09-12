@@ -35,7 +35,9 @@
     "kembali": "Back",
     "lanjut": "Next",
     "selesai": "Done",
-    "menyimpan": "Saving…"
+    "menyimpan": "Saving…",
+    "sesiBerakhir": "Your session has ended. Please sign in again and retry.",
+    "simpanGagal": "Could not save. Please try again shortly."
   },
   "sapaan": {
     "pagi": "Good morning",

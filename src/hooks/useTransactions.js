@@ -76,6 +76,15 @@ export function useTransactions(userId, limits) {
   }, [userId]);
 
   async function createTransaction(tx) {
+    // TIDAK ADA gerbang requireUserId() di sini — dan itu disengaja, bukan
+    // celah yang tertinggal saat merge dari main (hotfix identitas). Jalur
+    // itu berguna untuk INSERT langsung, yang menaruh `user_id` dari state
+    // React ke payload. Di branch ini createTransaction memanggil RPC
+    // record_transaction (migrasi 20260911010000), yang MENURUNKAN user_id
+    // dari auth.uid() DI SERVER — payload tidak pernah membawa identitas
+    // apa pun, jadi tidak ada "prop basi vs JWT" yang bisa melenceng untuk
+    // dicegat di sini. Menambahkan requireUserId() di titik ini hanya akan
+    // menduplikasi apa yang sudah dijamin RPC-nya sendiri.
     const now = new Date();
     const todayISO = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
     // Tanggal pilihan user (ISO yyyy-mm-dd); fallback ke hari ini

@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 // (`const [t, setTweakRaw] = useTweaks(defaults)`), jadi useTranslation()
 // tidak bisa dipasang di sana tanpa menabraknya. Pola yang sama dipakai
 // useDebts.js dan reports.jsx untuk alasan berbeda (bukan komponen React).
+// Lihat juga catatan di handleAddAcct/handleAddGoal/handleScan di bawah.
 import i18n from './i18n';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
@@ -690,13 +691,17 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
   // ── Gate fitur (Basic vs Pro) — pre-check di tombol pemicu ─────────
   // Wallet/goal: cek limit SEBELUM membuka form supaya form tak terbuka
   // sia-sia (hook tetap punya guard otoritatif sebagai jaring pengaman).
-  // PERBAIKAN BUG (Task 4): ketiga gate di bawah dulu memanggil `t('...')`.
-  // Di komponen ini `t` adalah objek TWEAKS, bukan fungsi i18next — jadi
-  // ketiganya melempar "t is not a function" DAN membuat layar putih, tepat
-  // saat user Basic menyentuh batas plannya (tambah dompet ke-2, goal ke-3,
-  // scan nota). Paywall-nya tidak pernah muncul. Lolos karena ketiganya hanya
-  // bisa dipicu akun Basic yang sudah mentok, sedangkan pengembangan dilakukan
-  // dengan akun Pro. i18n.t() adalah fungsi yang benar di scope ini.
+  // PERBAIKAN BUG (ditemukan independen di dua tempat — Task 4 & hotfix
+  // terpisah, keduanya berujung fix yang sama): ketiga gate di bawah dulu
+  // memanggil `t('...')`. Di komponen ini `t` adalah objek TWEAKS
+  // (`const [t, setTweakRaw] = useTweaks(defaults)`), BUKAN fungsi i18next —
+  // useTranslation() memang dipanggil di file ini, tapi di komponen App,
+  // bukan di sini. Ketiganya melempar "t is not a function" dan membuat layar
+  // putih, tepat saat user Basic menyentuh batas plannya (tambah dompet ke-2,
+  // goal ke-3, scan nota) — paywall-nya tidak pernah sempat muncul. Lolos lama
+  // karena hanya terpicu akun Basic yang sudah mentok, sedangkan pengembangan
+  // dilakukan dengan akun Pro. i18n.t() adalah fungsi yang benar di scope ini.
+  // JANGAN mengganti i18n.t() kembali menjadi t() di ketiga tempat ini.
   //
   // `accounts` di handleAddAcct = dompet MILIK SENDIRI (Q4): dompet bersama
   // tidak boleh ikut menghabiskan jatah 1-dompet Basic.

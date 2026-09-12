@@ -3,6 +3,11 @@ import { useTranslation } from 'react-i18next';
 import { supabase } from '../supabase';
 import { usePaywall } from '../components/PaywallModal';
 import { fetchSharedMemberships, sharedOrFilter } from '../lib/walletAccess';
+import { requireUserId } from '../lib/authIdentity';
+// `logError` TIDAK ikut diambil dari main: di sana dipakai adjustBalance(),
+// fungsi yang SENGAJA DIHAPUS di lineage ini (Task 4, 11 Sep 2026) — lihat
+// komentar besar di dekat createAccount/deleteAccount di bawah. Mengimpornya
+// di sini hanya akan jadi unused import.
 
 const FALLBACK_COLORS = ["#2A6FDB","#1FA8A0","#1B8A3F","#9A6BD9","#B26A4A","#B68A3E","#5C6B4C","#C9886D"];
 const pickColor = (name) => FALLBACK_COLORS[(name || '').charCodeAt(0) % FALLBACK_COLORS.length];
@@ -219,10 +224,17 @@ export function useWallets(userId, limits) {
       return { error: null, limitReached: true };
     }
 
+    // Identitas diambil dari sesi aktif, bukan dari prop `userId` — lihat
+    // src/lib/authIdentity.js. Prop bisa berumur beda dari token yang
+    // dilampirkan SDK; kalau melenceng, RLS menolak dengan pesan yang tidak
+    // menyebut identitas sama sekali.
+    const { userId: authUserId, error: authError } = await requireUserId();
+    if (authError) return { error: authError };
+
     // ── Kolom base schema (selalu ada) ────────────────────────────
     // AddAccountModal kirim 'institution', schema pakai 'bank'
     const basePayload = {
-      user_id:    userId,
+      user_id:    authUserId,
       name:       a.name        || '',
       bank:       a.institution || a.bank || '',
       type:       a.type        || 'bank',
