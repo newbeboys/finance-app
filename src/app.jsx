@@ -787,7 +787,10 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
         {active === "budgets" && <BudgetsPage transactions={transactions} budgets={budgets} onAdd={createBudget} onUpdate={updateBudget} onDelete={deleteBudget} customCategories={customCategories} onCreateCustom={addCustomCategory} onDeleteCustom={handleDeleteCustomCategory} isPro={subscription.isPro} isBasicAtMax={isBasicAtMax} userId={session.user.id} accounts={visibleAccounts} />}
 
         {active === "wallets" && (
-          <WalletsPage accounts={visibleAccounts} onAdd={handleAddAcct} onSetPrimary={setPrimary} onDelete={deleteAccount} transactions={transactions} addLocked={walletAddLocked} customCategories={customCategories} />
+          <WalletsPage accounts={visibleAccounts} onAdd={handleAddAcct} onSetPrimary={setPrimary} onDelete={deleteAccount} transactions={transactions} addLocked={walletAddLocked} customCategories={customCategories}
+            userId={session.user.id}
+            canInvite={!!limits?.sharedWalletInviteEnabled}
+            onNeedPro={() => openPaywall(i18n.t('paywall.feature.dompetBersama'))} />
         )}
 
         {active === "reports" && <ReportsPage transactions={transactions} customCategories={customCategories} canExport={limits.reportsExportEnabled} accounts={visibleAccounts} />}

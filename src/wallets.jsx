@@ -5,6 +5,8 @@ import { IconBudget, IconPlus, IconChev, IconClose, CatIcon } from './icons';
 import { useScrollLock } from './hooks/useScrollLock';
 import { LockBadge } from './components/PaywallModal';
 import { resolveCategory, categoryLabel } from './category-field';
+import MemberListSheet from './components/wallets/MemberListSheet';
+import InviteMemberSheet from './components/wallets/InviteMemberSheet';
 
 const WALLET_GLYPH = {
   bank:       <><rect x="3" y="6" width="18" height="13" rx="2" /><path d="M3 10h18" /><path d="M7 15h4" /></>,
@@ -140,9 +142,19 @@ function txForAccount(account, transactions) {
   );
 }
 
-export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transactions = [], addLocked = false, customCategories = [] }) {
+export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transactions = [], addLocked = false, customCategories = [], userId = null, canInvite = false, onNeedPro }) {
   const { t } = useTranslation();
   const [txSheet, setTxSheet] = React.useState(null);
+  const [memberSheet, setMemberSheet] = React.useState(null);   // dompet yang anggotanya dikelola
+  const [joinOpen, setJoinOpen] = React.useState(false);        // sheet masukkan kode
+  // Toast dipegang halaman ini, bukan diangkat ke app.jsx: pesannya butuh
+  // useTranslation, dan di AuthenticatedApp nama `t` sudah dipakai objek tweaks.
+  const [toast, setToast] = React.useState(null);
+  React.useEffect(() => {
+    if (!toast) return;
+    const id = setTimeout(() => setToast(null), 3500);
+    return () => clearTimeout(id);
+  }, [toast]);
   const [deletingWallet, setDeletingWallet] = React.useState(null);
   const [deleteError, setDeleteError] = React.useState(null);
   const [deleteDropdownOpen, setDeleteDropdownOpen] = React.useState(false);
@@ -181,6 +193,13 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
             title={t('dompet.hapusDompet', { defaultValue: 'Hapus Dompet' })}
             style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--terra)", color: "#fff", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, opacity: canDeleteAny ? 1 : 0.5, cursor: canDeleteAny ? "pointer" : "not-allowed" }}>
             🗑️ {t('dompet.hapusDompet', { defaultValue: 'Hapus Dompet' })}
+          </button>
+          {/* "Gabung" TIDAK digerbangi Pro — yang berbayar adalah MENGUNDANG.
+              Kalau menerima undangan juga butuh Pro, fitur ini tidak akan
+              pernah terpakai: yang diundang justru biasanya pengguna baru. */}
+          <button onClick={() => setJoinOpen(true)}
+            style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--paper)", color: "var(--ink-2)", border: "1px solid var(--line-soft)", borderRadius: 12, fontSize: 13.5, fontWeight: 500, fontFamily: "inherit", cursor: "pointer" }}>
+            🤝 {t('dompetBersama.gabung.tombolHeader')}
           </button>
           <button data-tour="wallets-add" onClick={onAdd} style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 16px", background: "var(--ink)", color: "var(--cream)", border: 0, borderRadius: 12, fontSize: 13.5, fontWeight: 500, opacity: addLocked ? 0.6 : 1, cursor: addLocked ? "not-allowed" : "pointer" }}>
             <IconPlus size={15} /> {t('dompet.tambahdompet')}
@@ -280,6 +299,17 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
             </div>
             <div className="hairline" style={{ display: "flex" }}>
               <button data-tour={i === 0 ? "wallets-tx-first" : undefined} onClick={() => setTxSheet(a)} style={{ ...cardFootBtn, flex: 1 }}>{t('dompet.transaksi')}</button>
+              {/* Tombol ini ada untuk SEMUA dompet, termasuk milik user Basic.
+                  Gerbang Pro-nya ada di dalam (InviteStatusBadge → onNeedPro),
+                  bukan di sini: menyembunyikan tombolnya membuat user Basic
+                  tidak pernah tahu fitur ini ada. Untuk dompet bersama,
+                  tombol yang sama dipakai anggota untuk melihat siapa saja
+                  yang punya akses dan untuk keluar. */}
+              <button onClick={() => setMemberSheet(a)} style={{ ...cardFootBtn, flex: 1, borderLeft: "1px solid var(--line-soft)" }}>
+                {a.memberCount > 0
+                  ? t('dompetBersama.kartu.anggotaCount', { count: a.memberCount })
+                  : t('dompetBersama.kartu.anggota')}
+              </button>
             </div>
           </div>
         ))}
@@ -303,6 +333,31 @@ export function WalletsPage({ accounts, onAdd, onSetPrimary, onDelete, transacti
         customCategories={customCategories}
         onClose={() => setTxSheet(null)}
       />
+    )}
+    {memberSheet && (
+      <MemberListSheet
+        wallet={memberSheet}
+        userId={userId}
+        // canInvite = Pro DAN pemilik dompet ini. Keduanya wajib: RPC
+        // generate_wallet_invite juga memeriksa keduanya, jadi UI yang lebih
+        // longgar hanya akan memunculkan penolakan server.
+        canInvite={canInvite && !memberSheet.isShared}
+        onNeedPro={onNeedPro}
+        onToast={setToast}
+        onClose={() => setMemberSheet(null)}
+        onLeft={() => setMemberSheet(null)}
+      />
+    )}
+    {joinOpen && (
+      <InviteMemberSheet
+        onClose={() => setJoinOpen(false)}
+        onJoined={() => setToast(t('dompetBersama.toast.berhasilGabung'))}
+      />
+    )}
+    {toast && (
+      <div role="status" style={{ position: "fixed", left: "50%", transform: "translateX(-50%)", bottom: 92, zIndex: 260, maxWidth: "min(92vw, 420px)", background: "var(--ink)", color: "var(--cream)", padding: "11px 16px", borderRadius: 12, fontSize: 13, lineHeight: 1.45, boxShadow: "0 8px 28px -8px rgba(42,44,32,.45)" }}>
+        {toast}
+      </div>
     )}
     {deletingWallet && (
       <WalletDeleteConfirmation

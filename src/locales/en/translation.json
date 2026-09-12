@@ -909,7 +909,8 @@
       "tabungan": "Savings",
       "laporanUnduh": "Download PDF/Excel report",
       "kategoriKustomTambahan": "Additional custom categories",
-      "hutangPiutangTanpaBatas": "Unlimited debts / receivables"
+      "hutangPiutangTanpaBatas": "Unlimited debts / receivables",
+      "dompetBersama": "Shared Wallets"
     },
     "message": {
       "transaksiLimit": "You've reached this month's transaction limit. Upgrade to Pro for unlimited flexibility.",
@@ -1156,5 +1157,68 @@
     "semuaDompet": "All Wallets",
     "belumAdaTransaksiDompet": "No transactions for this wallet in the selected period",
     "dataTerlaluSedikit": "Not enough data for accurate insights. Try selecting 'All Wallets' or a longer time range."
+  },
+  "dompetBersama": {
+    "kartu": {
+      "anggota": "Members",
+      "anggotaCount": "{{count}} member(s)"
+    },
+    "peran": {
+      "owner": "Owner",
+      "editor": "Editor",
+      "viewer": "Viewer",
+      "editorDesc": "Can record & edit",
+      "viewerDesc": "Can only view"
+    },
+    "gabung": {
+      "tombolHeader": "Join Wallet",
+      "judul": "Join a Shared Wallet",
+      "deskripsi": "Enter the 6-digit code the wallet owner sent you. Codes last 24 hours and can only be used once.",
+      "labelKode": "Invite code",
+      "tombol": "Join"
+    },
+    "kode": {
+      "judul": "Invite code",
+      "penjelasan": "Create a 6-digit code and send it to the person you want to invite. Codes last 24 hours and can only be used once.",
+      "buat": "Create Invite Code",
+      "buatBaru": "Create New Code",
+      "salin": "Copy code",
+      "tersalin": "Copied",
+      "aktif": "Active",
+      "kedaluwarsa": "Expired",
+      "berlaku": "Valid for {{sisa}} · {{peran}} role. Creating a new code revokes this one.",
+      "sudahLewat": "This code has expired. Create a new one to invite someone.",
+      "sisaMenit": "{{count}} minute(s)",
+      "sisaJam": "{{count}} hour(s)"
+    },
+    "daftar": {
+      "judul": "Wallet Members",
+      "jumlahAnggota": "{{count}} member(s)",
+      "kamu": "you",
+      "keluarkan": "Remove",
+      "keluarDompet": "Leave this wallet",
+      "keluarKonfirmasi": "You will no longer see this wallet. Transactions you already recorded stay there and are not deleted.",
+      "keluarYa": "Yes, leave",
+      "gagalMuat": "Could not load the member list. Please close and reopen."
+    },
+    "toast": {
+      "berhasilGabung": "You have joined the shared wallet.",
+      "sudahKeluar": "You have left \"{{nama}}\".",
+      "anggotaDikeluarkan": "{{nama}} has been removed from the wallet."
+    },
+    "err": {
+      "formatKode": "The code must be 6 digits.",
+      "kodeTidakValid": "Invalid or expired code. Ask the wallet owner for a new one.",
+      "sudahAnggota": "You are already a member of this wallet.",
+      "dompetSendiri": "This is your own wallet code. Send it to the person you want to invite.",
+      "terlaluSering": "Too many attempts. Try again in about {{menit}} minutes.",
+      "khususPro": "Inviting members is a Pro feature. You can still join other people wallets on Basic.",
+      "bukanOwner": "Only the wallet owner can do this.",
+      "bukanAnggota": "You are not an active member of this wallet.",
+      "anggotaSudahKeluar": "This member is no longer active in the wallet.",
+      "tidakPunyaAkses": "You do not have access to this wallet.",
+      "sesiBerakhir": "Your session has ended. Please sign in again.",
+      "takDikenal": "Something went wrong. Please try again shortly."
+    }
   }
 }

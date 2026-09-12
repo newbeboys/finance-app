@@ -909,7 +909,8 @@
       "tabungan": "Tabungan",
       "laporanUnduh": "Unduh laporan PDF/Excel",
       "kategoriKustomTambahan": "Kategori kustom tambahan",
-      "hutangPiutangTanpaBatas": "Hutang / Piutang tanpa batas"
+      "hutangPiutangTanpaBatas": "Hutang / Piutang tanpa batas",
+      "dompetBersama": "Dompet Bersama"
     },
     "message": {
       "transaksiLimit": "Penggunaan transaksi sudah maksimal bulan ini. Upgrade ke Pro untuk fleksibilitas tanpa batas.",
@@ -1156,5 +1157,68 @@
     "semuaDompet": "Semua Dompet",
     "belumAdaTransaksiDompet": "Belum ada transaksi untuk dompet ini di periode ini",
     "dataTerlaluSedikit": "Data terlalu sedikit untuk insight yang akurat. Coba pilih 'Semua Dompet' atau rentang waktu yang lebih panjang."
+  },
+  "dompetBersama": {
+    "kartu": {
+      "anggota": "Anggota",
+      "anggotaCount": "{{count}} anggota"
+    },
+    "peran": {
+      "owner": "Pemilik",
+      "editor": "Editor",
+      "viewer": "Pengamat",
+      "editorDesc": "Bisa mencatat & mengubah",
+      "viewerDesc": "Hanya bisa melihat"
+    },
+    "gabung": {
+      "tombolHeader": "Gabung Dompet",
+      "judul": "Gabung Dompet Bersama",
+      "deskripsi": "Masukkan kode 6 angka yang dikirim pemilik dompet. Kode berlaku 24 jam dan hanya bisa dipakai sekali.",
+      "labelKode": "Kode undangan",
+      "tombol": "Gabung"
+    },
+    "kode": {
+      "judul": "Kode undangan",
+      "penjelasan": "Buat kode 6 angka, lalu kirim ke orang yang ingin kamu undang. Kode berlaku 24 jam dan hanya bisa dipakai sekali.",
+      "buat": "Buat Kode Undangan",
+      "buatBaru": "Buat Kode Baru",
+      "salin": "Salin kode",
+      "tersalin": "Tersalin",
+      "aktif": "Aktif",
+      "kedaluwarsa": "Kedaluwarsa",
+      "berlaku": "Berlaku {{sisa}} lagi · peran {{peran}}. Membuat kode baru akan membatalkan kode ini.",
+      "sudahLewat": "Kode ini sudah lewat masa berlakunya. Buat kode baru untuk mengundang.",
+      "sisaMenit": "{{count}} menit",
+      "sisaJam": "{{count}} jam"
+    },
+    "daftar": {
+      "judul": "Anggota Dompet",
+      "jumlahAnggota": "{{count}} anggota",
+      "kamu": "kamu",
+      "keluarkan": "Keluarkan",
+      "keluarDompet": "Keluar dari dompet ini",
+      "keluarKonfirmasi": "Kamu tidak akan bisa melihat dompet ini lagi. Transaksi yang sudah kamu catat tetap ada di sana dan tidak ikut terhapus.",
+      "keluarYa": "Ya, keluar",
+      "gagalMuat": "Daftar anggota gagal dimuat. Tutup dan buka lagi ya."
+    },
+    "toast": {
+      "berhasilGabung": "Berhasil bergabung ke dompet bersama.",
+      "sudahKeluar": "Kamu sudah keluar dari \"{{nama}}\".",
+      "anggotaDikeluarkan": "{{nama}} sudah dikeluarkan dari dompet."
+    },
+    "err": {
+      "formatKode": "Kode harus terdiri dari 6 angka.",
+      "kodeTidakValid": "Kode tidak valid atau sudah kedaluwarsa. Minta kode baru ke pemilik dompet.",
+      "sudahAnggota": "Kamu sudah menjadi anggota dompet ini.",
+      "dompetSendiri": "Ini kode dompetmu sendiri. Kirimkan kodenya ke orang yang ingin kamu undang.",
+      "terlaluSering": "Terlalu banyak percobaan. Coba lagi sekitar {{menit}} menit lagi.",
+      "khususPro": "Mengundang anggota khusus pengguna Pro. Kamu tetap bisa bergabung ke dompet orang lain dengan paket Basic.",
+      "bukanOwner": "Hanya pemilik dompet yang bisa melakukan ini.",
+      "bukanAnggota": "Kamu bukan anggota aktif dompet ini.",
+      "anggotaSudahKeluar": "Anggota ini sudah tidak aktif di dompet.",
+      "tidakPunyaAkses": "Kamu tidak punya akses ke dompet ini.",
+      "sesiBerakhir": "Sesi kamu sudah berakhir. Masuk lagi ya.",
+      "takDikenal": "Terjadi kesalahan. Coba lagi sebentar lagi."
+    }
   }
 }
