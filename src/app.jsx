@@ -1,5 +1,8 @@
 ﻿import React from 'react';
 import { useTranslation } from 'react-i18next';
+// Dipakai di AuthenticatedApp, yang tidak bisa memakai useTranslation():
+// nama `t` di sana sudah dipegang objek tweaks. Lihat catatan di handleAddAcct.
+import i18n from './i18n';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { useTweaks, TweaksPanel, TweakSection, TweakRadio, TweakSelect, TweakToggle } from './tweaks-panel';
@@ -647,21 +650,29 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
   // ── Gate fitur (Basic vs Pro) — pre-check di tombol pemicu ─────────
   // Wallet/goal: cek limit SEBELUM membuka form supaya form tak terbuka
   // sia-sia (hook tetap punya guard otoritatif sebagai jaring pengaman).
+  // PENTING — kenapa i18n.t() dan bukan t():
+  // di komponen ini `t` adalah objek TWEAKS (`const [t, setTweakRaw] =
+  // useTweaks(defaults)`), BUKAN fungsi terjemahan. useTranslation() memang
+  // dipanggil di file ini, tapi di komponen App, bukan di sini. Memanggil
+  // `t('...')` di scope ini melempar "t is not a function" dan mematikan
+  // layar — tepat pada saat user Basic menyentuh batas plannya, sehingga
+  // paywall-nya tidak pernah sempat muncul.
+  // Jangan mengganti i18n.t() kembali menjadi t() di ketiga tempat ini.
   const handleAddAcct = React.useCallback(() => {
-    if (accounts.length >= (limits?.maxWallets ?? Infinity)) { openPaywall(t('paywall.feature.walletTambahan')); return; }
+    if (accounts.length >= (limits?.maxWallets ?? Infinity)) { openPaywall(i18n.t('paywall.feature.walletTambahan')); return; }
     setAddAcct(true);
-  }, [accounts.length, limits, openPaywall, t]);
+  }, [accounts.length, limits, openPaywall]);
 
   const handleAddGoal = React.useCallback(() => {
-    if (goals.length >= (limits?.maxSavingsGoals ?? Infinity)) { openPaywall(t('paywall.feature.goalsTambahan')); return; }
+    if (goals.length >= (limits?.maxSavingsGoals ?? Infinity)) { openPaywall(i18n.t('paywall.feature.goalsTambahan')); return; }
     setAddGoal(true);
-  }, [goals.length, limits, openPaywall, t]);
+  }, [goals.length, limits, openPaywall]);
 
   // Scan nota (OCR): Basic → PaywallModal, scanner tidak terbuka.
   const handleScan = React.useCallback(() => {
-    if (!limits?.receiptScanEnabled) { openPaywall(t('paywall.feature.scanNota')); return; }
+    if (!limits?.receiptScanEnabled) { openPaywall(i18n.t('paywall.feature.scanNota')); return; }
     setScanOpen(true);
-  }, [limits, openPaywall, t]);
+  }, [limits, openPaywall]);
 
   // Deposit + deteksi goal mencapai 100% (dari belum tercapai) → overlay perayaan
   const handleDeposit = React.useCallback(async (id, amount) => {
