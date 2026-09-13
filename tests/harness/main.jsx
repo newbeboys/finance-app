@@ -1,5 +1,8 @@
-// Entry harness: mount hook useTransactions ASLI, ekspos API-nya ke window
-// supaya bisa disetir dari Playwright.
+// Entry harness untuk tests/useTransactions.harness.mjs (sync Fase 1): mount
+// hook useTransactions ASLI, ekspos API + kontrol lock ke window supaya bisa
+// disetir dari Playwright. Dipasangkan dengan supabase-stub.js lewat
+// index.html + vite.config.js. Ada sepasang file kembar untuk harness lain
+// (main-visibility.jsx + stub-visibility.js) — alasannya di stub-visibility.js.
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import '../../src/i18n';

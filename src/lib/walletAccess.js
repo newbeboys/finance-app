@@ -100,19 +100,20 @@ export async function fetchOwnedWalletIds(userId) {
 }
 
 /**
- * Boleh-tidaknya user MENGHAPUS sebuah transaksi.
+ * Boleh-tidaknya user menghapus transaksi yang DIA CATAT SENDIRI.
  *
- * Dua syarat — cerminan RPC delete_transaction (migrasi 20260917000000):
- *  1. dicatat user sendiri (Task 2 #2: owner pun tidak bisa menghapus
- *     transaksi anggota — transaksi orang lain di dompet bersama ikut ada di
- *     daftar klien, tapi tidak boleh ditawari tombol hapus);
+ * Dua syarat — cerminan cabang "milik sendiri" di RPC delete_transaction:
+ *  1. dicatat user sendiri;
  *  2. dompetnya saat ini masih bisa ditulis (milik sendiri / editor).
  *
  * Syarat 2 berlaku sejak keputusan 12 Sep 2026, MENGGANTIKAN Task 2 #3 (dulu
  * viewer / bekas anggota tetap boleh menghapus transaksinya sendiri). Dompet
- * yang aksesnya sudah hilang tidak ada di `accounts` → false. Konsekuensi yang
- * disengaja: transaksi seperti itu tidak bisa dihapus siapa pun sampai owner
- * menaikkan perannya kembali ke editor.
+ * yang aksesnya sudah hilang tidak ada di `accounts` → false.
+ *
+ * INI BUKAN gerbang lengkap untuk tombol hapus — sejak 13 Sep 2026 owner juga
+ * boleh menghapus transaksi anggotanya, lihat `canDeleteTransaction`. Fungsi
+ * ini dipertahankan terpisah untuk pemanggil yang HARUS tetap ketat, yaitu
+ * `useDebts.deleteDebt` (lihat catatan di sana).
  *
  * `accounts` wajib diteruskan — tanpa itu setiap transaksi ber-dompet ditolak
  * (gagal tertutup, bukan terbuka).
@@ -121,7 +122,7 @@ export async function fetchOwnedWalletIds(userId) {
  * @param {string} userId
  * @param {object[]} accounts dompet format app (dari useWallets), dengan `canWrite`
  */
-export function canDeleteTransaction(tx, userId, accounts = []) {
+export function canDeleteOwnTransaction(tx, userId, accounts = []) {
   if (!tx || !userId || tx.user_id !== userId) return false;
   if (!tx.wallet_id) return true;
   const wallet = accounts.find(a => a.id === tx.wallet_id);
@@ -129,19 +130,63 @@ export function canDeleteTransaction(tx, userId, accounts = []) {
 }
 
 /**
+ * Boleh-tidaknya user MENGHAPUS sebuah transaksi dari UI.
+ *
+ * Dua jalan, cerminan persis dua cabang RPC delete_transaction (migrasi
+ * 20260919000000):
+ *  1. transaksi itu dia catat sendiri → `canDeleteOwnTransaction`;
+ *  2. ATAU dia OWNER dompet tempat transaksi itu berada — walau baris itu
+ *     dicatat orang lain (keputusan 13 Sep 2026, membalik Task 2 #2).
+ *
+ * Kenapa owner dapat hapus tapi TIDAK dapat edit: menghapus itu operasi
+ * pembersihan yang efeknya persis membatalkan baris + mengembalikan saldo,
+ * sedangkan mengedit berarti menulis ulang catatan keuangan atas nama orang
+ * lain. `canEditTransaction` karena itu sengaja TIDAK ikut dilonggarkan.
+ *
+ * Pendorong utamanya: transaksi yang penulisnya sudah keluar dari dompet
+ * (`wallet_members.status='left'`) dulu terkunci permanen — penulisnya sudah
+ * tidak punya akses, dan owner pun ditolak. Cabang 2 mencakup itu tanpa
+ * perlu tahu status keanggotaan penulisnya: `role` di sini adalah peran
+ * PENGHAPUS, bukan peran pencatat.
+ *
+ * `debt_id` sengaja TIDAK dicek di sini: baris hutang/piutang milik orang
+ * lain tidak pernah masuk state `transactions` (filter `excludeDebt` di
+ * `sharedOrFilter`), jadi owner tidak akan pernah melihatnya untuk dihapus.
+ * Server tetap menjaganya sebagai lapis kedua.
+ *
+ * @param {object} tx     transaksi format app (dari useTransactions)
+ * @param {string} userId
+ * @param {object[]} accounts dompet format app (dari useWallets), dengan `role`
+ */
+export function canDeleteTransaction(tx, userId, accounts = []) {
+  if (canDeleteOwnTransaction(tx, userId, accounts)) return true;
+  if (!tx || !userId || !tx.wallet_id) return false;
+  // `role === 'owner'` diturunkan dari `wallets.user_id` baris dompet itu
+  // sendiri (useWallets.toAppWallet), yang dijaga fresh oleh realtime —
+  // BUKAN dari `roleById` yang cuma snapshot saat mount. Jadi sinyal owner
+  // di sini tidak ikut basi saat peran anggota berubah di tengah sesi.
+  const wallet = accounts.find(w => w.id === tx.wallet_id);
+  return wallet?.role === 'owner';
+}
+
+/**
  * Boleh-tidaknya user MENGUBAH sebuah transaksi dari UI.
  *
- * Syaratnya sama persis dengan hapus — update_transaction sejak migrasi
- * 20260917000000 mensyaratkan dompet ASAL dan TUJUAN sama-sama bisa ditulis.
- * Dompet tujuan dijaga terpisah oleh modal edit (hanya menawarkan dompet yang
- * bisa ditulis) dan handleUpdateTransaction di app.jsx.
+ * Syaratnya tetap "hanya baris yang dia catat sendiri" — update_transaction
+ * sejak migrasi 20260917000000 mensyaratkan dompet ASAL dan TUJUAN sama-sama
+ * bisa ditulis. Dompet tujuan dijaga terpisah oleh modal edit (hanya
+ * menawarkan dompet yang bisa ditulis) dan handleUpdateTransaction di app.jsx.
+ *
+ * SENGAJA tidak memakai `canDeleteTransaction` lagi: sejak owner-override 13
+ * Sep 2026 keduanya BERBEDA, dan menyamakannya kembali akan diam-diam memberi
+ * owner hak mengedit transaksi anggotanya.
  *
  * @param {object} tx
  * @param {string} userId
  * @param {object[]} accounts dompet format app (dari useWallets), dengan `canWrite`
  */
 export function canEditTransaction(tx, userId, accounts = []) {
-  return canDeleteTransaction(tx, userId, accounts);
+  return canDeleteOwnTransaction(tx, userId, accounts);
 }
 
 /**

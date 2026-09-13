@@ -1,5 +1,9 @@
-// Stub Supabase untuk harness useTransactions. Direkatkan lewat alias di
-// tests/harness/vite.config.js — TIDAK pernah ikut ke bundle produksi.
+// Stub Supabase untuk tests/useTransactions.harness.mjs. Direkatkan lewat alias
+// di tests/harness/vite.config.js — TIDAK pernah ikut ke bundle produksi.
+// Fokusnya SIKLUS TULIS: rpc() bisa ditahan/dilepas (holdRpc/pendingRpc) untuk
+// menguji drainWrites + dua rem auto-refetch. Sengaja TIDAK table-aware, jadi
+// tidak bisa dipakai owner-visibility — itu punya stub sendiri, lihat
+// stub-visibility.js untuk alasan lengkap kenapa stub-nya ada dua.
 const state = { rows: [], members: [], selectCount: 0, rpcCalls: [], pendingRpc: null, holdRpc: false };
 window.__stub = state;
 
