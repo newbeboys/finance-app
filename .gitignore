@@ -23,5 +23,8 @@ build-test-apk.ps1
 # Artefak debug sesi Playwright MCP (log console, snapshot halaman) — jangan di-track
 .playwright-mcp/
 
+# Cache lokal Supabase CLI (versi gotrue/storage/postgres, project-ref, dst) — jangan di-track
+supabase/.temp/
+
 
 
