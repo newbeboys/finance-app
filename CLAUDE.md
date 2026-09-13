@@ -14,7 +14,11 @@ npm run build       # Production build (bumps Node heap via cross-env NODE_OPTIO
 npm run preview     # Preview the production build
 ```
 
-There is no lint script and no automated test suite configured (`playwright` is a devDependency but no config/spec files exist in the repo). Verify changes by running the app and exercising the affected flow manually.
+There is no lint script and no test runner wired to `npm test`. What exists instead is a set of standalone Playwright harnesses run by hand with `node <file>`, each booting its own vite dev server against `tests/harness/`: `tests/useTransactions.harness.mjs` (21 tests, sync Fase 1), `tests/owner-visibility.harness.mjs` (7), `tests/owner-delete.harness.mjs` (22, client gates only). Plus `tests/shared-wallet-sync.spec.mjs` (manual two-account e2e, needs a dev server + `.env.test.local`) and `tests/dryrun_20260919_owner_delete.sql` (pasted into the Supabase SQL Editor). None of them run in CI.
+
+**There are deliberately TWO Supabase stubs under `tests/harness/`, and they are not interchangeable.** `supabase-stub.js` (+ `index.html`, `main.jsx`, `vite.config.js`) models the *write cycle* — `rpc()` can be held and released to test `drainWrites()` and the auto-refetch brakes — and is not table-aware; it serves `useTransactions.harness.mjs`, and also `owner-delete.harness.mjs` (via `gates.html`/`gates.js`, which only needs the import to resolve). `stub-visibility.js` (+ `visibility.html`, `main-visibility.jsx`, `vite.visibility.config.js`) is table-aware (`wallets`/`wallet_members`/`transactions` seeded separately via `window.__PRESEED__`) and captures the `.or()`/`.eq('user_id')` arguments, which is precisely what `owner-visibility.harness.mjs` asserts. Each needs its own vite config because the stub is injected by an **alias**, and an alias applies server-wide. TODO: consider merging them into one table-aware stub after Phase 2 (realtime) lands, so there aren't two harness stacks to maintain.
+
+Verify changes by running the app and exercising the affected flow manually, in addition to the harnesses.
 
 ### Android / Capacitor
 

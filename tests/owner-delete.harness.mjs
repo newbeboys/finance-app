@@ -24,7 +24,7 @@
  */
 
 import { chromium } from 'playwright';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
 const PORT = Number(process.env.HARNESS_PORT || 5399);
 const URL = `http://localhost:${PORT}/tests/harness/gates.html`;
@@ -32,11 +32,32 @@ const URL = `http://localhost:${PORT}/tests/harness/gates.html`;
 const results = [];
 const ok = (name, cond, detail = '') => results.push({ name, pass: !!cond, detail });
 
+// Bunuh vite BESERTA anak-anaknya, bukan cuma prosesnya sendiri.
+// Di Windows `shell: true` membuat kita memegang pid cmd.exe, bukan pid
+// node/vite-nya — `child.kill()` hanya membunuh shell dan meninggalkan vite
+// YATIM yang tetap memegang port. Efeknya berbahaya dan senyap: run berikutnya
+// gagal start (--strictPort) tapi probe fetch-nya SUKSES ke server lama, jadi
+// yang diuji kode basi dengan config lama. Terverifikasi 14 Sep 2026.
+function killTree(child) {
+  if (!child || child.exitCode !== null || child.signalCode !== null) return;
+  if (process.platform === 'win32') {
+    spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+  } else {
+    // detached: true di spawn membuat anak jadi pemimpin grup; pid negatif
+    // menyasar seluruh grup itu.
+    try { process.kill(-child.pid, 'SIGKILL'); } catch { child.kill('SIGKILL'); }
+  }
+}
+
 function startVite() {
   const child = spawn(
     process.platform === 'win32' ? 'npx.cmd' : 'npx',
     ['vite', '--config', 'tests/harness/vite.config.js', '--port', String(PORT), '--strictPort'],
-    { stdio: ['ignore', 'pipe', 'pipe'], shell: process.platform === 'win32' }
+    {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: process.platform === 'win32',
+      detached: process.platform !== 'win32',   // lihat killTree()
+    }
   );
   return new Promise(async (resolve, reject) => {
     let dead = null;
@@ -50,12 +71,15 @@ function startVite() {
       } catch {}
       await new Promise(r => setTimeout(r, 400));
     }
-    child.kill();
+    killTree(child);
     reject(new Error('vite tidak siap dalam 60 dtk'));
   });
 }
 
 const vite = await startVite();
+// Jaring pengaman: kalau skrip ini mati di tengah (assert melempar, Ctrl+C),
+// killTree(vite) di bawah tidak pernah tercapai dan port-nya bocor ke run berikutnya.
+process.on('exit', () => killTree(vite));
 const browser = await chromium.launch();
 const page = await browser.newPage();
 const consoleErrors = [];
@@ -198,5 +222,5 @@ const passed = results.filter(r => r.pass).length;
 console.log(`\n${passed}/${results.length} lulus`);
 
 await browser.close();
-vite.kill();
+killTree(vite);
 process.exit(passed === results.length ? 0 : 1);

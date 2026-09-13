@@ -1,9 +1,11 @@
 /**
  * Regresi hotfix/owner-cant-see-member-transactions.
  *
- * Menguji hook useTransactions ASLI (bentuk branch ini — pre-Task-5, satu
- * useEffect mount tunggal, tanpa autoRefetchTransactions/refreshTransactions)
- * dengan Supabase di-stub. Fokusnya sempit dan sengaja BUKAN mereplikasi
+ * Menguji hook useTransactions ASLI dengan Supabase di-stub. Sejak merge Task 5
+ * (14 Sep 2026) hook itu sudah berbentuk fetchTransactions() terpisah + auto/
+ * manual refetch — uji ini TIDAK menyentuh jalur refetch-nya, cukup load awal,
+ * dan tetap relevan karena filter query-nya dibangun di tempat yang sama.
+ * Fokusnya sempit dan sengaja BUKAN mereplikasi
  * semantik RLS/WHERE sungguhan (itu sudah dibuktikan e2e dua-akun terhadap
  * Supabase asli — lihat pesan commit hotfix ini): yang diverifikasi di sini
  * murni ARGUMEN yang dikirim ke query builder, yaitu apakah dompet yang
@@ -26,7 +28,7 @@
  */
 
 import { chromium } from 'playwright';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
 const PORT = Number(process.env.HARNESS_PORT || 5299);
 const URL = `http://localhost:${PORT}/tests/harness/visibility.html`;
@@ -34,11 +36,33 @@ const URL = `http://localhost:${PORT}/tests/harness/visibility.html`;
 const results = [];
 const ok = (name, cond, detail = '') => results.push({ name, pass: !!cond, detail });
 
+// Bunuh vite BESERTA anak-anaknya, bukan cuma prosesnya sendiri.
+// Di Windows `shell: true` membuat kita memegang pid cmd.exe, bukan pid
+// node/vite-nya — `child.kill()` hanya membunuh shell dan meninggalkan vite
+// YATIM yang tetap memegang port. Efeknya berbahaya dan senyap: run berikutnya
+// gagal start (--strictPort) tapi probe fetch-nya SUKSES ke server lama, jadi
+// yang diuji kode basi dengan config lama. Terverifikasi 14 Sep 2026 — justru
+// di harness INI (uji lulus/gagal palsu saat stub-nya baru dipisah).
+function killTree(child) {
+  if (!child || child.exitCode !== null || child.signalCode !== null) return;
+  if (process.platform === 'win32') {
+    spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+  } else {
+    // detached: true di spawn membuat anak jadi pemimpin grup; pid negatif
+    // menyasar seluruh grup itu.
+    try { process.kill(-child.pid, 'SIGKILL'); } catch { child.kill('SIGKILL'); }
+  }
+}
+
 function startVite() {
   const child = spawn(
     process.platform === 'win32' ? 'npx.cmd' : 'npx',
     ['vite', '--config', 'tests/harness/vite.visibility.config.js', '--port', String(PORT), '--strictPort'],
-    { stdio: ['ignore', 'pipe', 'pipe'], shell: process.platform === 'win32' }
+    {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: process.platform === 'win32',
+      detached: process.platform !== 'win32',   // lihat killTree()
+    }
   );
   // Kesiapan dideteksi dengan menembak URL-nya, bukan mencocokkan teks stdout
   // (format banner vite berubah antar-versi, dan di Windows dengan shell:true
@@ -55,12 +79,15 @@ function startVite() {
       } catch {}
       await new Promise(r => setTimeout(r, 400));
     }
-    child.kill();
+    killTree(child);
     reject(new Error('vite tidak siap dalam 60 dtk'));
   });
 }
 
 const vite = await startVite();
+// Jaring pengaman: kalau skrip ini mati di tengah (assert melempar, Ctrl+C),
+// killTree(vite) di bawah tidak pernah tercapai dan port-nya bocor ke run berikutnya.
+process.on('exit', () => killTree(vite));
 const browser = await chromium.launch();
 const page = await browser.newPage();
 const consoleErrors = [];
@@ -99,7 +126,7 @@ const out = await page.evaluate(async () => {
 });
 
 await browser.close();
-vite.kill();
+killTree(vite);
 
 ok('fetchOwnedWalletIds benar-benar di-query (tabel wallets ke-panggil)', out.calls.wallets >= 1, JSON.stringify(out.calls));
 ok('fetchSharedMemberships tetap di-query (tabel wallet_members ke-panggil)', out.calls.wallet_members >= 1, JSON.stringify(out.calls));
