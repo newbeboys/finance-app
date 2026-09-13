@@ -18,7 +18,8 @@
  *   • kebenaran pembalikan SALDO saat owner menghapus baris anggota;
  *   • penolakan baris ber-debt_id di cabang owner — itu HANYA ada di server
  *     (gerbang klien sengaja tidak mengeceknya, lihat T7/T8 di bawah).
- * Semua itu butuh Postgres sungguhan. Belum dijalankan; lihat laporan.
+ * Semua itu butuh Postgres sungguhan: tests/dryrun_20260919_owner_delete.sql
+ * (ditempel ke Supabase SQL Editor, dibatalkan otomatis di akhir).
  * ══════════════════════════════════════════════════════════════════════
  */
 
@@ -99,7 +100,7 @@ ok('T2 owner TIDAK boleh EDIT transaksi milik editor (tetap ketat)',
 ok('T3 owner BOLEH hapus transaksi milik BEKAS anggota (status=left)',
   await run('canDeleteTransaction', WORLD.txByExMember, 'owner-1', WORLD.accountsOwner) === true);
 
-ok('T4 bekas anggota sendiri tetap TIDAK boleh hapus transaksinya (dompet hilang dari daftarnya)',
+ok('T4 [b] bekas anggota sendiri tetap TIDAK boleh hapus transaksinya (dompet hilang dari daftarnya)',
   await run('canDeleteTransaction', WORLD.txByExMember, 'ex-1', WORLD.accountsExMember) === false);
 
 // ── (b) editor TIDAK mewarisi hak owner ──────────────────────────────
@@ -134,13 +135,13 @@ ok('T9 REGRESI pencatat tetap boleh hapus transaksi biasa miliknya sendiri',
 ok('T10 REGRESI pencatat tetap boleh hapus transaksi ber-debt_id miliknya sendiri',
   await run('canDeleteTransaction', WORLD.txDebtByOwner, 'owner-1', WORLD.accountsOwner) === true);
 
-ok('T11 REGRESI editor tetap boleh hapus transaksi biasa miliknya sendiri',
+ok('T11 [c] REGRESI editor tetap boleh hapus transaksi biasa miliknya sendiri',
   await run('canDeleteTransaction', WORLD.txByEditor1, 'editor-1', WORLD.accountsEditor) === true);
 
 ok('T12 REGRESI editor tetap boleh EDIT transaksi miliknya sendiri',
   await run('canEditTransaction', WORLD.txByEditor1, 'editor-1', WORLD.accountsEditor) === true);
 
-ok('T13 REGRESI viewer tetap TIDAK boleh hapus transaksi miliknya sendiri (keputusan 12 Sep 2026)',
+ok('T13 [a] REGRESI viewer tetap TIDAK boleh hapus transaksi miliknya sendiri (keputusan 12 Sep 2026)',
   await run('canDeleteTransaction', { id: 't7', user_id: 'viewer-1', wallet_id: 'w-shared', debt_id: null },
     'viewer-1', WORLD.accountsViewer) === false);
 
@@ -156,6 +157,29 @@ ok('T15 canDeleteOwnTransaction meloloskan baris milik sendiri',
 ok('T16 canDeleteOwnTransaction menolak baris sendiri di dompet read-only (viewer)',
   await run('canDeleteOwnTransaction', { id: 't8', user_id: 'viewer-1', wallet_id: 'w-shared', debt_id: null },
     'viewer-1', WORLD.accountsViewer) === false);
+
+// Cermin klien untuk (b) dan (c) di gerbang KETAT. Gerbang longgar untuk
+// kasus yang sama sudah ada: (a) viewer = T13, (b) bekas anggota = T4,
+// (c) editor = T11. Penegakan server untuk (a)/(b)/(c) diuji terhadap Postgres
+// sungguhan di tests/dryrun_20260919_owner_delete.sql (R7/R8/R9), bukan di sini.
+ok('T20 [b] canDeleteOwnTransaction menolak bekas anggota atas barisnya sendiri',
+  await run('canDeleteOwnTransaction', WORLD.txByExMember, 'ex-1', WORLD.accountsExMember) === false);
+
+ok('T21 [c] canDeleteOwnTransaction meloloskan editor atas barisnya sendiri',
+  await run('canDeleteOwnTransaction', WORLD.txByEditor1, 'editor-1', WORLD.accountsEditor) === true);
+
+// ── [d] wallet_id kosong — BUKAN jalur yang didukung ─────────────────
+// JALUR INI TIDAK BISA TERJADI DI PRODUKSI: transactions.wallet_id di database
+// adalah uuid NOT NULL (dicek di remote 13 Sep 2026, 0 baris NULL), jadi tidak
+// ada baris dari DB yang sampai ke klien tanpa wallet_id. Tes ini HANYA
+// mengunci perilaku klien yang ada sekarang (`if (!tx.wallet_id) return true;`
+// di walletAccess.js) supaya perubahannya disengaja. Server justru MENOLAK
+// kasus ini (penjaga peran: wallet_access_role(NULL) → NULL). Pasangan SQL-nya
+// (S1 di dry-run) membuktikan INSERT dengan wallet_id NULL ditolak NOT NULL.
+// Jangan baca sebagai "transaksi tanpa dompet boleh dihapus".
+ok('T22 [d] (kode mati, bukan jalur didukung) canDeleteOwnTransaction dengan wallet_id null → true',
+  await run('canDeleteOwnTransaction', { id: 't9', user_id: 'owner-1', wallet_id: null, debt_id: null },
+    'owner-1', WORLD.accountsOwner) === true);
 
 // ── Gagal-tertutup ───────────────────────────────────────────────────
 ok('T17 accounts kosong → owner-override tidak bisa dipakai (gagal tertutup)',

@@ -88,10 +88,19 @@ CREATE POLICY "transactions: delete own row"
 --  pun tulisan yang terjadi saat RAISE, dan kunci dilepas saat transaksi
 --  di-rollback.
 --
---  Pesan error KEDUA cabang penolakan sengaja identik dan tetap sama persis
+--  Tiga titik penolakan, semuanya 42501. Dua di antaranya (id tidak ada, dan
+--  bukan pencatat maupun owner) memakai pesan yang identik dan sama persis
 --  dengan versi sebelumnya: "tidak ditemukan" vs "tidak boleh" tidak
 --  dibedakan, supaya keberadaan sebuah id tidak bocor (pola
---  adjust_wallet_balance). Kode error tetap 42501.
+--  adjust_wallet_balance). Yang ketiga — Penjaga 2 dari 20260917000000, di
+--  dalam cabang pencatat — boleh memakai pesan spesifik karena pemanggilnya
+--  sudah terbukti pencatat baris itu.
+--
+--  CATATAN REVIEW (13 Sep 2026): draft pertama migrasi ini (commit 0ddedc2)
+--  kehilangan Penjaga 2 di cabang pencatat, sehingga viewer & bekas anggota
+--  bisa lagi menghapus baris yang mereka catat sendiri lewat RPC ini. Policy
+--  DELETE di BAGIAN 1 tetap benar, tapi fungsi SECURITY DEFINER tidak
+--  melewatinya. Ditemukan sebelum db push dan diperbaiki di file yang sama.
 --
 --  Badan penghapusan (pembalikan saldo + DELETE) DITULIS SEKALI setelah
 --  percabangan — dua cabang izin, satu jalur efek, jadi tidak mungkin ada
@@ -126,10 +135,28 @@ BEGIN
   END IF;
 
   IF v_tx.user_id = v_user_id THEN
-    -- Cabang 1 — PENCATAT menghapus barisnya sendiri. Perilaku lama, tidak
-    -- berubah sedikit pun: tidak ada cek peran di sini (pembalikan saldo
-    -- untuk baris sendiri sengaja tidak mensyaratkan peran aktif — lihat
-    -- header BAGIAN 2 migrasi 20260916000000) dan tidak ada cek debt_id.
+    -- Cabang 1 — PENCATAT menghapus barisnya sendiri. Perilaku 20260917000000
+    -- tidak berubah: penjaga peran di bawah (keputusan 12 Sep 2026) ADA dan
+    -- tetap berlaku, jadi viewer & bekas anggota tidak bisa menghapus baris
+    -- yang mereka catat sendiri. debt_id tidak dicek di cabang ini.
+    --
+    -- Penjaga itu SENGAJA BERSARANG di sini, tidak berdiri sendiri setelah
+    -- SELECT seperti di 20260917000000. SELECT di atas tidak lagi memfilter
+    -- user_id, jadi penjaga yang berdiri sendiri akan menjawab pesan spesifik
+    -- untuk id yang ADA dan "tidak ditemukan" untuk id yang TIDAK ADA —
+    -- membocorkan keberadaan id. Di dalam cabang ini pemanggil sudah terbukti
+    -- pencatat barisnya, jadi pesan spesifik aman.
+    --
+    -- Blok di bawah identik dengan Penjaga 2 di 20260917000000 (komentar dan
+    -- kode), hanya indentasinya bergeser.
+    -- Penjaga 2 — peran di dompetnya (keputusan 12 Sep 2026). Untuk dompet
+    -- sendiri selalu 'owner', jadi transaksi non-bersama tidak terdampak.
+    -- Pesan boleh spesifik: pemanggil sudah terbukti pemilik baris.
+    IF COALESCE(public.wallet_access_role(v_tx.wallet_id), '') NOT IN ('owner', 'editor') THEN
+      RAISE EXCEPTION 'delete_transaction: dompet ini hanya bisa dibaca atau sudah kamu tinggalkan'
+        USING ERRCODE = '42501';
+    END IF;
+
     v_via := 'pencatat';
 
   ELSIF v_tx.debt_id IS NULL
@@ -166,4 +193,4 @@ REVOKE EXECUTE ON FUNCTION public.delete_transaction(uuid) FROM public, anon;
 GRANT  EXECUTE ON FUNCTION public.delete_transaction(uuid) TO authenticated;
 
 COMMENT ON FUNCTION public.delete_transaction(uuid) IS
-  'Menghapus transaksi DAN membalik efeknya ke saldo dompet dalam satu transaksi Postgres. Dua cabang izin (13 Sep 2026): (1) pencatat baris itu sendiri — tanpa cek peran maupun debt_id, perilaku lama; (2) OWNER dompet tempat baris berada, khusus baris debt_id IS NULL — mencakup baris anggota aktif maupun bekas anggota (status=left), karena wallet_access_role mengevaluasi peran PENGHAPUS, bukan pencatat. Mengubah transaksi TIDAK ikut dilonggarkan (update_transaction tetap hanya baris sendiri). Penolakan selalu 42501 dengan pesan yang tidak membedakan "tidak ada" vs "tidak boleh". Mengembalikan {wallet_id, balance, via}.';
+  'Menghapus transaksi DAN membalik efeknya ke saldo dompet dalam satu transaksi Postgres. Dua cabang izin (13 Sep 2026): (1) pencatat baris itu sendiri — penjaga peran 20260917000000 tetap berlaku (wallet_access_role atas dompet baris itu harus owner/editor, jadi viewer & bekas anggota ditolak), tanpa cek debt_id; (2) OWNER dompet tempat baris berada, khusus baris debt_id IS NULL — mencakup baris anggota aktif maupun bekas anggota (status=left), karena wallet_access_role mengevaluasi peran PENGHAPUS, bukan pencatat. Mengubah transaksi TIDAK ikut dilonggarkan (update_transaction tetap hanya baris sendiri). Semua penolakan 42501; pesan "tidak ditemukan atau bukan milikmu" tidak membedakan "tidak ada" vs "tidak boleh", kecuali pencatat yang ditolak penjaga peran (pesan spesifik, karena dia sudah terbukti pencatat). Mengembalikan {wallet_id, balance, via}.';

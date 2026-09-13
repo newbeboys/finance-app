@@ -188,12 +188,14 @@ note            text            Catatan bebas
 date            date            Tanggal lokal (YYYY-MM-DD), BUKAN UTC
 time            text            Jam transaksi (HH:MM)
 method          text            'Tunai' | 'Transfer' | user-defined
-wallet_id       uuid            FK → wallets.id (nullable, added via migrations)
+wallet_id       uuid            NOT NULL, FK → wallets.id ON DELETE CASCADE
 debt_id         uuid            FK → debts.id ON DELETE CASCADE (nullable, untuk transaksi hutang/piutang)
 created_at      timestamptz     Auto-set
 ```
 
 **Penting:** Transaksi dengan `debt_id` terisi **dikecualikan** dari kuota 75 transaksi/bulan Basic (filter `debt_id IS NULL` di `useTransactions.js`).
+
+**`wallet_id` NOT NULL — koreksi 13 Sep 2026.** Dokumen ini sebelumnya menulis "nullable", dan itu salah. Dicek di remote: kolomnya `uuid NOT NULL` dan tidak ada baris NULL. Constraint-nya tidak berasal dari file mana pun di `supabase/migrations/` (komentar `record_transaction` di `20260912000000` sudah mencatatnya). Beberapa kode klien masih punya fallback untuk `wallet_id` kosong: `txForAccount()` di `wallets.jsx` (tx tanpa dompet dianggap milik dompet utama), aturan anggaran per-dompet di `getBudgetSpent()` (`lib/budgetSpent.js`, `tx.wallet_id || primaryWalletId`), dan `canDeleteOwnTransaction()` di `lib/walletAccess.js` baris 127 (`!tx.wallet_id → true`). Untuk baris yang datang dari DB, fallback itu kini kode mati. **Sengaja tidak dihapus**, hanya dicatat. Jalur *tulis* dengan `wallet_id` kosong belum mati — lihat backlog "user tanpa dompet" di bagian Shared Wallet.
 
 ### Tabel `wallets`
 ```sql
@@ -536,7 +538,8 @@ Cabang pertama dibaca dari baris yang sedang dikembalikan, tanpa lookup ke tabel
    - **Baris ber-`debt_id` dikecualikan dari cabang owner** (bukan dari cabang pencatat). Baris itu tidak pernah terlihat owner (#4), jadi mengizinkannya berarti memberi hak atas baris yang tak bisa dia lihat, dan menghapusnya di luar `useDebts.deleteDebt` membuat catatan hutang tidak konsisten. Gerbang klien `canDeleteTransaction()` **sengaja tidak** mengecek `debt_id` — penjaganya dua-duanya di tempat lain: filter fetch `excludeDebt` (baris itu tidak pernah masuk state) dan cabang owner di RPC.
    - **`useDebts.deleteDebt` sengaja dikecualikan** dari pelonggaran ini: pre-flight-nya memakai `canDeleteOwnTransaction()`, bukan `canDeleteTransaction()`. Kalau memakai gerbang longgar, pre-flight akan menjanjikan penghapusan yang RPC-nya tetap tolak (karena `debt_id IS NOT NULL`), dan soft-delete catatan hutang bisa jalan dengan transaksi tertinggal.
    - **Status keanggotaan PENCATAT tidak pernah diperiksa** — `wallet_access_role()` hanya menerima `wallet_id` dan mengevaluasi `auth.uid()`, yaitu si PENGHAPUS. Karena itu aturan ini mencakup baris anggota aktif maupun bekas anggota tanpa klausa `status` tambahan.
-   - Verifikasi: `tests/owner-delete.harness.mjs` (19/19, gerbang klien saja). **Policy + RPC belum diuji terhadap Postgres sungguhan** — termasuk kebenaran pembalikan saldo saat owner menghapus baris anggota, dan penolakan `debt_id` di cabang owner. Wajib dry-run `BEGIN…ROLLBACK` seperti `20260917000000` sebelum dianggap terbukti.
+   - **Cabang pencatat MEMPERTAHANKAN penjaga peran #6**, bersarang di dalam `IF pencatat` dan identik dengan Penjaga 2 `20260917000000` (hanya indentasi). Draft pertama (commit `0ddedc2`) menghilangkannya dengan komentar yang merujuk `20260916000000` (sudah disupersede), sehingga viewer/bekas anggota bisa lagi menghapus baris sendiri lewat RPC — `SECURITY DEFINER` tidak melewati policy DELETE yang masih benar, dan harness klien tidak menguji RPC. Ditemukan saat review sebelum `db push`, diperbaiki di file migrasi yang sama. Bersarang, bukan berdiri sendiri: `SELECT` tidak lagi memfilter `user_id`, jadi penjaga berdiri sendiri akan menjawab pesan spesifik untuk id yang ada dan "tidak ditemukan" untuk id yang tidak ada → keberadaan id bocor.
+   - Verifikasi: `tests/owner-delete.harness.mjs` (22/22 per 13 Sep 2026, gerbang klien saja) dan `tests/dryrun_20260919_owner_delete.sql` (19 uji terhadap Postgres sungguhan: 12 RPC, 6 policy dengan role `authenticated`, 1 skema; ditempel ke SQL Editor, dibatalkan otomatis). **Dry-run belum dijalankan per 13 Sep 2026** — belum dianggap terbukti sampai hasilnya 19/19.
 
 #### Sisi klien
 
@@ -693,6 +696,17 @@ Transaksi ber-`debt_id` **tidak dibedakan sama sekali** di halaman Transaksi: `s
 Akibatnya `debt_payments` ikut terhapus (FK cascade `transaction_id`) tapi baris `debts`-nya tidak disentuh: `paid` bisa tetap menunjukkan jumlah yang sudah termasuk pembayaran yang barisnya sudah tidak ada, dan status lunas bisa ikut salah.
 
 Belum diukur: berapa banyak baris produksi yang sudah terlanjur tidak konsisten. **Perbaikan ini butuh keputusan produk lebih dulu** (tolak penghapusan dari halaman Transaksi? hapus diam-diam ikut menyesuaikan `debts.paid`? atau arahkan user ke halaman Hutang?) — jangan ditambal sepihak di RPC, karena mengubah cabang pencatat berarti mengubah perilaku yang sudah dipakai user hari ini.
+
+#### 📋 Backlog — user tanpa dompet: tambah transaksi mengirim `wallet_id` NULL ke kolom NOT NULL
+
+**Status: BELUM diperbaiki, sengaja di luar scope `20260919000000`.** Ditemukan 13 Sep 2026 saat mengoreksi dokumentasi `transactions.wallet_id`. Hasil membaca kode saja, belum direproduksi di app.
+
+- **Kondisi nol dompet bisa tercapai.** Tidak ada yang membuat dompet otomatis saat daftar (satu-satunya trigger di `auth.users` adalah `on_auth_user_created_subscription`, dan `OnboardingScreen.jsx` tidak menyentuh dompet), dan `useWallets.deleteAccount()` tidak menolak penghapusan dompet terakhir. Form tambah transaksi menerima `writableAccounts`, jadi user tanpa dompet sendiri yang hanya menjadi viewer dompet bersama juga masuk kondisi ini.
+- **Guard form justru meloloskannya.** `transactions.jsx:353` `hasWallet = accounts.length === 0 || !!walletId`: dengan nol dompet tombol simpan aktif dan payload membawa `wallet_id: null`. Pola yang sama ada di `RecurringTransactionForm.jsx:163` dan `AddDebtModal.jsx:61` (`wallets.length === 0 || walletId`).
+- **`useTransactions.createTransaction` tidak punya guard** — meneruskan `p_wallet_id: tx.wallet_id || null`. Di `record_transaction`, cek akses dompet dan penyesuaian saldo dibungkus `IF p_wallet_id IS NOT NULL`, jadi dilewati, lalu `INSERT` ditolak constraint → `23502 not_null_violation`.
+- **Yang dilihat user bukan error mentah, tapi pesan generik yang menyesatkan:** modal tetap terbuka dengan `transaksi.gagalSimpan`; error Postgres mentah hanya muncul di console. Tidak ada petunjuk "buat dompet dulu". Untuk hutang, transaksi pokok yang gagal membuat `createDebt` me-rollback catatan hutangnya dan mengembalikan error.
+- **Yang sudah aman:** runner transaksi berulang — `app.jsx` menunggu `writableAccounts.length > 0` dan `recurringHelper.js` melewati item bila user belum punya dompet.
+- Perbaikan butuh keputusan UX lebih dulu (tombol diblokir + ajakan membuat dompet? dompet default saat daftar? larang hapus dompet terakhir?) — jangan ditambal sepihak.
 
 #### Pemisahan array dompet tiga-arah (`useWallets`)
 
