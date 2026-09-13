@@ -19,9 +19,14 @@
 --    BAGIAN D  UJI POLICY  P0-P5    6 uji  policy RLS DELETE, role authenticated
 --    BAGIAN E  UJI SKEMA   S1       1 uji  transactions.wallet_id NOT NULL
 --
---  SESUDAH RUN (sebelum db push), pastikan tidak ada yang tersimpan — jalankan
---  sebagai query TERPISAH, hasilnya harus false:
---    SELECT pg_get_functiondef('public.delete_transaction(uuid)'::regprocedure) LIKE '%v_via%';
+--  STATUS 13 Sep 2026: migrasi 20260919000000 SUDAH TERPASANG di produksi
+--  (tidak sengaja dijalankan manual di SQL Editor sebelum dry-run). Script ini
+--  sekarang PELENGKAP, bukan gerbang. BAGIAN A menimpa fungsi & policy dengan
+--  isi yang identik, jadi hasil uji tetap mencerminkan yang terpasang.
+--  Cek `v_via` yang lama (harus false) TIDAK BERLAKU lagi — sekarang selalu
+--  true. Untuk memastikan data palsu ikut dibatalkan, jalankan sebagai query
+--  TERPISAH sesudah Run, hasilnya harus 0:
+--    SELECT count(*) FROM auth.users WHERE email LIKE '%@dryrun.invalid';
 --
 --  BAGIAN A adalah SALINAN file migrasi. Kalau migrasinya berubah, BAGIAN A
 --  wajib disalin ulang. Cek kesamaan dari root worktree (Git Bash):
@@ -358,7 +363,10 @@ DECLARE
   S  uuid := gen_random_uuid();  -- orang asing, bukan anggota
   W  uuid := gen_random_uuid();  -- dompet bersama milik O, saldo 1.000.000
   D  uuid := gen_random_uuid();  -- hutang milik E
-  tO uuid := gen_random_uuid();  -- -50.000 dicatat O
+  -- Nama variabel dilipat ke huruf kecil: "tO" menjadi "to" = kata kunci
+  -- cadangan PL/pgSQL (ERROR 42601). Jangan pakai nama yang huruf kecilnya
+  -- bentrok dengan kata kunci (to, by, in, or, if, end, for, not, ...).
+  tOwn uuid := gen_random_uuid();  -- -50.000 dicatat O
   tE uuid := gen_random_uuid();  -- -100.000 dicatat E
   tV uuid := gen_random_uuid();  -- -20.000 dicatat V
   tX uuid := gen_random_uuid();  -- -30.000 dicatat X (sebelum keluar)
@@ -388,7 +396,7 @@ BEGIN
   VALUES (D, E, W, 'payable', 'DRYRUN', 40000);
 
   INSERT INTO public.transactions (id, user_id, wallet_id, type, amount, merchant, debt_id) VALUES
-    (tO, O, W, 'expense', -50000,  'DR owner',  NULL),
+    (tOwn, O, W, 'expense', -50000,  'DR owner',  NULL),
     (tE, E, W, 'expense', -100000, 'DR editor', NULL),
     (tV, V, W, 'expense', -20000,  'DR viewer', NULL),
     (tX, X, W, 'expense', -30000,  'DR ex',     NULL),
@@ -399,11 +407,11 @@ BEGIN
   --  Identitas lewat request.jwt.claims; role TIDAK diganti (SECURITY DEFINER).
   -- ══════════════════════════════════════════════════════════════════
   r := r || E'\n--- BAGIAN C: UJI RPC delete_transaction ---\n';
-  r := r || pg_temp.dr_line('R1  owner hapus transaksi SENDIRI (regresi normal)',             'LOLOS via=pencatat saldo 1000000 -> 1050000', pg_temp.dr_rpc(O, tO, W));
+  r := r || pg_temp.dr_line('R1  owner hapus transaksi SENDIRI (regresi normal)',             'LOLOS via=pencatat saldo 1000000 -> 1050000', pg_temp.dr_rpc(O, tOwn, W));
   r := r || pg_temp.dr_line('R2  owner hapus transaksi EDITOR aktif (saldo kembali 100000)',  'LOLOS via=owner saldo 1000000 -> 1100000',    pg_temp.dr_rpc(O, tE, W));
   r := r || pg_temp.dr_line('R3  owner hapus transaksi BEKAS anggota (left)',                 'LOLOS via=owner saldo 1000000 -> 1030000',    pg_temp.dr_rpc(O, tX, W));
   r := r || pg_temp.dr_line('R4  owner hapus transaksi ber-debt_id milik editor',             msg_umum,  pg_temp.dr_rpc(O, tD, W));
-  r := r || pg_temp.dr_line('R5  editor hapus transaksi OWNER',                               msg_umum,  pg_temp.dr_rpc(E, tO, W));
+  r := r || pg_temp.dr_line('R5  editor hapus transaksi OWNER',                               msg_umum,  pg_temp.dr_rpc(E, tOwn, W));
   r := r || pg_temp.dr_line('R6  viewer hapus transaksi EDITOR',                              msg_umum,  pg_temp.dr_rpc(V, tE, W));
   r := r || pg_temp.dr_line('R7  [a] viewer hapus transaksinya SENDIRI → ditolak Penjaga 2',  msg_peran, pg_temp.dr_rpc(V, tV, W));
   r := r || pg_temp.dr_line('R8  [b] bekas anggota hapus transaksinya SENDIRI → ditolak Penjaga 2', msg_peran, pg_temp.dr_rpc(X, tX, W));
@@ -418,11 +426,11 @@ BEGIN
   --  Jalur build klien lama yang masih .delete() langsung.
   -- ══════════════════════════════════════════════════════════════════
   r := r || E'\n--- BAGIAN D: UJI POLICY RLS DELETE (role authenticated) ---\n';
-  r := r || pg_temp.dr_line('P0  pergantian role benar-benar terjadi (RLS aktif)',   'role=authenticated bypassrls=false uid_cocok=true', pg_temp.dr_whoami(E));
+  r := r || pg_temp.dr_line('P0  pergantian role benar-benar terjadi (RLS aktif)',   'role=authenticated bypassrls=f uid_cocok=t', pg_temp.dr_whoami(E));
   r := r || pg_temp.dr_line('P1  [policy] owner hapus transaksi editor',             '1 baris (role=authenticated)', pg_temp.dr_policy(O, tE));
   r := r || pg_temp.dr_line('P2  [policy] owner hapus transaksi ber-debt_id editor', '0 baris (role=authenticated)', pg_temp.dr_policy(O, tD));
   r := r || pg_temp.dr_line('P3  [policy] viewer hapus transaksinya sendiri',        '0 baris (role=authenticated)', pg_temp.dr_policy(V, tV));
-  r := r || pg_temp.dr_line('P4  [policy] editor hapus transaksi owner',             '0 baris (role=authenticated)', pg_temp.dr_policy(E, tO));
+  r := r || pg_temp.dr_line('P4  [policy] editor hapus transaksi owner',             '0 baris (role=authenticated)', pg_temp.dr_policy(E, tOwn));
   r := r || pg_temp.dr_line('P5  [policy] editor hapus transaksinya sendiri',        '1 baris (role=authenticated)', pg_temp.dr_policy(E, tE));
 
   -- ══════════════════════════════════════════════════════════════════
