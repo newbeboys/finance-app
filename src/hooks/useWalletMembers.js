@@ -98,10 +98,14 @@ export function useWalletMembers(walletId) {
     refreshMembers();
 
     // Channel berumur-sheet: dibuka saat daftar anggota dibuka, ditutup saat
-    // ditutup. Sengaja TIDAK digabung ke channel useWallets — yang di sana
-    // memantau keanggotaan USER INI di dompet mana pun (agar daftar dompetnya
-    // tidak basi), sedangkan yang ini memantau SEMUA anggota SATU dompet.
-    // Beda cakupan, beda umur.
+    // ditutup. Sengaja TIDAK digabung ke channel `wallet_members_watch` di
+    // useWallets — yang di sana memantau keanggotaan USER INI di dompet mana
+    // pun (agar daftar dompetnya tidak basi), sedangkan yang ini memantau
+    // SEMUA anggota SATU dompet. Beda cakupan, beda umur.
+    //
+    // ⚠️ Per 14 Sep 2026 channel ini SELALU ditolak server: `wallet_members`
+    // tidak ada di publication `supabase_realtime`. Daftar hanya segar lewat
+    // refreshMembers() saat sheet dibuka dan setelah removeMember().
     const channel = supabase
       .channel(`wallet_members_sheet:${walletId}`)
       .on(

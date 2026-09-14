@@ -9,6 +9,19 @@ import { requireUserId } from '../lib/authIdentity';
 // komentar besar di dekat createAccount/deleteAccount di bawah. Mengimpornya
 // di sini hanya akan jadi unused import.
 
+// Nomor urut PER JALANNYA effect realtime, ditempel ke nama topic channel
+// (`wallets_lock:<uid>:<n>`). WAJIB, bukan kosmetik: supabase.channel(topic)
+// MENGEMBALIKAN channel lama kalau topic yang sama masih terdaftar di klien,
+// dan removeChannel() di cleanup bersifat async — jadi effect yang jalan
+// ulang (reloadKey naik) dengan topic identik bisa menerima channel yang
+// sudah subscribe, lalu `.on()`/`.subscribe()` melempar "tried to subscribe
+// multiple times" di dalam fungsi async (tidak tertangkap callback status).
+// Counter tingkat modul, bukan useRef dan bukan Math.random: tetap naik
+// walau komponen mount ulang (logout/login), dan nomornya bisa dicocokkan di
+// DevTools. Prefix `wallets_lock:` / `wallet_members_watch:` sengaja dijaga
+// supaya filter DevTools yang sudah dipakai tetap cocok.
+let channelSeq = 0;
+
 const FALLBACK_COLORS = ["#2A6FDB","#1FA8A0","#1B8A3F","#9A6BD9","#B26A4A","#B68A3E","#5C6B4C","#C9886D"];
 const pickColor = (name) => FALLBACK_COLORS[(name || '').charCodeAt(0) % FALLBACK_COLORS.length];
 
@@ -47,7 +60,8 @@ export function useWallets(userId, limits) {
   const [allAccounts, setAccounts]   = React.useState([]);
   const [memberCounts, setCounts]    = React.useState({});
   const [loading, setLoading]        = React.useState(true);
-  // Dinaikkan oleh langganan realtime `wallet_members`. Menjalankan ULANG
+  // Dinaikkan oleh langganan realtime `wallet_members` (channel 2 di effect —
+  // per 14 Sep 2026 mati karena tabelnya di luar publication). Menjalankan ULANG
   // seluruh effect, bukan sekadar menambal state — dan itu memang yang
   // dibutuhkan: kalau keanggotaan berubah, daftar id dompet bersama berubah,
   // dan filter realtime `id=in.(...)` di bawah harus dirakit ulang juga.
@@ -58,7 +72,11 @@ export function useWallets(userId, limits) {
   React.useEffect(() => {
     if (!userId) { setLoading(false); return; }
     let alive = true;
-    let channel = null;
+    let walletsChannel = null;
+    let membersChannel = null;
+    // Diambil SINKRON di awal effect, sebelum await apa pun: dua jalannya
+    // effect yang tumpang-tindih tidak boleh sampai berbagi nomor.
+    const seq = ++channelSeq;
     setLoading(true);
 
     (async () => {
@@ -143,14 +161,25 @@ export function useWallets(userId, limits) {
         ));
       };
 
-      // EMPAT binding di satu channel. Dompet sendiri disaring `user_id=eq.X`
-      // supaya dompet yang dibuat SETELAH langganan ini tetap terpantau tanpa
-      // perlu subscribe ulang. Dompet bersama tidak punya kolom yang bisa
-      // dipakai begitu, jadi harus daftar id eksplisit — daftar itu memang
-      // snapshot, TAPI binding ketiga di bawah membuatnya dirakit ulang setiap
-      // kali keanggotaan user berubah, jadi keterbatasannya sudah tidak ada.
-      channel = supabase
-        .channel(`wallets_lock:${userId}`)
+      // ┌─ DUA CHANNEL, BUKAN SATU — JANGAN DIGABUNG LAGI (hotfix 14 Sep 2026) ─┐
+      // │ Binding `postgres_changes` yang ditolak server menggagalkan SELURUH  │
+      // │ channel, bukan cuma binding itu. `wallet_members` TIDAK ada di       │
+      // │ publication `supabase_realtime` (terverifikasi 14 Sep 2026 lewat     │
+      // │ pg_publication_tables), jadi selama keempat binding ada di satu      │
+      // │ channel, server membalas "Unable to subscribe to changes with given  │
+      // │ parameters" dan binding `wallets` (saldo, is_locked) IKUT MATI —     │
+      // │ diam-diam, di produksi. Satu tabel per channel: kalau publication    │
+      // │ salah satunya bermasalah, yang lain tetap hidup.                     │
+      // └───────────────────────────────────────────────────────────────────────┘
+      //
+      // CHANNEL 1 — `wallets`. Dompet sendiri disaring `user_id=eq.X` supaya
+      // dompet yang dibuat SETELAH langganan ini tetap terpantau tanpa perlu
+      // subscribe ulang. Dompet bersama tidak punya kolom yang bisa dipakai
+      // begitu, jadi harus daftar id eksplisit — daftar itu snapshot, dan
+      // channel 2 di bawah yang (begitu `wallet_members` masuk publication)
+      // membuatnya dirakit ulang setiap kali keanggotaan user berubah.
+      walletsChannel = supabase
+        .channel(`wallets_lock:${userId}:${seq}`)
         .on(
           'postgres_changes',
           { event: 'UPDATE', schema: 'public', table: 'wallets', filter: `user_id=eq.${userId}` },
@@ -158,22 +187,30 @@ export function useWallets(userId, limits) {
         );
 
       if (sharedIds.length) {
-        channel = channel.on(
+        walletsChannel = walletsChannel.on(
           'postgres_changes',
           { event: 'UPDATE', schema: 'public', table: 'wallets', filter: `id=in.(${sharedIds.join(',')})` },
           applyRow
         );
       }
 
-      // BINDING KETIGA — keanggotaan USER INI, di dompet mana pun.
+      walletsChannel.subscribe();
+
+      // CHANNEL 2 — `wallet_members`. ⚠️ Per 14 Sep 2026 channel ini SELALU
+      // gagal di server karena tabelnya tidak ada di publication; kodenya
+      // dipertahankan supaya langsung berfungsi begitu tabel itu ditambahkan
+      // (keputusan terpisah — lihat teknis_arsitektur-database.md). Sampai
+      // itu terjadi, reloadKey tidak pernah naik dari sini: peran/keanggotaan
+      // tetap snapshot saat mount.
       //
-      // Ini yang memperbaiki keterbatasan yang dicatat di komentar binding
-      // kedua: daftar `sharedIds` dirakit sekali saat effect jalan, jadi dompet
-      // yang dibagikan ke user SETELAH itu dulu tidak terpantau sampai hook
-      // mount ulang. Sekarang setiap perubahan baris keanggotaannya sendiri
-      // menaikkan `reloadKey`, dan effect ini jalan ulang dari awal: memberships
-      // diambil lagi, query dompet diulang, dan binding `id=in.(...)` dirakit
-      // ulang dengan daftar yang baru.
+      // BINDING A — keanggotaan USER INI, di dompet mana pun.
+      //
+      // Menutup keterbatasan snapshot `sharedIds` di channel 1: dompet yang
+      // dibagikan ke user SETELAH effect jalan tidak terpantau sampai hook
+      // mount ulang. Setiap perubahan baris keanggotaannya sendiri menaikkan
+      // `reloadKey`, dan effect ini jalan ulang dari awal: memberships diambil
+      // lagi, query dompet diulang, dan binding `id=in.(...)` dirakit ulang
+      // dengan daftar yang baru (dengan nomor `seq` baru di nama topic).
       //
       // Mencakup tiga kejadian sekaligus: menerima undangan di device/tab lain,
       // dikeluarkan owner (remove_wallet_member → status 'left' → dompetnya
@@ -184,32 +221,38 @@ export function useWallets(userId, limits) {
       // berubah (editor→viewer saat rejoin dengan kode lain), dan `canWrite`
       // yang salah jauh lebih berbahaya daripada satu query ekstra — dia
       // menentukan tombol edit/hapus transaksi mana yang ditawarkan.
-      channel = channel.on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'wallet_members', filter: `user_id=eq.${userId}` },
-        () => { if (alive) setReloadKey(k => k + 1); }
-      );
+      membersChannel = supabase
+        .channel(`wallet_members_watch:${userId}:${seq}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'wallet_members', filter: `user_id=eq.${userId}` },
+          () => { if (alive) setReloadKey(k => k + 1); }
+        );
 
-      // BINDING KEEMPAT — anggota yang masuk/keluar dari dompet MILIK user ini,
+      // BINDING B — anggota yang masuk/keluar dari dompet MILIK user ini,
       // supaya lencana "N anggota" dan penjagaan tombol hapus ikut segar.
-      // Tidak bisa digabung dengan binding ketiga: yang itu menyaring
+      // Tidak bisa digabung dengan binding A: yang itu menyaring
       // `user_id` = user ini, sedangkan baris anggota orang lain justru
       // ber-`user_id` orang lain. Penyaring yang cocok adalah wallet_id, dan
       // hanya untuk dompet yang benar-benar dimiliki user ini.
       if (ownedIds.length) {
-        channel = channel.on(
+        membersChannel = membersChannel.on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'wallet_members', filter: `wallet_id=in.(${ownedIds.join(',')})` },
           () => { if (alive) setReloadKey(k => k + 1); }
         );
       }
 
-      channel.subscribe();
+      membersChannel.subscribe();
     })();
 
-    // channel bisa masih null kalau effect dibersihkan sebelum fetch selesai;
+    // Channel bisa masih null kalau effect dibersihkan sebelum fetch selesai;
     // `alive` di atas yang mencegah subscribe-nya terlanjur jalan.
-    return () => { alive = false; if (channel) supabase.removeChannel(channel); };
+    return () => {
+      alive = false;
+      if (walletsChannel) supabase.removeChannel(walletsChannel);
+      if (membersChannel) supabase.removeChannel(membersChannel);
+    };
   }, [userId, reloadKey]);
 
   async function createAccount(a) {
