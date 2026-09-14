@@ -44,7 +44,7 @@ Hook-hook ini dikomposisi di `app.jsx`. Setiap query RLS-scoped by `user_id` cli
 
 **Business logic** yang tidak terikat UI ada di `src/lib/`:
 - `planLimits.js` — sumber kebenaran semua limit & feature flags
-- `planReconciliation.js` — lock/unlock saat downgrade
+- `planReconciliation.js` — lock/unlock saat downgrade; kegagalan SELECT/UPDATE (dulu senyap) kini dicatat ke `error_logs` via `logError()`, severity `high`
 - `recurringHelper.js` — scheduler transaksi berulang (localStorage)
 - `widgetSync.js` — sinkronisasi ke widget Android
 - `strukParser.js` — parser OCR struk belanja → transaksi
@@ -337,7 +337,7 @@ isPro = plan === 'pro' && (expires_at === null || new Date(expires_at) > new Dat
 ```sql
 id              uuid            PRIMARY KEY
 user_id         uuid            FK → auth.users ON DELETE SET NULL, NULLABLE
-source          text            NOT NULL — nama fungsi/modul asal (adjustBalance, debts, recurringHelper, etc)
+source          text            NOT NULL — nama fungsi/modul asal (adjustBalance, debts, recurringHelper, planReconciliation, etc)
 message         text            NOT NULL — pesan error asli
 metadata        jsonb           Nullable — konteks tambahan (wallet_id, debt_id, email, etc)
 severity        text            'high' | 'medium' (CHECK constraint, default 'medium')
