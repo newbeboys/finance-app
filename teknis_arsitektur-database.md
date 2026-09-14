@@ -146,7 +146,7 @@ React Component (UI state)
 
 **Realtime Supabase:**
 - `wallets`, `savings`, `user_subscriptions`, `custom_categories` subscribe to event changes untuk multi-device sync
-- **Isi publication `supabase_realtime` — TERVERIFIKASI 14 Sep 2026** (`select tablename from pg_publication_tables where pubname = 'supabase_realtime'`, 6 baris): `budgets`, `custom_categories`, `savings`, `transactions`, `user_subscriptions`, `wallets`. **`wallet_members` TIDAK ada** (begitu juga `debts`, padahal `useDebts` membuka channel `debts:<uid>` — belum dicek di DevTools). **`transactions` SUDAH ada** → Fase 2 (realtime transaksi) tidak butuh perubahan DB.
+- **Isi publication `supabase_realtime` — DIPERBARUI 15 Sep 2026** (`select tablename from pg_publication_tables where pubname = 'supabase_realtime'`, 8 baris): `budgets`, `custom_categories`, `debts`, `savings`, `transactions`, `user_subscriptions`, `wallet_members`, `wallets`. `wallet_members` dan `debts` ditambah 15 Sep 2026 lewat `ALTER PUBLICATION supabase_realtime ADD TABLE` — memperbaiki channel `wallets_lock`/`wallet_members_sheet` dan `debts:<uid>` yang sebelumnya mati (status per 14 Sep 2026 di atas). Sebelum `ALTER` dijalankan, sudah diverifikasi `relreplident = 'd'` (default) pada ketiga tabel, dan diuji akun-B (non-owner, non-anggota) subscribe ke `wallet_members` tanpa filter tidak menerima frame apa pun — RLS tetap berlaku di jalur realtime. `debt_payments` **sengaja tidak** dimasukkan — `useDebts` tidak punya binding ke tabel itu. `transactions` sudah ada sejak sebelumnya → Fase 2 (realtime transaksi) tidak butuh perubahan DB.
 - Binding `postgres_changes` untuk tabel di luar publication membuat server mengirim pesan `system` "Unable to subscribe to changes with given parameters" dan **seluruh channel** mati, termasuk binding lain yang valid. Karena itu satu tabel per channel (hotfix 14 Sep 2026, `useWallets`).
 - Pesan `system` itu datang **setelah** callback status sudah menerima `SUBSCRIBED`, jadi `.subscribe(cb)` saja tidak melihatnya. `subscribeWithHealth()` (`src/lib/realtimeHealth.js`) mencatat tiga jalur ke console **dan** `error_logs` (source `'realtime'`): `system` error (severity high), `CHANNEL_ERROR`/`TIMED_OUT` (medium; lalu `onRecovered` saat `SUBSCRIBED` berikutnya, karena event selama putus tidak dikirim ulang), dan `CLOSED` yang tidak lewat `closeChannel()` (medium) — cleanup channel ini **wajib** memakai `closeChannel()`, bukan `supabase.removeChannel()`. **Rem:** satu baris per (jenis channel + status) per sesi, kuncinya di `sessionStorage` (cadangan: Set modul); metadata `{channel, status, message, tables, bindings[{table, event, id_count}]}` tanpa uuid — uuid di pesan server diganti `<uuid>`. Sebelum 14 Sep 2026 (commit 4) helper ini hanya menulis ke console, dan tidak ada yang pernah tercatat di `error_logs`. Dipakai `wallets_lock` (pulih → reload penuh), `wallet_members_watch` (log saja — reload di sana akan loop selama tabelnya ditolak), `wallet_members_sheet` (pulih → `refreshMembers`). Channel lain (`savings_lock`, `debts`, `custom_categories`, `user_subscriptions`) belum memakainya.
 
@@ -271,6 +271,8 @@ created_at      timestamptz
 
 **Soft delete:** Kategori dihapus hanya di-flag `is_deleted = true` agar transaksi lama tetap bisa diresolvasi nama & warna.
 
+**Schema drift `is_locked` (wallets/savings/custom_categories) — ditutup 20 Sep 2026.** Ketiga kolom `is_locked` di atas sudah ada di production sejak lama tapi tidak pernah tercatat di file SQL manapun (kemungkinan dibuat manual via SQL Editor, seperti kasus `user_summary` di atas). `20260920000000_document_is_locked_columns.sql` (executed) menambahkan `ADD COLUMN IF NOT EXISTS` untuk ketiganya — no-op di production, tapi memastikan database yang dibangun ulang dari `migrations/` ikut punya kolomnya.
+
 ### Tabel `debts` & `debt_payments`
 ```sql
 -- debts
@@ -388,7 +390,7 @@ DELETE FROM public.chat_unanswered_log WHERE created_at < now() - interval '30 d
 
 ### View `public.user_summary` (Referensi Manual Admin — Baru Didokumentasikan 23 Juli 2026)
 
-**Status migration:** File `20260723000000_document_user_summary_view.sql` sudah dibuat lokal, **BELUM di-push/dieksekusi** ke Supabase.
+**Status migration:** **SUDAH di-push/dieksekusi** ke Supabase — `supabase migration list` (15/20 Sep 2026) menunjukkan `local` = `remote` untuk versi ini. Bagian ini sebelumnya menyebut "belum di-push"; itu keliru dan sudah dikoreksi.
 
 **Riwayat:** View ini sudah ada di production sejak ~pertengahan Juni 2026, dibuat langsung via SQL Editor tanpa pernah tercatat sebagai migration file — baru diformalkan lewat migration di atas.
 
