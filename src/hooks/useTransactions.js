@@ -28,7 +28,21 @@ function toAppTx(row) {
   };
 }
 
-export function useTransactions(userId, limits) {
+// opts.syncBalances: useWallets.syncBalances — dipanggil setelah setiap RPC
+// tulis yang berhasil dengan id dompet yang saldonya baru saja diubah server.
+// Opsional (harness memanggil hook ini tanpa useWallets).
+export function useTransactions(userId, limits, opts = {}) {
+  // Ref, bukan dependency: identitas fungsinya stabil (useCallback []), tapi
+  // pemanggil tidak wajib menjaminnya, dan ketiga fungsi tulis di bawah tidak
+  // di-memoize — ref membuat mereka selalu memakai versi terbaru.
+  const syncBalancesRef = React.useRef(null);
+  syncBalancesRef.current = opts.syncBalances || null;
+  // Fire-and-forget: tulisnya sudah BERHASIL di server, jadi gagal menarik
+  // saldo tidak boleh berubah jadi error transaksi (syncBalances mencatat
+  // kegagalannya sendiri). Tidak di-await supaya pemanggil (modal, useDebts)
+  // tidak menunggu satu round-trip ekstra.
+  const syncBalances = (walletIds, knownRows) => { syncBalancesRef.current?.(walletIds, knownRows); };
+
   const [transactions, setTransactions] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState(null);
@@ -173,6 +187,8 @@ export function useTransactions(userId, limits) {
         debt_id:   tx.debt_id   || null,
         user_id:   userId,   // record_transaction menulis user_id = auth.uid()
       }), ...prev]);
+      // RPC mengembalikan id saja, bukan saldo baru → syncBalances men-SELECT.
+      syncBalances([tx.wallet_id]);
     }
     // id dikembalikan agar useDebts bisa menautkannya ke debt_payments.transaction_id
     return { error: err, id: newId ?? null };
@@ -182,7 +198,8 @@ export function useTransactions(userId, limits) {
   // delete_transaction / update_transaction menulis baris DAN menyesuaikan
   // saldo dompet dalam satu transaksi Postgres — sama seperti record_transaction
   // untuk create. Jadi pemanggil TIDAK BOLEH memanggil adjustBalance lagi
-  // (dobel di DB); saldo baru sampai ke state lewat realtime useWallets.
+  // (dobel di DB); saldo baru ditarik ke state oleh syncBalances() di bawah
+  // (nilai ABSOLUT — realtime useWallets menyusul dengan nilai yang sama).
   //
   // Kenapa bukan .delete()/.update() + adjustBalance seperti dulu:
   //  - baris milik orang lain di dompet bersama ditolak RLS sebagai 0 BARIS,
@@ -193,16 +210,29 @@ export function useTransactions(userId, limits) {
   // RPC-nya memvalidasi `user_id = auth.uid()` dan RAISE kalau bukan milik
   // pemanggil, jadi kegagalan selalu berupa error, tidak pernah "sukses kosong".
   async function deleteTransaction(id) {
-    const { error: err } = await supabase.rpc('delete_transaction', { p_transaction_id: id });
+    // Dompet asal diambil SEBELUM RPC: kalau balasannya tidak membawa
+    // wallet_id (bentuk jsonb lama), ini satu-satunya sumber id-nya.
+    const walletId = transactions.find(t => t.id === id)?.wallet_id || null;
+    const { data, error: err } = await supabase.rpc('delete_transaction', { p_transaction_id: id });
     if (err) {
       console.error('[useTransactions] delete_transaction FAILED:', err.code, err.message);
     } else {
       setTransactions(prev => prev.filter(t => t.id !== id));
+      // 20260919000000 mengembalikan {wallet_id, balance} — saldo pasca-commit
+      // dari RPC-nya sendiri, jadi dipakai langsung tanpa SELECT tambahan.
+      if (data?.wallet_id && data.balance !== undefined && data.balance !== null) {
+        syncBalances([data.wallet_id], [{ id: data.wallet_id, balance: data.balance }]);
+      } else {
+        syncBalances([walletId]);
+      }
     }
     return { error: err };
   }
 
   async function updateTransaction(id, updates) {
+    // Dompet ASAL dari state, sebelum RPC: saat transaksi dipindah dompet,
+    // saldo dompet asal ikut berubah dan balasan RPC hanya membawa dompet baru.
+    const oldWalletId = transactions.find(t => t.id === id)?.wallet_id || null;
     const { data, error: err } = await supabase.rpc('update_transaction', {
       p_transaction_id: id,
       p_amount:    updates.amount,
@@ -220,6 +250,8 @@ export function useTransactions(userId, limits) {
       return { error: err || new Error('update_transaction: tidak ada baris dikembalikan') };
     }
     setTransactions(prev => prev.map(t => t.id === id ? toAppTx(data) : t));
+    // Asal + tujuan (sama saja kalau tidak dipindah; syncBalances men-dedupe).
+    syncBalances([oldWalletId, data.wallet_id]);
     return { error: null };
   }
 

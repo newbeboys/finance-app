@@ -70,6 +70,59 @@ export function useWallets(userId, limits) {
   const { openPaywall } = usePaywall();
   const { t } = useTranslation();
 
+  // ── Saldo ABSOLUT setelah RPC transaksi (hotfix 14 Sep 2026) ─────────────
+  // Sampai hotfix ini, realtime `wallets_lock` adalah SATU-SATUNYA penulis
+  // saldo ke state — dan channel itu mati di produksi (lihat CHANNEL 1 di
+  // effect), jadi saldo di layar tidak bergerak setelah mencatat transaksi
+  // sampai app dibuka ulang. Satu jalur tunggal yang bisa putus diam-diam
+  // bukan desain yang layak untuk angka uang: useTransactions sekarang
+  // memanggil syncBalances() setelah setiap RPC yang berhasil, dan realtime
+  // tinggal jalur untuk perubahan dari device/anggota lain.
+  //
+  // Aman berdampingan dengan realtime KARENA keduanya menulis nilai ABSOLUT
+  // (idempoten) — larangan penulis DELTA di komentar applyRow tetap berlaku
+  // penuh. Yang tersisa urutan: respons yang lebih TUA tidak boleh menimpa
+  // nilai yang lebih BARU. `latest` menyimpan nomor permintaan terbaru per
+  // dompet; hasil hanya diterapkan untuk dompet yang nomornya masih milik
+  // permintaan itu. Event realtime ikut menaikkan nomornya (applyRow), jadi
+  // SELECT yang masih di jalan tidak menimpa event yang sudah tiba. Jendela
+  // yang TIDAK tertutup: SELECT yang dieksekusi sebelum commit penulis lain
+  // tapi tiba sesudah event realtime-nya — butuh dua penulis di dompet yang
+  // sama dalam hitungan milidetik, dan sembuh di perubahan/reload berikutnya.
+  //
+  // knownRows: saldo yang sudah dikembalikan RPC-nya sendiri
+  // (delete_transaction → {wallet_id, balance}) — dipakai tanpa SELECT.
+  const balanceReqRef = React.useRef({ seq: 0, latest: new Map() });
+
+  const syncBalances = React.useCallback(async (walletIds, knownRows = null) => {
+    const ids = [...new Set((walletIds || []).filter(Boolean))];
+    if (!ids.length) return;
+    const tracker = balanceReqRef.current;
+    const req = ++tracker.seq;
+    ids.forEach(id => tracker.latest.set(id, req));
+
+    let rows = knownRows;
+    if (!rows) {
+      try {
+        const { data, error } = await supabase.from('wallets').select('id, balance').in('id', ids);
+        if (error) {
+          console.error('[useWallets] syncBalances FAILED:', error.code, error.message);
+          return;
+        }
+        rows = data || [];
+      } catch (e) {
+        console.error('[useWallets] syncBalances FAILED:', e?.message || e);
+        return;
+      }
+    }
+
+    const fresh = new Map(
+      rows.filter(r => tracker.latest.get(r.id) === req).map(r => [r.id, Number(r.balance) || 0])
+    );
+    if (!fresh.size) return;
+    setAccounts(prev => prev.map(a => fresh.has(a.id) ? { ...a, balance: fresh.get(a.id) } : a));
+  }, []);
+
   React.useEffect(() => {
     if (!userId) { setLoading(false); return; }
     let alive = true;
@@ -152,8 +205,14 @@ export function useWallets(userId, limits) {
       // kedua yang bekerja dengan DELTA (mis. `balance + delta`): dua penulis delta,
       // atau satu delta + satu absolut, akan menggandakan saldo di UI secara acak
       // tergantung siapa yang sampai duluan. Itu persis bug saldo dobel 11 Sep 2026.
+      //
+      // Penulis ABSOLUT kedua ada di syncBalances() (hotfix 14 Sep 2026). Event
+      // ini menaikkan nomor permintaan dompetnya supaya SELECT syncBalances yang
+      // masih di jalan tidak menimpa nilai yang baru saja tiba di sini.
       const applyRow = (payload) => {
         if (!alive) return;
+        const tracker = balanceReqRef.current;
+        tracker.latest.set(payload.new.id, ++tracker.seq);
         setAccounts(prev => prev.map(a =>
           // `user_id` lama dipakai sebagai cadangan: kalau payload tidak
           // membawanya, dompet sendiri jangan sampai terbaca "bersama" (dan
@@ -459,5 +518,5 @@ export function useWallets(userId, limits) {
   const accounts         = React.useMemo(() => visibleAccounts.filter(a => !a.isShared), [visibleAccounts]);
   const writableAccounts = React.useMemo(() => visibleAccounts.filter(a => a.canWrite),  [visibleAccounts]);
 
-  return { accounts, visibleAccounts, writableAccounts, loading, createAccount, setPrimary, deleteAccount };
+  return { accounts, visibleAccounts, writableAccounts, loading, createAccount, setPrimary, deleteAccount, syncBalances };
 }
