@@ -1,15 +1,19 @@
-// Entry harness: mount hook useTransactions ASLI (bentuk branch ini — TANPA
-// autoRefetchTransactions/refreshTransactions, itu milik Task 5 di branch
-// terpisah), ekspos API-nya ke window supaya bisa disetir dari Playwright.
+// Entry harness untuk tests/useTransactions.harness.mjs (sync Fase 1): mount
+// hook useTransactions ASLI, ekspos API + kontrol lock ke window supaya bisa
+// disetir dari Playwright. Dipasangkan dengan supabase-stub.js lewat
+// index.html + vite.config.js. Ada sepasang file kembar untuk harness lain
+// (main-visibility.jsx + stub-visibility.js) — alasannya di stub-visibility.js.
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import '../../src/i18n';
 import { useTransactions } from '../../src/hooks/useTransactions';
+import { setAppLocked, isAppLocked, subscribeAppLock } from '../../src/hooks/useAutoLock';
 
 function Probe() {
-  const api = useTransactions('owner-1', { maxTransactionsPerMonth: Infinity });
+  const api = useTransactions('user-1', { maxTransactionsPerMonth: Infinity });
   window.__api = api;   // identitas berubah tiap render → pembaca harus ambil ulang
   return <div id="ready">{api.loading ? 'loading' : 'ready'}</div>;
 }
 
+window.__lock = { setAppLocked, isAppLocked, subscribeAppLock };
 ReactDOM.createRoot(document.getElementById('root')).render(<Probe />);

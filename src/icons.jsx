@@ -51,6 +51,7 @@ export const IconArrowRight = Ic(<><path d="M5 12h14" /><path d="m13 5 7 7-7 7" 
 export const IconSpark  = Ic(<><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8" /></>);
 export const IconCheck  = Ic(<><path d="m5 12 5 5 9-12" /></>);
 export const IconClose  = Ic(<><path d="M6 6l12 12M18 6 6 18" /></>);
+export const IconRefresh = Ic(<><path d="M21 12a9 9 0 1 1-2.64-6.36" /><path d="M21 4v5h-5" /></>);
 export const IconFilter = Ic(<><path d="M3 5h18M6 12h12M10 19h4" /></>);
 export const IconChev   = Ic(<><path d="m6 9 6 6 6-6" /></>);
 export const IconWallet = Ic(<><rect x="3" y="6" width="18" height="13" rx="2" /><path d="M16 12h.01" /><path d="M3 9h13a2 2 0 0 1 2 2v0" /></>);

@@ -184,7 +184,9 @@
     "pratinjauStruk": "Receipt preview",
     "gagalKategoriKustom": "Failed to save custom category. Please try again.",
     "gagalSimpan": "Failed to save transaction. Check your connection and try again.",
-    "tanggal": "Date"
+    "tanggal": "Date",
+    "segarkan": "Refresh",
+    "segarkanTooltip": "Fetch the latest transaction data"
   },
   "kategori": {
     "pilihKategori": "Select category",

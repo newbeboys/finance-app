@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { TRANSACTIONS, ALL_CATEGORIES, fmt, formatNominal, nominalFontSize } from './data';
-import { IconSearch, IconPlus, IconClose, CatIcon } from './icons';
+import { IconSearch, IconPlus, IconClose, IconRefresh, CatIcon } from './icons';
 import { useIsCompact } from './hooks/useContainerWidth';
 import { AddTransactionModal } from './transactions';
 import { LockBadge } from './components/PaywallModal';
@@ -9,7 +9,7 @@ import { resolveCategory, categoryLabel } from './category-field';
 import { MonthYearPicker } from './components/MonthYearPicker';
 import { canEditTransaction, canDeleteTransaction } from './lib/walletAccess';
 
-export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, transactions: txProp, loading = false, onDelete, onUpdate, customCategories = [], onCreateCustom, onDeleteCustom, isPro = false, isBasicAtMax = false, userId }) {
+export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, transactions: txProp, loading = false, onRefresh, refreshing = false, onDelete, onUpdate, customCategories = [], onCreateCustom, onDeleteCustom, isPro = false, isBasicAtMax = false, userId }) {
   const { t: tr, i18n } = useTranslation();
   const locale = i18n.language === 'en' ? 'en-US' : 'id-ID';
   const transactions = txProp ?? TRANSACTIONS;
@@ -92,6 +92,21 @@ export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, 
           )}
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {/* Pull-to-refresh manual. Terpisah dari refetch otomatis saat app
+              kembali ke foreground (useTransactions.autoRefetchTransactions):
+              yang ini aksi eksplisit user, jadi debounce 60 detik diabaikan.
+              Antre di belakang tulisan in-flight sama seperti jalur otomatis.
+              Sengaja tombol, bukan gestur tarik-ke-bawah: di WebView Capacitor
+              gestur itu harus berebut overscroll dengan kontainer scroll halaman
+              dan gampang salah picu saat user cuma menggulir daftar. */}
+          {onRefresh && (
+            <button onClick={() => onRefresh()} disabled={refreshing}
+              title={tr('transaksi.segarkanTooltip')} aria-label={tr('transaksi.segarkan')}
+              style={{ padding: "9px 12px", fontSize: 12.5, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10, display: "inline-flex", alignItems: "center", gap: 6, color: "var(--ink)", fontFamily: "inherit", cursor: refreshing ? "default" : "pointer", opacity: refreshing ? 0.6 : 1 }}>
+              <IconRefresh size={15} className={refreshing ? "spin" : ""} />
+              {!isMobile && tr('transaksi.segarkan')}
+            </button>
+          )}
           <button onClick={() => setPickerOpen(true)}
             style={{ padding: "9px 14px", fontSize: 12.5, background: "var(--paper)", border: "1px solid var(--line-soft)", borderRadius: 10, display: "inline-flex", alignItems: "center", gap: 6, color: "var(--ink)", fontFamily: "inherit", cursor: "pointer" }}>
             {new Date(selectedMonth.year, selectedMonth.month, 1).toLocaleDateString(locale, { month: 'short', year: 'numeric' })} ▾

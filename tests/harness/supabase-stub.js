@@ -1,53 +1,31 @@
-// Stub Supabase untuk harness regresi hotfix owner-cant-see-member-transactions.
-// TIDAK mereplikasi semantik WHERE Supabase/RLS sungguhan (itu sudah dibuktikan
-// oleh e2e dua-akun terhadap Supabase asli, lihat commit message hotfix ini) —
-// stub ini murni menangkap ARGUMEN yang dikirim ke query builder, supaya bisa
-// diverifikasi bahwa fetchOwnedWalletIds() benar-benar ikut digabung ke dalam
-// filter sebelum query jalan.
-// Data skenario diseed lewat window.__PRESEED__ — WAJIB ditulis via
-// page.addInitScript() SEBELUM navigasi, bukan lewat page.evaluate() setelah
-// halaman dimuat: efek mount hook (fetchOwnedWalletIds/fetchSharedMemberships
-// lalu query transactions) selesai dalam hitungan microtask begitu modul ini
-// dievaluasi — jauh lebih cepat daripada roundtrip CDP page.evaluate()
-// terpisah, jadi mutasi state PASCA-load nyaris pasti kalah start.
-const preseed = window.__PRESEED__ || {};
-const state = {
-  wallets: preseed.wallets || [],          // baris untuk fetchOwnedWalletIds: [{ id }]
-  walletMembers: preseed.walletMembers || [], // baris untuk fetchSharedMemberships: [{ wallet_id, role }]
-  transactionRows: preseed.transactionRows || [], // baris yang "dikembalikan" query transactions (server-side filtering tidak disimulasikan)
-  lastOrFilter: null,   // string yang dikirim ke .or(...) pada query transactions — null kalau tidak pernah dipanggil
-  lastEqUserId: null,   // nilai .eq('user_id', X) TERAKHIR pada query transactions (fallback saat sharedOrFilter null)
-  calls: { wallets: 0, wallet_members: 0, transactions: 0 },
-};
+// Stub Supabase untuk tests/useTransactions.harness.mjs. Direkatkan lewat alias
+// di tests/harness/vite.config.js — TIDAK pernah ikut ke bundle produksi.
+// Fokusnya SIKLUS TULIS: rpc() bisa ditahan/dilepas (holdRpc/pendingRpc) untuk
+// menguji drainWrites + dua rem auto-refetch. Sengaja TIDAK table-aware, jadi
+// tidak bisa dipakai owner-visibility — itu punya stub sendiri, lihat
+// stub-visibility.js untuk alasan lengkap kenapa stub-nya ada dua.
+const state = { rows: [], members: [], selectCount: 0, rpcCalls: [], pendingRpc: null, holdRpc: false };
 window.__stub = state;
 
 function builder(table) {
   const b = {};
-  ['select', 'order', 'is', 'gte', 'lt'].forEach(m => { b[m] = () => b; });
-  b.eq = (col, val) => {
-    // Dipakai fetchSharedMemberships/fetchOwnedWalletIds (chain-nya sendiri,
-    // tidak overlap) DAN fallback `.eq('user_id', userId)` di query transactions
-    // saat sharedOrFilter mengembalikan null. Hanya kolom 'user_id' pada query
-    // TABEL 'transactions' yang relevan untuk assert fallback-vs-or di bawah.
-    if (table === 'transactions' && col === 'user_id') state.lastEqUserId = val;
-    return b;
-  };
-  b.or = (expr) => {
-    if (table === 'transactions') state.lastOrFilter = expr;
-    return b;
-  };
+  ['select', 'order', 'or', 'eq', 'is', 'gte', 'lt'].forEach(m => { b[m] = () => b; });
   b.then = (res, rej) => {
-    state.calls[table] = (state.calls[table] || 0) + 1;
-    let data;
-    if (table === 'wallets') data = state.wallets.slice();
-    else if (table === 'wallet_members') data = state.walletMembers.slice();
-    else if (table === 'transactions') data = state.transactionRows.slice();
-    else data = [];
-    return Promise.resolve({ data, error: null }).then(res, rej);
+    const p = table === 'transactions'
+      ? (state.selectCount++, Promise.resolve({ data: state.rows.slice(), error: null }))
+      : Promise.resolve({ data: state.members.slice(), error: null });
+    return p.then(res, rej);
   };
   return b;
 }
 
 export const supabase = {
   from: (table) => builder(table),
+  // holdRpc = tahan RPC supaya tulisannya "in-flight" selama yang kita mau;
+  // lepaskan lewat state.pendingRpc.resolve(...).
+  rpc: (name, args) => {
+    state.rpcCalls.push({ name, args });
+    if (state.holdRpc) return new Promise(resolve => { state.pendingRpc = { name, args, resolve }; });
+    return Promise.resolve({ data: 'rpc-id-1', error: null });
+  },
 };

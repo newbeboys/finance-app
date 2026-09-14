@@ -3,8 +3,13 @@ import { useTranslation } from 'react-i18next';
 import { supabase } from '../supabase';
 import { usePaywall } from '../components/PaywallModal';
 import { fetchSharedWalletIds, fetchOwnedWalletIds, sharedOrFilter } from '../lib/walletAccess';
+import { isAppLocked } from './useAutoLock';
 
 const MONTHS = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
+
+// Jeda minimum antar-refetch OTOMATIS (app kembali ke foreground). Pull-to-refresh
+// manual sengaja TIDAK tunduk pada angka ini — lihat refreshTransactions().
+export const AUTO_REFETCH_MIN_INTERVAL_MS = 60 * 1000;
 
 // Supabase row → format yang dipakai komponen app
 function toAppTx(row) {
@@ -46,60 +51,195 @@ export function useTransactions(userId, limits, opts = {}) {
   const [transactions, setTransactions] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState(null);
+  const [refreshing, setRefreshing] = React.useState(false);
   const { openPaywall } = usePaywall();
   const { t } = useTranslation();
 
+  // Epoch ms fetch SUKSES terakhir; 0 = belum pernah. Dasar debounce #2.
+  // Fetch yang gagal sengaja tidak memperbaruinya supaya percobaan berikutnya
+  // tidak ikut kena rem.
+  const lastFetchAtRef = React.useRef(0);
+  // Promise dari tulisan (create/update/delete) yang sedang berjalan.
+  // Fetch yang berangkat sebelum RPC tulis commit akan mengembalikan daftar
+  // versi lama dan menghapus lagi baris yang baru masuk state — jadi KEDUA
+  // jalur fetch harus menunggu himpunan ini kosong dulu.
+  // Disimpan sebagai promise, bukan counter: counter cuma bisa menjawab
+  // "ada tulisan?", sedangkan yang dibutuhkan adalah MENUNGGU-nya selesai.
+  const inFlightWritesRef = React.useRef(new Set());
+  // Nomor urut fetch: hanya hasil fetch TERAKHIR yang boleh menulis state,
+  // jadi dua fetch yang balapan tidak bisa saling menimpa dengan data basi.
+  const fetchSeqRef = React.useRef(0);
+  const mountedRef = React.useRef(true);
   React.useEffect(() => {
-    if (!userId) { setLoading(false); return; }
-    let alive = true;
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
-    setLoading(true);
+  // ── Badan fetch, dipisah dari useEffect agar bisa dipanggil ulang ────
+  // Dipakai tiga pemanggil: load awal, refetch otomatis saat app kembali ke
+  // foreground, dan pull-to-refresh manual. Perilakunya SAMA di ketiganya —
+  // REPLACE penuh, daftar hasil query menggantikan seluruh state. Tidak ada
+  // logika merge per baris: itu yang menjamin hasil refetch identik dengan
+  // load awal (baris yang dihapus orang lain benar-benar hilang, bukan
+  // menyisa karena tidak ada di payload).
+  //
+  // `silent` = jangan sentuh `loading` (dipakai refetch/refresh, supaya daftar
+  // yang sudah tampil tidak berkedip jadi skeleton).
+  const fetchTransactions = React.useCallback(async ({ silent = false } = {}) => {
+    if (!userId) return { error: null, skipped: 'no-user' };
+
+    const seq = ++fetchSeqRef.current;
+    // Basi kalau komponen sudah unmount ATAU sudah ada fetch yang lebih baru.
+    const isStale = () => !mountedRef.current || seq !== fetchSeqRef.current;
+
+    if (!silent) setLoading(true);
     setError(null);
 
-    (async () => {
-      // Transaksi di dompet bersama dicatat atas nama ORANG LAIN (user_id-nya
-      // si pencatat), jadi `.eq('user_id', …)` saja akan menyembunyikannya —
-      // baik dompet ITU DIMILIKI user (owner tidak pernah punya baris di
-      // wallet_members untuk dompetnya sendiri, jadi fetchSharedWalletIds saja
-      // TIDAK CUKUP — lihat rationale fetchOwnedWalletIds di walletAccess.js)
-      // MAUPUN dompet itu dibagikan KE user (fetchSharedWalletIds). Kedua
-      // daftar digabung supaya cabang wallet_id.in.(…) di bawah mencerminkan
-      // persis policy SELECT server: wallet_access_role(wallet_id) IS NOT NULL
-      // (dompet yang saya miliki ATAU dompet yang saya jadi anggota aktifnya).
-      const [sharedIds, ownedIds] = await Promise.all([
-        fetchSharedWalletIds(userId),
-        fetchOwnedWalletIds(userId),
-      ]);
-      if (!alive) return;
-      const walletIds = [...new Set([...sharedIds, ...ownedIds])];
+    // Transaksi di dompet bersama dicatat atas nama ORANG LAIN (user_id-nya
+    // si pencatat), jadi `.eq('user_id', …)` saja akan menyembunyikannya —
+    // baik dompet ITU DIMILIKI user (owner tidak pernah punya baris di
+    // wallet_members untuk dompetnya sendiri, jadi fetchSharedWalletIds saja
+    // TIDAK CUKUP — lihat rationale fetchOwnedWalletIds di walletAccess.js)
+    // MAUPUN dompet itu dibagikan KE user (fetchSharedWalletIds). Kedua
+    // daftar digabung supaya cabang wallet_id.in.(…) di bawah mencerminkan
+    // persis policy SELECT server: wallet_access_role(wallet_id) IS NOT NULL
+    // (dompet yang saya miliki ATAU dompet yang saya jadi anggota aktifnya).
+    const [sharedIds, ownedIds] = await Promise.all([
+      fetchSharedWalletIds(userId),
+      fetchOwnedWalletIds(userId),
+    ]);
+    if (isStale()) return { error: null, skipped: 'stale' };
+    const walletIds = [...new Set([...sharedIds, ...ownedIds])];
 
-      let query = supabase
-        .from('transactions')
-        .select('*')
-        .order('created_at', { ascending: false });
+    let query = supabase
+      .from('transactions')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-      // excludeDebt: transaksi hutang/piutang orang lain di dompet bersama
-      // tidak pernah ikut terbaca (Task 2 #4) — cerminan policy SELECT.
-      const orFilter = sharedOrFilter(userId, walletIds, 'wallet_id', { excludeDebt: true });
-      // Cabang `user_id` tetap ada di dalam orFilter — bukan cuma wallet_id —
-      // supaya transaksi yang dulu user catat di dompet yang aksesnya sudah
-      // dicabut (dia keluar dari dompet itu) tetap muncul di riwayatnya sendiri.
-      query = orFilter ? query.or(orFilter) : query.eq('user_id', userId);
+    // excludeDebt: transaksi hutang/piutang orang lain di dompet bersama
+    // tidak pernah ikut terbaca (Task 2 #4) — cerminan policy SELECT.
+    const orFilter = sharedOrFilter(userId, walletIds, 'wallet_id', { excludeDebt: true });
+    // Cabang `user_id` tetap ada di dalam orFilter — bukan cuma wallet_id —
+    // supaya transaksi yang dulu user catat di dompet yang aksesnya sudah
+    // dicabut (dia keluar dari dompet itu) tetap muncul di riwayatnya sendiri.
+    query = orFilter ? query.or(orFilter) : query.eq('user_id', userId);
 
-      const { data, error: err } = await query;
-      if (!alive) return;
-      if (err) {
-        setError(err.message);
-      } else {
-        setTransactions((data || []).map(toAppTx));
-      }
-      setLoading(false);
-    })();
+    const { data, error: err } = await query;
+    if (isStale()) return { error: null, skipped: 'stale' };
 
-    return () => { alive = false; };
+    if (err) {
+      setError(err.message);
+    } else {
+      setTransactions((data || []).map(toAppTx));
+      lastFetchAtRef.current = Date.now();
+    }
+    if (!silent) setLoading(false);
+    return { error: err ?? null, skipped: null };
   }, [userId]);
 
-  async function createTransaction(tx) {
+  React.useEffect(() => {
+    if (!userId) { setLoading(false); return; }
+    // Ganti user → jam debounce direset, jangan sampai fetch user sebelumnya
+    // menahan load awal user ini.
+    lastFetchAtRef.current = 0;
+    fetchTransactions();
+  }, [userId, fetchTransactions]);
+
+  // ── Antre di belakang tulisan yang sedang terbang ────────────────────
+  // Dipakai KEDUA jalur fetch — tidak ada versi "cek sekali lalu skip".
+  // Alasannya sama untuk keduanya: fetch yang berangkat sebelum RPC tulis
+  // commit akan me-REPLACE daftar dengan versi sebelum tulisan itu.
+  //
+  // `allSettled`, bukan `all`: tulisan yang ditolak RLS (42501) tidak boleh
+  // menggantung fetch selamanya.
+  // `while`, bukan sekali tunggu: tulisan baru bisa berangkat selagi kita
+  // menunggu, dan fetch tetap tidak boleh jalan selama masih ada yang terbang.
+  const drainWrites = React.useCallback(async () => {
+    while (inFlightWritesRef.current.size > 0) {
+      await Promise.allSettled([...inFlightWritesRef.current]);
+    }
+  }, []);
+
+  // ── Refetch OTOMATIS (app kembali ke foreground) ─────────────────────
+  // Dipanggil oleh pemicu yang BUKAN aksi eksplisit user. Dua rem yang
+  // MEMBATALKAN (skip, bukan antre — resume beruntun tidak boleh menumpuk
+  // request yang lalu dieksekusi berbarengan):
+  //   1. gerbang keamanan PIN/biometrik sedang aktif → data user tidak boleh
+  //      diambil/diperbarui di belakang layar kunci;
+  //   2. belum lewat AUTO_REFETCH_MIN_INTERVAL_MS sejak fetch sukses terakhir.
+  // Tulisan in-flight BUKAN rem pembatal: jalur ini MENGANTRE lewat
+  // drainWrites(), sama persis dengan pull-to-refresh manual. Sebelumnya
+  // di-skip sekali di titik trigger, dan itu asimetris tanpa alasan —
+  // efeknya resume yang kebetulan bertabrakan dengan sebuah tulisan
+  // kehilangan sinkronisasinya sampai 60 detik berikutnya.
+  //
+  // Kedua rem DIPERIKSA ULANG setelah antre: menunggu tulisan bisa makan
+  // waktu, dan dalam jeda itu app bisa keburu terkunci atau fetch lain bisa
+  // sudah sukses duluan. Memeriksa sekali di depan saja akan membuat fetch
+  // tetap berangkat di balik layar kunci.
+  // Mengembalikan alasan skip (Promise) supaya bisa diperiksa saat debug.
+  const autoRefetchTransactions = React.useCallback(async () => {
+    const blocked = () => {
+      if (isAppLocked()) return 'locked';
+      if (Date.now() - lastFetchAtRef.current < AUTO_REFETCH_MIN_INTERVAL_MS) return 'debounced';
+      return null;
+    };
+
+    let why = blocked();
+    if (why) return { skipped: why };
+
+    await drainWrites();
+
+    why = blocked();
+    if (why) return { skipped: why };
+
+    await fetchTransactions({ silent: true });
+    return { skipped: null };
+  }, [fetchTransactions, drainWrites]);
+
+  // ── Pull-to-refresh MANUAL ───────────────────────────────────────────
+  // Aksi eksplisit user, jadi TIDAK PERNAH di-skip diam-diam: tombol yang
+  // ditekan user harus selalu benar-benar mengambil data. Bedanya dengan
+  // jalur otomatis tinggal satu hal — debounce (lastFetchAtRef) DIABAIKAN,
+  // karena user menekan tombol justru karena dia mau data sekarang, bukan
+  // 60 detik lagi. Perlakuan terhadap tulisan in-flight sudah sama: antre.
+  //
+  // `refreshing` tetap true selama antre, jadi spinner-nya jujur menunjukkan
+  // tombolnya masih bekerja.
+  const refreshTransactions = React.useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await drainWrites();
+      return await fetchTransactions({ silent: true });
+    } finally {
+      if (mountedRef.current) setRefreshing(false);
+    }
+  }, [fetchTransactions, drainWrites]);
+
+  // ── Pendaftar tulisan in-flight ──────────────────────────────────────
+  // Semua penulis lewat sini, bukan mendaftar manual di dalam tiap badan
+  // fungsi: satu tempat saja, jadi tidak ada jalur `return` lebih awal
+  // (mis. limitReached) atau exception yang bisa lupa mencabut pendaftarannya.
+  // `finally` menjamin tercabut untuk sukses MAUPUN gagal.
+  //
+  // Pendaftarannya sinkron, sedangkan `run` dan callback `finally` baru jalan
+  // di microtask berikutnya — jadi urutan add-lalu-delete selalu terjaga.
+  function trackWrite(run) {
+    const p = Promise.resolve()
+      .then(run)
+      .finally(() => { inFlightWritesRef.current.delete(p); });
+    inFlightWritesRef.current.add(p);
+    return p;
+  }
+
+  // Pembungkusnya sengaja fungsi biasa (bukan useCallback): identitasnya ikut
+  // berubah tiap render persis seperti implementasi aslinya, jadi tidak ada
+  // closure basi atas `userId`/`limits` yang ikut terbawa.
+  function createTransaction(tx)          { return trackWrite(() => createTransactionInner(tx)); }
+  function deleteTransaction(id)          { return trackWrite(() => deleteTransactionInner(id)); }
+  function updateTransaction(id, updates) { return trackWrite(() => updateTransactionInner(id, updates)); }
+
+  async function createTransactionInner(tx) {
     // TIDAK ADA gerbang requireUserId() di sini — dan itu disengaja, bukan
     // celah yang tertinggal saat merge dari main (hotfix identitas). Jalur
     // itu berguna untuk INSERT langsung, yang menaruh `user_id` dari state
@@ -209,7 +349,7 @@ export function useTransactions(userId, limits, opts = {}) {
   //    adjust_wallet_balance menolak mereka → baris hilang, saldo tidak dibalik.
   // RPC-nya memvalidasi `user_id = auth.uid()` dan RAISE kalau bukan milik
   // pemanggil, jadi kegagalan selalu berupa error, tidak pernah "sukses kosong".
-  async function deleteTransaction(id) {
+  async function deleteTransactionInner(id) {
     // Dompet asal diambil SEBELUM RPC: kalau balasannya tidak membawa
     // wallet_id (bentuk jsonb lama), ini satu-satunya sumber id-nya.
     const walletId = transactions.find(t => t.id === id)?.wallet_id || null;
@@ -229,7 +369,7 @@ export function useTransactions(userId, limits, opts = {}) {
     return { error: err };
   }
 
-  async function updateTransaction(id, updates) {
+  async function updateTransactionInner(id, updates) {
     // Dompet ASAL dari state, sebelum RPC: saat transaksi dipindah dompet,
     // saldo dompet asal ikut berubah dan balasan RPC hanya membawa dompet baru.
     const oldWalletId = transactions.find(t => t.id === id)?.wallet_id || null;
@@ -255,5 +395,12 @@ export function useTransactions(userId, limits, opts = {}) {
     return { error: null };
   }
 
-  return { transactions, loading, error, createTransaction, deleteTransaction, updateTransaction };
+  return {
+    transactions, loading, error, refreshing,
+    createTransaction, deleteTransaction, updateTransaction,
+    // Refetch otomatis (dipakai pemicu foreground di app.jsx) vs pull-to-refresh
+    // manual (tombol di halaman Transaksi). Sengaja dua nama berbeda: yang
+    // pertama boleh di-skip diam-diam, yang kedua tidak pernah.
+    autoRefetchTransactions, refreshTransactions,
+  };
 }
