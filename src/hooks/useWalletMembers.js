@@ -1,6 +1,6 @@
 import React from 'react';
 import { supabase } from '../supabase';
-import { subscribeWithHealth } from '../lib/realtimeHealth';
+import { subscribeWithHealth, closeChannel } from '../lib/realtimeHealth';
 
 /**
  * Hook aksi keanggotaan dompet bersama (Fitur B, Task 4).
@@ -118,7 +118,8 @@ export function useWalletMembers(walletId) {
       { onRecovered: () => { if (alive) refreshMembers(); } }
     );
 
-    return () => { alive = false; supabase.removeChannel(channel); };
+    // closeChannel, BUKAN supabase.removeChannel — lihat lib/realtimeHealth.js.
+    return () => { alive = false; closeChannel(channel); };
   }, [walletId, refreshMembers]);
 
   // ── Penerjemah error RPC bergaya RAISE ─────────────────────────────

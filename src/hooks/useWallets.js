@@ -4,7 +4,7 @@ import { supabase } from '../supabase';
 import { usePaywall } from '../components/PaywallModal';
 import { fetchSharedMemberships, sharedOrFilter } from '../lib/walletAccess';
 import { requireUserId } from '../lib/authIdentity';
-import { subscribeWithHealth } from '../lib/realtimeHealth';
+import { subscribeWithHealth, closeChannel } from '../lib/realtimeHealth';
 // `logError` TIDAK ikut diambil dari main: di sana dipakai adjustBalance(),
 // fungsi yang SENGAJA DIHAPUS di lineage ini (Task 4, 11 Sep 2026) — lihat
 // komentar besar di dekat createAccount/deleteAccount di bawah. Mengimpornya
@@ -315,10 +315,12 @@ export function useWallets(userId, limits) {
 
     // Channel bisa masih null kalau effect dibersihkan sebelum fetch selesai;
     // `alive` di atas yang mencegah subscribe-nya terlanjur jalan.
+    // closeChannel, BUKAN supabase.removeChannel: tanpa penanda "disengaja",
+    // setiap reloadKey naik akan tercatat sebagai 'CLOSED' di error_logs.
     return () => {
       alive = false;
-      if (walletsChannel) supabase.removeChannel(walletsChannel);
-      if (membersChannel) supabase.removeChannel(membersChannel);
+      closeChannel(walletsChannel);
+      closeChannel(membersChannel);
     };
   }, [userId, reloadKey]);
 
