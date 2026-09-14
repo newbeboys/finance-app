@@ -148,6 +148,7 @@ React Component (UI state)
 - `wallets`, `savings`, `user_subscriptions`, `custom_categories` subscribe to event changes untuk multi-device sync
 - **Isi publication `supabase_realtime` — TERVERIFIKASI 14 Sep 2026** (`select tablename from pg_publication_tables where pubname = 'supabase_realtime'`, 6 baris): `budgets`, `custom_categories`, `savings`, `transactions`, `user_subscriptions`, `wallets`. **`wallet_members` TIDAK ada** (begitu juga `debts`, padahal `useDebts` membuka channel `debts:<uid>` — belum dicek di DevTools). **`transactions` SUDAH ada** → Fase 2 (realtime transaksi) tidak butuh perubahan DB.
 - Binding `postgres_changes` untuk tabel di luar publication membuat server mengirim pesan `system` "Unable to subscribe to changes with given parameters" dan **seluruh channel** mati, termasuk binding lain yang valid. Karena itu satu tabel per channel (hotfix 14 Sep 2026, `useWallets`).
+- Pesan `system` itu datang **setelah** callback status sudah menerima `SUBSCRIBED`, jadi `.subscribe(cb)` saja tidak melihatnya. `subscribeWithHealth()` (`src/lib/realtimeHealth.js`) mendengar keduanya: `system` error → log; `CHANNEL_ERROR`/`TIMED_OUT` → log, lalu `onRecovered` saat `SUBSCRIBED` berikutnya (event selama putus tidak dikirim ulang). Dipakai `wallets_lock` (pulih → reload penuh), `wallet_members_watch` (log saja — reload di sana akan loop selama tabelnya ditolak), `wallet_members_sheet` (pulih → `refreshMembers`). Channel lain (`savings_lock`, `debts`, `custom_categories`, `user_subscriptions`) belum memakainya.
 
 ---
 

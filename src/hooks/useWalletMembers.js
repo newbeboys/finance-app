@@ -1,5 +1,6 @@
 import React from 'react';
 import { supabase } from '../supabase';
+import { subscribeWithHealth } from '../lib/realtimeHealth';
 
 /**
  * Hook aksi keanggotaan dompet bersama (Fitur B, Task 4).
@@ -106,14 +107,16 @@ export function useWalletMembers(walletId) {
     // ⚠️ Per 14 Sep 2026 channel ini SELALU ditolak server: `wallet_members`
     // tidak ada di publication `supabase_realtime`. Daftar hanya segar lewat
     // refreshMembers() saat sheet dibuka dan setelah removeMember().
-    const channel = supabase
-      .channel(`wallet_members_sheet:${walletId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'wallet_members', filter: `wallet_id=eq.${walletId}` },
-        () => { if (alive) refreshMembers(); }
-      )
-      .subscribe();
+    const channel = subscribeWithHealth(
+      supabase
+        .channel(`wallet_members_sheet:${walletId}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'wallet_members', filter: `wallet_id=eq.${walletId}` },
+          () => { if (alive) refreshMembers(); }
+        ),
+      { onRecovered: () => { if (alive) refreshMembers(); } }
+    );
 
     return () => { alive = false; supabase.removeChannel(channel); };
   }, [walletId, refreshMembers]);

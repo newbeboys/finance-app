@@ -4,6 +4,7 @@ import { supabase } from '../supabase';
 import { usePaywall } from '../components/PaywallModal';
 import { fetchSharedMemberships, sharedOrFilter } from '../lib/walletAccess';
 import { requireUserId } from '../lib/authIdentity';
+import { subscribeWithHealth } from '../lib/realtimeHealth';
 // `logError` TIDAK ikut diambil dari main: di sana dipakai adjustBalance(),
 // fungsi yang SENGAJA DIHAPUS di lineage ini (Task 4, 11 Sep 2026) — lihat
 // komentar besar di dekat createAccount/deleteAccount di bawah. Mengimpornya
@@ -194,7 +195,11 @@ export function useWallets(userId, limits) {
         );
       }
 
-      walletsChannel.subscribe();
+      // Pulih dari putus koneksi → muat ulang penuh: event UPDATE saldo yang
+      // terjadi selama putus tidak dikirim ulang oleh server.
+      subscribeWithHealth(walletsChannel, {
+        onRecovered: () => { if (alive) setReloadKey(k => k + 1); },
+      });
 
       // CHANNEL 2 — `wallet_members`. ⚠️ Per 14 Sep 2026 channel ini SELALU
       // gagal di server karena tabelnya tidak ada di publication; kodenya
@@ -243,7 +248,10 @@ export function useWallets(userId, limits) {
         );
       }
 
-      membersChannel.subscribe();
+      // Tanpa onRecovered: selama tabelnya di luar publication, channel ini
+      // ditolak lewat pesan `system` (dicatat ke console), dan memuat ulang
+      // di sana hanya akan membuat channel baru yang ditolak lagi.
+      subscribeWithHealth(membersChannel);
     })();
 
     // Channel bisa masih null kalau effect dibersihkan sebelum fetch selesai;
