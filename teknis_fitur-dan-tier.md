@@ -511,7 +511,7 @@ t.wallet_id === account.id ||
 - Jalur tulis client: RPC `log_error()` SECURITY DEFINER (user_id otomatis dari JWT)
 - Sisi server (Edge Function): langsung via `service_role`
 - RLS SELECT: hanya baris milik sendiri
-- **Update 23 Juli 2026:** Migration `20260723010000_harden_functions_search_path_and_grants.sql` (dibuat lokal, **belum di-push**) merencanakan revoke execute `log_error()` dari `public, anon` — hanya `authenticated` yang boleh panggil. Lihat `teknis_keputusan-infrastruktur-roadmap.md` bagian 1.12.
+- **Update 23 Juli 2026:** Migration `20260723010000_harden_functions_search_path_and_grants.sql` (executed, diverifikasi 11 Sep 2026) me-revoke execute `log_error()` dari `public, anon` — hanya `authenticated` yang boleh panggil. Lihat `teknis_keputusan-infrastruktur-roadmap.md` bagian 1.12.
 
 **Titik integrasi yang sudah dipasang:**
 
@@ -598,7 +598,7 @@ User Question
 - 8 request/min per user (fail-open: kalau RPC gagal, let through)
 - Cek atomik via RPC `check_chat_rate_limit()` SECURITY DEFINER
 - Status 200 (bukan 429) dengan `source:"rate_limit"` supaya pesan friendly ditampilkan
-- **Update 23 Juli 2026:** Migration `20260723010000_harden_functions_search_path_and_grants.sql` (dibuat lokal, **belum di-push**) merencanakan revoke execute `check_chat_rate_limit()` dari `public, anon` — hanya `authenticated` yang boleh panggil. Lihat `teknis_keputusan-infrastruktur-roadmap.md` bagian 1.12.
+- **Update 23 Juli 2026:** Migration `20260723010000_harden_functions_search_path_and_grants.sql` (executed, diverifikasi 11 Sep 2026) me-revoke execute `check_chat_rate_limit()` dari `public, anon` — hanya `authenticated` yang boleh panggil. Lihat `teknis_keputusan-infrastruktur-roadmap.md` bagian 1.12.
 
 **Logging pertanyaan gagal (added 17 Juli 2026):**
 - Tabel `chat_unanswered_log` menyimpan pola pertanyaan yang DIBLOK di Level 1, 2, atau 3, atau tidak cukup data
