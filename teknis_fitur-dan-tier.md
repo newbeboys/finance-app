@@ -518,6 +518,7 @@ t.wallet_id === account.id ||
 | Source | Lokasi | Severity | Trigger |
 |---|---|---|---|
 | `debts` | useDebts.js | high | `delete_transaction` gagal saat hapus catatan (transaksi & saldonya tetap utuh — atomik) |
+| `planReconciliation` | planReconciliation.js | high | SELECT/UPDATE gagal saat lock-on-downgrade atau unlock-on-upgrade (wallets/savings/custom_categories/debts) — 20 Sep 2026, sebelumnya senyap total |
 | `recurringHelper` | recurringHelper.js | high | createTransaction gagal saat eksekusi jadwal |
 | `revenuecat-webhook` | Edge Function | medium/high | JSON tidak valid / update user_subscriptions gagal |
 | `auth-signup` | Register.jsx | high | supabase.auth.signUp() gagal |
