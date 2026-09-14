@@ -25,10 +25,9 @@ import { requireUserId } from '../lib/authIdentity';
 //      accounts,   // dari useWallets — gerbang peran di deleteDebt
 //    });
 //
-//  PENTING: createTransaction yang di-pass HARUS versi MENTAH dari
-//  useTransactions, BUKAN wrapper handleCreateTransaction di app.jsx — wrapper
-//  itu ikut menyelaraskan saldo di state, jadi kalau dipakai di sini saldonya
-//  dobel di UI.
+//  createTransaction yang di-pass sebaiknya versi MENTAH dari useTransactions.
+//  (Wrapper handleCreateTransaction di app.jsx saat ini hanya meneruskan
+//  panggilan — dulu dia menyelaraskan saldo sendiri, itu sudah dihapus.)
 //
 //  Sejak RPC record_transaction (migrasi 20260911010000), createTransaction
 //  SUDAH menyesuaikan saldo dompet di database secara atomik (INSERT transaksi
@@ -36,10 +35,11 @@ import { requireUserId } from '../lib/authIdentity';
 //  hook ini TIDAK boleh menyentuh saldo lagi — sama sekali:
 //    - adjustBalance()      → dobel di DATABASE
 //    - penulis state delta  → dobel di UI (saldo state jadi 2x delta), karena
-//                             realtime useWallets sudah mengirim saldo absolut
-//                             yang baru dan urutannya tidak dijamin.
-//  Penyaluran saldo baru ke state adalah tugas subscription realtime di
-//  useWallets, titik.
+//                             saldo absolut yang baru sudah dikirim ke state
+//                             dan urutannya tidak dijamin.
+//  Penyaluran saldo baru ke state sudah diurus createTransaction/
+//  deleteTransaction sendiri (syncBalances ke useWallets, hotfix 14 Sep 2026)
+//  plus realtime useWallets untuk perubahan dari luar. Bukan tugas hook ini.
 //
 //  Sejak RPC delete_transaction (migrasi 20260916000000), deleteTransaction
 //  JUGA membalik saldo secara atomik. Jadi deleteDebt() dan semua rollback di
@@ -342,9 +342,10 @@ export function useDebts(userId, limits, ledger = {}) {
 
     // 4) Saldo dompet TIDAK disentuh di sini sama sekali. createTransaction() di
     //    langkah 2 menulis lewat RPC record_transaction() yang meng-INSERT
-    //    transaksi + meng-UPDATE saldo dalam satu transaksi Postgres, dan
-    //    subscription realtime di useWallets yang menyalurkan saldo barunya ke
-    //    state. Menambah penulis state kedua di sini (delta) = saldo dobel di UI.
+    //    transaksi + meng-UPDATE saldo dalam satu transaksi Postgres, lalu
+    //    createTransaction sendiri menarik saldo absolutnya ke state
+    //    (syncBalances); realtime useWallets menyusul dengan nilai yang sama.
+    //    Menambah penulis state di sini (delta) = saldo dobel di UI.
 
     // 5) State lokal
     setDebts(prev => [toAppDebt(debtRow), ...prev]);
@@ -428,9 +429,10 @@ export function useDebts(userId, limits, ledger = {}) {
     }
 
     // 4) Saldo dompet sudah diubah atomik oleh createTransaction() di langkah 1
-    //    (RPC record_transaction), dan realtime useWallets yang menyalurkannya ke
-    //    state. Jangan menyentuh saldo di sini — baik adjustBalance() (dobel di DB)
-    //    maupun penulis state berbasis delta (dobel di UI).
+    //    (RPC record_transaction), dan createTransaction sendiri yang menarik
+    //    saldo absolutnya ke state (syncBalances; realtime useWallets menyusul
+    //    dengan nilai yang sama). Jangan menyentuh saldo di sini — baik
+    //    adjustBalance() (dobel di DB) maupun penulis state delta (dobel di UI).
 
     // 5) State lokal — termasuk lastPaymentDate (untuk banner telat bayar §7)
     const payDate = payRow.date || null;

@@ -383,7 +383,7 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
   //   visibleAccounts  = milik + bersama → tampilan, filter, pencarian izin (Q1)
   //   writableAccounts = milik + editor  → setiap picker yang MENCATAT uang
   // Memilih yang salah tidak menimbulkan error, hanya perilaku yang salah.
-  const { accounts, visibleAccounts, writableAccounts, createAccount, setPrimary, deleteAccount: _deleteAccount } = useWallets(session.user.id, limits);
+  const { accounts, visibleAccounts, writableAccounts, createAccount, setPrimary, deleteAccount: _deleteAccount, syncBalances } = useWallets(session.user.id, limits);
 
   // Tombol "Tambah Wallet" tetap tampil + gemlock saat Basic sudah mencapai limit
   const walletAddLocked = accounts.length >= (limits?.maxWallets ?? Infinity);
@@ -416,8 +416,10 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
     });
   }, []);
 
-  // Transactions — sinkron dengan Supabase per user yang login
-  const { transactions, loading: txLoading, createTransaction, deleteTransaction, updateTransaction } = useTransactions(session.user.id, limits);
+  // Transactions — sinkron dengan Supabase per user yang login.
+  // syncBalances: setelah RPC tulis berhasil, useTransactions menarik saldo
+  // ABSOLUT dompet yang tersentuh ke state useWallets (hotfix 14 Sep 2026).
+  const { transactions, loading: txLoading, createTransaction, deleteTransaction, updateTransaction } = useTransactions(session.user.id, limits, { syncBalances });
 
   // Hutang/Piutang — butuh "ledger" dari transactions untuk orkestrasi +
   // rollback. create/delete di sini sudah atomik (RPC record_transaction /
@@ -435,9 +437,11 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
   // CREATE / UPDATE / DELETE: saldo TIDAK disentuh di sini sama sekali. Ketiganya
   // lewat RPC atomik (record_transaction 20260911010000, update_transaction &
   // delete_transaction 20260916000000) yang menulis baris transaksi + saldo
-  // dompet dalam satu transaksi Postgres; saldo barunya sampai ke state lewat
-  // realtime useWallets. Jangan tambahkan adjustBalance() di sini (dobel di DB)
-  // ataupun penulis state berbasis delta (dobel di UI).
+  // dompet dalam satu transaksi Postgres. Saldo barunya sampai ke state lewat
+  // DUA penulis ABSOLUT: syncBalances() yang dipanggil useTransactions setelah
+  // RPC berhasil, dan realtime useWallets (perubahan dari device/anggota lain).
+  // Jangan tambahkan adjustBalance() di sini (dobel di DB) ataupun penulis
+  // state berbasis delta (dobel di UI).
   const handleCreateTransaction = React.useCallback(async (tx) => {
     return await createTransaction(tx);
   }, [createTransaction]); // eslint-disable-line react-hooks/exhaustive-deps

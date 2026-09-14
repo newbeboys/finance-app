@@ -1,5 +1,6 @@
 import React from 'react';
 import { supabase } from '../supabase';
+import { subscribeWithHealth, closeChannel } from '../lib/realtimeHealth';
 
 /**
  * Hook aksi keanggotaan dompet bersama (Fitur B, Task 4).
@@ -98,20 +99,27 @@ export function useWalletMembers(walletId) {
     refreshMembers();
 
     // Channel berumur-sheet: dibuka saat daftar anggota dibuka, ditutup saat
-    // ditutup. Sengaja TIDAK digabung ke channel useWallets — yang di sana
-    // memantau keanggotaan USER INI di dompet mana pun (agar daftar dompetnya
-    // tidak basi), sedangkan yang ini memantau SEMUA anggota SATU dompet.
-    // Beda cakupan, beda umur.
-    const channel = supabase
-      .channel(`wallet_members_sheet:${walletId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'wallet_members', filter: `wallet_id=eq.${walletId}` },
-        () => { if (alive) refreshMembers(); }
-      )
-      .subscribe();
+    // ditutup. Sengaja TIDAK digabung ke channel `wallet_members_watch` di
+    // useWallets — yang di sana memantau keanggotaan USER INI di dompet mana
+    // pun (agar daftar dompetnya tidak basi), sedangkan yang ini memantau
+    // SEMUA anggota SATU dompet. Beda cakupan, beda umur.
+    //
+    // ⚠️ Per 14 Sep 2026 channel ini SELALU ditolak server: `wallet_members`
+    // tidak ada di publication `supabase_realtime`. Daftar hanya segar lewat
+    // refreshMembers() saat sheet dibuka dan setelah removeMember().
+    const channel = subscribeWithHealth(
+      supabase
+        .channel(`wallet_members_sheet:${walletId}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'wallet_members', filter: `wallet_id=eq.${walletId}` },
+          () => { if (alive) refreshMembers(); }
+        ),
+      { onRecovered: () => { if (alive) refreshMembers(); } }
+    );
 
-    return () => { alive = false; supabase.removeChannel(channel); };
+    // closeChannel, BUKAN supabase.removeChannel — lihat lib/realtimeHealth.js.
+    return () => { alive = false; closeChannel(channel); };
   }, [walletId, refreshMembers]);
 
   // ── Penerjemah error RPC bergaya RAISE ─────────────────────────────

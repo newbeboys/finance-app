@@ -4,10 +4,24 @@ import { supabase } from '../supabase';
 import { usePaywall } from '../components/PaywallModal';
 import { fetchSharedMemberships, sharedOrFilter } from '../lib/walletAccess';
 import { requireUserId } from '../lib/authIdentity';
+import { subscribeWithHealth, closeChannel } from '../lib/realtimeHealth';
 // `logError` TIDAK ikut diambil dari main: di sana dipakai adjustBalance(),
 // fungsi yang SENGAJA DIHAPUS di lineage ini (Task 4, 11 Sep 2026) — lihat
 // komentar besar di dekat createAccount/deleteAccount di bawah. Mengimpornya
 // di sini hanya akan jadi unused import.
+
+// Nomor urut PER JALANNYA effect realtime, ditempel ke nama topic channel
+// (`wallets_lock:<uid>:<n>`). WAJIB, bukan kosmetik: supabase.channel(topic)
+// MENGEMBALIKAN channel lama kalau topic yang sama masih terdaftar di klien,
+// dan removeChannel() di cleanup bersifat async — jadi effect yang jalan
+// ulang (reloadKey naik) dengan topic identik bisa menerima channel yang
+// sudah subscribe, lalu `.on()`/`.subscribe()` melempar "tried to subscribe
+// multiple times" di dalam fungsi async (tidak tertangkap callback status).
+// Counter tingkat modul, bukan useRef dan bukan Math.random: tetap naik
+// walau komponen mount ulang (logout/login), dan nomornya bisa dicocokkan di
+// DevTools. Prefix `wallets_lock:` / `wallet_members_watch:` sengaja dijaga
+// supaya filter DevTools yang sudah dipakai tetap cocok.
+let channelSeq = 0;
 
 const FALLBACK_COLORS = ["#2A6FDB","#1FA8A0","#1B8A3F","#9A6BD9","#B26A4A","#B68A3E","#5C6B4C","#C9886D"];
 const pickColor = (name) => FALLBACK_COLORS[(name || '').charCodeAt(0) % FALLBACK_COLORS.length];
@@ -47,7 +61,8 @@ export function useWallets(userId, limits) {
   const [allAccounts, setAccounts]   = React.useState([]);
   const [memberCounts, setCounts]    = React.useState({});
   const [loading, setLoading]        = React.useState(true);
-  // Dinaikkan oleh langganan realtime `wallet_members`. Menjalankan ULANG
+  // Dinaikkan oleh langganan realtime `wallet_members` (channel 2 di effect —
+  // per 14 Sep 2026 mati karena tabelnya di luar publication). Menjalankan ULANG
   // seluruh effect, bukan sekadar menambal state — dan itu memang yang
   // dibutuhkan: kalau keanggotaan berubah, daftar id dompet bersama berubah,
   // dan filter realtime `id=in.(...)` di bawah harus dirakit ulang juga.
@@ -55,10 +70,67 @@ export function useWallets(userId, limits) {
   const { openPaywall } = usePaywall();
   const { t } = useTranslation();
 
+  // ── Saldo ABSOLUT setelah RPC transaksi (hotfix 14 Sep 2026) ─────────────
+  // Sampai hotfix ini, realtime `wallets_lock` adalah SATU-SATUNYA penulis
+  // saldo ke state — dan channel itu mati di produksi (lihat CHANNEL 1 di
+  // effect), jadi saldo di layar tidak bergerak setelah mencatat transaksi
+  // sampai app dibuka ulang. Satu jalur tunggal yang bisa putus diam-diam
+  // bukan desain yang layak untuk angka uang: useTransactions sekarang
+  // memanggil syncBalances() setelah setiap RPC yang berhasil, dan realtime
+  // tinggal jalur untuk perubahan dari device/anggota lain.
+  //
+  // Aman berdampingan dengan realtime KARENA keduanya menulis nilai ABSOLUT
+  // (idempoten) — larangan penulis DELTA di komentar applyRow tetap berlaku
+  // penuh. Yang tersisa urutan: respons yang lebih TUA tidak boleh menimpa
+  // nilai yang lebih BARU. `latest` menyimpan nomor permintaan terbaru per
+  // dompet; hasil hanya diterapkan untuk dompet yang nomornya masih milik
+  // permintaan itu. Event realtime ikut menaikkan nomornya (applyRow), jadi
+  // SELECT yang masih di jalan tidak menimpa event yang sudah tiba. Jendela
+  // yang TIDAK tertutup: SELECT yang dieksekusi sebelum commit penulis lain
+  // tapi tiba sesudah event realtime-nya — butuh dua penulis di dompet yang
+  // sama dalam hitungan milidetik, dan sembuh di perubahan/reload berikutnya.
+  //
+  // knownRows: saldo yang sudah dikembalikan RPC-nya sendiri
+  // (delete_transaction → {wallet_id, balance}) — dipakai tanpa SELECT.
+  const balanceReqRef = React.useRef({ seq: 0, latest: new Map() });
+
+  const syncBalances = React.useCallback(async (walletIds, knownRows = null) => {
+    const ids = [...new Set((walletIds || []).filter(Boolean))];
+    if (!ids.length) return;
+    const tracker = balanceReqRef.current;
+    const req = ++tracker.seq;
+    ids.forEach(id => tracker.latest.set(id, req));
+
+    let rows = knownRows;
+    if (!rows) {
+      try {
+        const { data, error } = await supabase.from('wallets').select('id, balance').in('id', ids);
+        if (error) {
+          console.error('[useWallets] syncBalances FAILED:', error.code, error.message);
+          return;
+        }
+        rows = data || [];
+      } catch (e) {
+        console.error('[useWallets] syncBalances FAILED:', e?.message || e);
+        return;
+      }
+    }
+
+    const fresh = new Map(
+      rows.filter(r => tracker.latest.get(r.id) === req).map(r => [r.id, Number(r.balance) || 0])
+    );
+    if (!fresh.size) return;
+    setAccounts(prev => prev.map(a => fresh.has(a.id) ? { ...a, balance: fresh.get(a.id) } : a));
+  }, []);
+
   React.useEffect(() => {
     if (!userId) { setLoading(false); return; }
     let alive = true;
-    let channel = null;
+    let walletsChannel = null;
+    let membersChannel = null;
+    // Diambil SINKRON di awal effect, sebelum await apa pun: dua jalannya
+    // effect yang tumpang-tindih tidak boleh sampai berbagi nomor.
+    const seq = ++channelSeq;
     setLoading(true);
 
     (async () => {
@@ -133,8 +205,14 @@ export function useWallets(userId, limits) {
       // kedua yang bekerja dengan DELTA (mis. `balance + delta`): dua penulis delta,
       // atau satu delta + satu absolut, akan menggandakan saldo di UI secara acak
       // tergantung siapa yang sampai duluan. Itu persis bug saldo dobel 11 Sep 2026.
+      //
+      // Penulis ABSOLUT kedua ada di syncBalances() (hotfix 14 Sep 2026). Event
+      // ini menaikkan nomor permintaan dompetnya supaya SELECT syncBalances yang
+      // masih di jalan tidak menimpa nilai yang baru saja tiba di sini.
       const applyRow = (payload) => {
         if (!alive) return;
+        const tracker = balanceReqRef.current;
+        tracker.latest.set(payload.new.id, ++tracker.seq);
         setAccounts(prev => prev.map(a =>
           // `user_id` lama dipakai sebagai cadangan: kalau payload tidak
           // membawanya, dompet sendiri jangan sampai terbaca "bersama" (dan
@@ -143,14 +221,25 @@ export function useWallets(userId, limits) {
         ));
       };
 
-      // EMPAT binding di satu channel. Dompet sendiri disaring `user_id=eq.X`
-      // supaya dompet yang dibuat SETELAH langganan ini tetap terpantau tanpa
-      // perlu subscribe ulang. Dompet bersama tidak punya kolom yang bisa
-      // dipakai begitu, jadi harus daftar id eksplisit — daftar itu memang
-      // snapshot, TAPI binding ketiga di bawah membuatnya dirakit ulang setiap
-      // kali keanggotaan user berubah, jadi keterbatasannya sudah tidak ada.
-      channel = supabase
-        .channel(`wallets_lock:${userId}`)
+      // ┌─ DUA CHANNEL, BUKAN SATU — JANGAN DIGABUNG LAGI (hotfix 14 Sep 2026) ─┐
+      // │ Binding `postgres_changes` yang ditolak server menggagalkan SELURUH  │
+      // │ channel, bukan cuma binding itu. `wallet_members` TIDAK ada di       │
+      // │ publication `supabase_realtime` (terverifikasi 14 Sep 2026 lewat     │
+      // │ pg_publication_tables), jadi selama keempat binding ada di satu      │
+      // │ channel, server membalas "Unable to subscribe to changes with given  │
+      // │ parameters" dan binding `wallets` (saldo, is_locked) IKUT MATI —     │
+      // │ diam-diam, di produksi. Satu tabel per channel: kalau publication    │
+      // │ salah satunya bermasalah, yang lain tetap hidup.                     │
+      // └───────────────────────────────────────────────────────────────────────┘
+      //
+      // CHANNEL 1 — `wallets`. Dompet sendiri disaring `user_id=eq.X` supaya
+      // dompet yang dibuat SETELAH langganan ini tetap terpantau tanpa perlu
+      // subscribe ulang. Dompet bersama tidak punya kolom yang bisa dipakai
+      // begitu, jadi harus daftar id eksplisit — daftar itu snapshot, dan
+      // channel 2 di bawah yang (begitu `wallet_members` masuk publication)
+      // membuatnya dirakit ulang setiap kali keanggotaan user berubah.
+      walletsChannel = supabase
+        .channel(`wallets_lock:${userId}:${seq}`)
         .on(
           'postgres_changes',
           { event: 'UPDATE', schema: 'public', table: 'wallets', filter: `user_id=eq.${userId}` },
@@ -158,22 +247,34 @@ export function useWallets(userId, limits) {
         );
 
       if (sharedIds.length) {
-        channel = channel.on(
+        walletsChannel = walletsChannel.on(
           'postgres_changes',
           { event: 'UPDATE', schema: 'public', table: 'wallets', filter: `id=in.(${sharedIds.join(',')})` },
           applyRow
         );
       }
 
-      // BINDING KETIGA — keanggotaan USER INI, di dompet mana pun.
+      // Pulih dari putus koneksi → muat ulang penuh: event UPDATE saldo yang
+      // terjadi selama putus tidak dikirim ulang oleh server.
+      subscribeWithHealth(walletsChannel, {
+        onRecovered: () => { if (alive) setReloadKey(k => k + 1); },
+      });
+
+      // CHANNEL 2 — `wallet_members`. ⚠️ Per 14 Sep 2026 channel ini SELALU
+      // gagal di server karena tabelnya tidak ada di publication; kodenya
+      // dipertahankan supaya langsung berfungsi begitu tabel itu ditambahkan
+      // (keputusan terpisah — lihat teknis_arsitektur-database.md). Sampai
+      // itu terjadi, reloadKey tidak pernah naik dari sini: peran/keanggotaan
+      // tetap snapshot saat mount.
       //
-      // Ini yang memperbaiki keterbatasan yang dicatat di komentar binding
-      // kedua: daftar `sharedIds` dirakit sekali saat effect jalan, jadi dompet
-      // yang dibagikan ke user SETELAH itu dulu tidak terpantau sampai hook
-      // mount ulang. Sekarang setiap perubahan baris keanggotaannya sendiri
-      // menaikkan `reloadKey`, dan effect ini jalan ulang dari awal: memberships
-      // diambil lagi, query dompet diulang, dan binding `id=in.(...)` dirakit
-      // ulang dengan daftar yang baru.
+      // BINDING A — keanggotaan USER INI, di dompet mana pun.
+      //
+      // Menutup keterbatasan snapshot `sharedIds` di channel 1: dompet yang
+      // dibagikan ke user SETELAH effect jalan tidak terpantau sampai hook
+      // mount ulang. Setiap perubahan baris keanggotaannya sendiri menaikkan
+      // `reloadKey`, dan effect ini jalan ulang dari awal: memberships diambil
+      // lagi, query dompet diulang, dan binding `id=in.(...)` dirakit ulang
+      // dengan daftar yang baru (dengan nomor `seq` baru di nama topic).
       //
       // Mencakup tiga kejadian sekaligus: menerima undangan di device/tab lain,
       // dikeluarkan owner (remove_wallet_member → status 'left' → dompetnya
@@ -184,32 +285,43 @@ export function useWallets(userId, limits) {
       // berubah (editor→viewer saat rejoin dengan kode lain), dan `canWrite`
       // yang salah jauh lebih berbahaya daripada satu query ekstra — dia
       // menentukan tombol edit/hapus transaksi mana yang ditawarkan.
-      channel = channel.on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'wallet_members', filter: `user_id=eq.${userId}` },
-        () => { if (alive) setReloadKey(k => k + 1); }
-      );
+      membersChannel = supabase
+        .channel(`wallet_members_watch:${userId}:${seq}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'wallet_members', filter: `user_id=eq.${userId}` },
+          () => { if (alive) setReloadKey(k => k + 1); }
+        );
 
-      // BINDING KEEMPAT — anggota yang masuk/keluar dari dompet MILIK user ini,
+      // BINDING B — anggota yang masuk/keluar dari dompet MILIK user ini,
       // supaya lencana "N anggota" dan penjagaan tombol hapus ikut segar.
-      // Tidak bisa digabung dengan binding ketiga: yang itu menyaring
+      // Tidak bisa digabung dengan binding A: yang itu menyaring
       // `user_id` = user ini, sedangkan baris anggota orang lain justru
       // ber-`user_id` orang lain. Penyaring yang cocok adalah wallet_id, dan
       // hanya untuk dompet yang benar-benar dimiliki user ini.
       if (ownedIds.length) {
-        channel = channel.on(
+        membersChannel = membersChannel.on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'wallet_members', filter: `wallet_id=in.(${ownedIds.join(',')})` },
           () => { if (alive) setReloadKey(k => k + 1); }
         );
       }
 
-      channel.subscribe();
+      // Tanpa onRecovered: selama tabelnya di luar publication, channel ini
+      // ditolak lewat pesan `system` (dicatat ke console), dan memuat ulang
+      // di sana hanya akan membuat channel baru yang ditolak lagi.
+      subscribeWithHealth(membersChannel);
     })();
 
-    // channel bisa masih null kalau effect dibersihkan sebelum fetch selesai;
+    // Channel bisa masih null kalau effect dibersihkan sebelum fetch selesai;
     // `alive` di atas yang mencegah subscribe-nya terlanjur jalan.
-    return () => { alive = false; if (channel) supabase.removeChannel(channel); };
+    // closeChannel, BUKAN supabase.removeChannel: tanpa penanda "disengaja",
+    // setiap reloadKey naik akan tercatat sebagai 'CLOSED' di error_logs.
+    return () => {
+      alive = false;
+      closeChannel(walletsChannel);
+      closeChannel(membersChannel);
+    };
   }, [userId, reloadKey]);
 
   async function createAccount(a) {
@@ -408,5 +520,5 @@ export function useWallets(userId, limits) {
   const accounts         = React.useMemo(() => visibleAccounts.filter(a => !a.isShared), [visibleAccounts]);
   const writableAccounts = React.useMemo(() => visibleAccounts.filter(a => a.canWrite),  [visibleAccounts]);
 
-  return { accounts, visibleAccounts, writableAccounts, loading, createAccount, setPrimary, deleteAccount };
+  return { accounts, visibleAccounts, writableAccounts, loading, createAccount, setPrimary, deleteAccount, syncBalances };
 }
