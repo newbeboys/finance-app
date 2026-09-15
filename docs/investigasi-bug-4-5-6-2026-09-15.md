@@ -203,3 +203,120 @@ CREATE POLICY "debts_insert_own"
 - `planReconciliation.js` (kalau dibiarkan tetap jalan) akan terus menulis `is_locked` ke DB tanpa efek yang terlihat di klien manapun — kerja sia-sia tapi tidak merusak apa pun, murni ongkos query tak berguna.
 - **Tidak ada resiko keamanan/kebocoran baru** dari kolom yang jadi "yatim" ini — dia tidak dibaca policy/trigger/RPC manapun (dikonfirmasi C8), jadi statusnya di DB tidak memengaruhi apapun di luar klien yang (setelah perubahan) tidak lagi membacanya.
 - Satu-satunya downside nyata: kebingungan developer masa depan yang melihat kolom `is_locked` terisi `true`/`false` di database dan mengira itu masih sumber kebenaran aktif — perlu dicatat di `teknis_arsitektur-database.md` (setelah keputusan final, bukan sekarang) bahwa kolom ini legacy/tidak lagi dibaca klien, kalau arah HITUNG jadi dipilih.
+
+---
+
+## BAGIAN E — Susulan: wallets (kutipan verbatim + pencarian penolakan fungsional) & gating 3 resource
+
+### E1. `src/hooks/useWallets.js` baris 140-165 (verbatim)
+
+```js
+140	      const memberships = await fetchSharedMemberships(userId);
+141	      if (!alive) return;
+142	      const sharedIds = memberships.map(m => m.walletId);
+143	      const roleById  = new Map(memberships.map(m => [m.walletId, m.role]));
+144	
+145	      let query = supabase
+146	        .from('wallets')
+147	        .select('*')
+148	        .order('created_at', { ascending: true });
+149	
+150	      const orFilter = sharedOrFilter(userId, sharedIds, 'id');
+151	      // Tanpa dompet bersama, tetap pakai .eq() seperti dulu: lebih murah dan
+152	      // perilakunya identik dengan sebelum Fitur B ada.
+153	      query = orFilter ? query.or(orFilter) : query.eq('user_id', userId);
+154	
+155	      const { data, error } = await query;
+156	      if (!alive) return;
+157	      if (error) {
+158	        console.error('[useWallets] fetch error:', error.code, error.message);
+159	      } else {
+160	        setAccounts((data || []).map(row => toAppWallet(row, userId, roleById)));
+161	      }
+162	      setLoading(false);
+163	
+164	      // ── Jumlah anggota aktif per dompet MILIK SENDIRI ────────────────
+165	      // Dipakai dua tempat di UI: lencana "3 anggota" di kartu dompet, dan
+```
+
+Konfirmasi atas A2: `sharedIds` (baris 142, dari `fetchSharedMemberships`) menentukan `orFilter`, dan **satu query yang sama** (baris 145-155) mengambil dompet milik sendiri DAN dompet bersama sekaligus, di-`order('created_at', {ascending:true})` **lintas-owner** — tidak ada `ORDER BY user_id, created_at` atau pemisahan per-owner di query maupun di `.map()` sesudahnya (baris 160). Array `allAccounts` hasilnya betul-betul satu urutan created_at gabungan semua owner yang datanya kebetulan terlihat oleh user ini.
+
+### E2. `supabase/migrations/20260913000000_add_wallet_invite_flow.sql` baris 125-150 (verbatim)
+
+```sql
+125	  -- Hanya OWNER dompet ini yang boleh mengundang. wallet_access_role()
+126	  -- melewati RLS by design (SECURITY DEFINER) — lihat catatan di
+127	  -- 20260912000000 soal kenapa helper ini wajib dipakai, bukan EXISTS() inline.
+128	  IF public.wallet_access_role(p_wallet_id) <> 'owner' THEN
+129	    RAISE EXCEPTION 'generate_wallet_invite: dompet tidak ditemukan atau bukan milikmu' USING ERRCODE = '42501';
+130	  END IF;
+131	
+132	  -- Keputusan produk #1: FITUR PRO-ONLY. Dicek DI DALAM RPC (bukan cuma
+133	  -- client), karena ini gerbang fitur — kalau dilewati lewat panggilan RPC
+134	  -- langsung, akun ketiga permanen mendapat akses, bukan sekadar kuota
+135	  -- transient seperti limit transaksi/bulan Basic.
+136	  IF NOT EXISTS (
+137	    SELECT 1 FROM public.user_subscriptions s
+138	    WHERE s.user_id = v_user_id
+139	      AND s.plan = 'pro'
+140	      AND (s.expires_at IS NULL OR s.expires_at > now())
+141	  ) THEN
+142	    RAISE EXCEPTION 'generate_wallet_invite: berbagi dompet khusus pengguna Pro' USING ERRCODE = '42501';
+143	  END IF;
+144	
+145	  -- Keputusan produk #2: satu kode aktif per dompet. Revoke yang lama dulu
+146	  -- supaya "generate ulang karena kode hilang" tidak menyisakan dua kode
+147	  -- valid sekaligus (kode lama yang "hilang" itu tetap bisa dipakai orang
+148	  -- yang kebetulan melihatnya kalau tidak di-revoke).
+149	  UPDATE public.wallet_invites
+150	  SET    status = 'revoked'
+```
+
+Baris 136-141 adalah klausul yang dimaksud di C9: `EXISTS(SELECT 1 FROM user_subscriptions WHERE plan='pro' AND (expires_at IS NULL OR expires_at > now()))` — secara harfiah kondisi yang sama dengan `isPro` di `useSubscription.js:55-58` (`plan==='pro' && notExpired`, dengan `notExpired = !expiresAt || new Date(expiresAt) > new Date()`), ditulis ulang dalam SQL. Ini bukan gerbang tier-limit numerik (bukan soal "berapa"), tapi gerbang boolean Pro/bukan — preseden yang relevan untuk C9 adalah polanya (cek tier di dalam RPC SECURITY DEFINER), bukan isi keputusannya.
+
+### E3. WALLETS — pencarian penolakan tulis fungsional berbasis `wallet.is_locked`
+
+Grep `is_locked` di seluruh titik yang berpotensi menggerbangi tulisan ke dompet:
+
+- **`src/hooks/useWallets.js`** — HANYA 3 kemunculan `is_locked` di seluruh file: baris 48 (`toAppWallet()`, pemetaan `row.is_locked` ke app-shape — bukan gate), baris 195 (komentar dokumentasi realtime), baris 230 (komentar dokumentasi realtime, di dalam blok penjelasan kenapa channel dipisah). `createAccount` (327-374), `setPrimary` (403-430), `deleteAccount` (443-465) — TIDAK SATU PUN mengecek `is_locked` sebelum menulis.
+- **`src/hooks/useTransactions.js`** — nol kemunculan `is_locked`. Gate tulis transaksi yang ADA di sana adalah `canWrite`/role (`owner`/`editor` vs `viewer`), sama sekali independen dari status kunci dompet.
+- **`src/transactions.jsx`** (modal catat/edit transaksi) — nol kemunculan `is_locked`/`isLocked`.
+- **`src/components/`** — grep `is_locked`/`isLocked` di seluruh folder hanya menemukan `DebtDetailSheet.jsx` (soal `debt.is_locked`, sudah dipetakan A1). Tidak ada di `AccountTxSheet`, `AddAccountModal`, atau komponen wallet manapun.
+- **SQL** (`supabase/**/*.sql`) — grep `is_locked` di seluruh folder `supabase/` hanya menemukan komentar di dua file migration yang MENAMBAHKAN kolomnya (`20260705000000_add_is_locked_to_debts.sql`, `20260920000000_document_is_locked_columns.sql`). Tidak ada RPC (`record_transaction`, `adjust_wallet_balance`, `update_transaction`, `delete_transaction`, atau lainnya) yang membaca `is_locked` di badan fungsinya.
+
+**Kesimpulan E3: TIDAK DITEMUKAN.** Tidak ada satu baris kode pun — RPC SQL, hook JS, atau komponen — yang menolak aksi tulis (catat transaksi, adjustBalance, ubah/hapus transaksi, dst.) karena `wallet.is_locked === true`. Efek `is_locked` pada `wallets` murni visual (opacity, badge 🔒, badge "Soft Lock" — sudah dipetakan A1: `wallets.jsx:99,104,267,268,281-282`). Dompet yang "terkunci" tetap 100% bisa dipakai mencatat transaksi seperti biasa — berbeda dari `debts` dan `savings`, yang masing-masing punya gate tulis eksplisit (`useDebts.js:361,470,487`; `useSavings.js:155`).
+
+### E4. Mekanisme gating create untuk wallets, savings, custom_categories (bukan `checkCreateAllowed`)
+
+Ketiganya punya pola yang SAMA satu sama lain tapi BEDA dari `debts`: perbandingan `array.length` murni terhadap state yang sudah ada di memori, dieksekusi SEBELUM ada panggilan jaringan apapun — tidak ada query tambahan di titik gating-nya sendiri.
+
+**Wallets** — `src/hooks/useWallets.js:333-337`, di dalam `createAccount(a)`:
+```js
+333    const maxWallets = limits?.maxWallets ?? Infinity;
+334    if (accounts.length >= maxWallets) {
+335      openPaywall(t('paywall.feature.walletTambahan'));
+336      return { error: null, limitReached: true };
+337    }
+```
+(baris 338-344 baru menyusul `requireUserId()` — panggilan jaringan pertama di fungsi ini terjadi SETELAH gate ini lolos, bukan sebelum/di dalamnya)
+
+**Savings** — `src/hooks/useSavings.js:92-96`, di dalam `createGoal(g)`:
+```js
+92    const maxGoals = limits?.maxSavingsGoals ?? Infinity;
+93    if (goals.length >= maxGoals) {
+94      openPaywall(t('paywall.feature.goalsTambahan'));
+95      return { error: null, limitReached: true };
+96    }
+```
+
+**Custom categories** — `src/hooks/useCustomCategories.js:98-102`, di dalam `addCustomCategory(...)`:
+```js
+98    const maxCustom = limits?.maxCustomCategories ?? Infinity;
+99    if (customCategories.filter(c => !c.is_deleted).length >= maxCustom) {
+100     openPaywall(t('paywall.feature.kategoriKustomTambahan'));
+101     return { error: null, category: null, limitReached: true };
+102   }
+```
+(satu-satunya bedanya dari dua yang lain: filter `!c.is_deleted` dulu sebelum `.length` — tapi tetap operasi array sinkron di state yang sudah ada, bukan query baru)
+
+**Apakah ada query async yang bisa gagal di sini juga?** **Tidak.** Ketiga gate ini murni `limits?.maxX ?? Infinity` (dari `useSubscription().limits`, sudah di-resolve lebih dulu sebagai prop/state, bukan di-fetch ulang di titik ini) dibandingkan ke `.length` array React state yang sudah di tangan (`accounts`/`goals`/`customCategories`, hasil fetch awal hook + update lokal tiap create/delete). Tidak ada `await supabase.from(...)` di dalam ketiga blok gate ini — jadi tidak ada mode-gagal jaringan/RLS yang setara dengan bug #5. Ini konsisten dengan kenapa bug #5 secara spesifik hanya ada di `debts`: hanya `debts` yang punya konsep tambahan "rolling window `debtCooldownDays`" (`planLimits.js:19`, `checkCreateAllowed()` baris 211-250) yang PERLU data agregat dari DB (termasuk baris yang sudah di-soft-delete, sengaja tidak ada di state lokal — lihat komentar `useDebts.js:195-197`) sehingga tidak bisa dihitung dari state yang sudah di tangan. `wallets`/`savings`/`custom_categories` tidak punya cooldown sama sekali di `PLAN_LIMITS` — limitnya murni "maks N item aktif", dan N item itu sudah selalu ada lengkap di state lokal (tidak ada bagian datanya yang sengaja dibuang dari state seperti soft-deleted debts). Jadi ketiga resource ini secara struktural TIDAK BISA punya bug fail-open yang sama seperti #5, karena tidak ada query di titik gating-nya untuk gagal.
