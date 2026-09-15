@@ -110,31 +110,45 @@ export function useSavings(userId, limits) {
       return { error: null, limitReached: true };
     }
 
-    // Identitas dari sesi aktif, bukan prop `userId` (lihat lib/authIdentity.js).
-    const { userId: authUserId, error: authError } = await requireUserId();
+    // Gerbang sesi. Identitas baris TIDAK lagi diambil dari sini: sejak
+    // createGoal lewat RPC, create_savings_goal membacanya sendiri dari
+    // auth.uid() di server. Yang tersisa adalah gunanya yang satu lagi —
+    // menangkap sesi mati lebih awal dengan pesan yang bisa dibaca user
+    // (lihat lib/authIdentity.js).
+    const { error: authError } = await requireUserId();
     if (authError) return { error: authError };
 
-    // ── Kolom base schema (selalu ada) ────────────────────────────
-    const basePayload = {
-      user_id:  authUserId,
-      name:     g.label   || '',
-      icon:     g.icon    || 'star',
-      color:    g.color   || '#5C6B4C',
-      target:   g.target  || 0,
-      current:  g.current || 0,
-      deadline: deadlineToISO(g.deadline),
-    };
-
-    const { data, error } = await supabase
-      .from('savings')
-      .insert(basePayload)
-      .select()
-      .single();
+    // ── Lewat RPC create_savings_goal, BUKAN .from('savings').insert() ──
+    // Gerbang limit yang sesungguhnya ada di dalam fungsi itu (migrasi
+    // 20260921000000, bug #6): cek kuota + INSERT dalam satu transaksi
+    // Postgres. Cek `goals.length` di atas TETAP ADA — dia yang memberi
+    // paywall seketika tanpa round-trip; yang di server backstop.
+    const { data: res, error } = await supabase.rpc('create_savings_goal', {
+      p_name:     g.label   || '',
+      p_icon:     g.icon    || 'star',
+      p_color:    g.color   || '#5C6B4C',
+      p_target:   g.target  || 0,
+      p_current:  g.current || 0,
+      p_deadline: deadlineToISO(g.deadline),
+    });
 
     if (error) {
       console.error('[useSavings] createGoal FAILED:', error.code, error.message, error.details);
       return { error };
     }
+
+    // Ditolak server → pesan SAMA PERSIS dengan gerbang klien di atas.
+    if (!res?.ok) {
+      if (res?.reason === 'limit_reached') {
+        openPaywall(t('paywall.feature.goalsTambahan'));
+        return { error: null, limitReached: true };
+      }
+      // Alasan asing jangan dijadikan paywall diam-diam.
+      console.error('[useSavings] createGoal DITOLAK server:', res?.reason);
+      return { error: new Error(`create_savings_goal ditolak: ${res?.reason || 'tidak diketahui'}`) };
+    }
+
+    const data = res.data;
 
     const newGoal = { ...toAppGoal(data), deadline: g.deadline || 'Tanpa tenggat', deadlineDate: g.deadlineISO || null };
     setGoals(prev => [...prev, newGoal]);

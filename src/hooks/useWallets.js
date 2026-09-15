@@ -339,34 +339,54 @@ export function useWallets(userId, limits) {
       return { error: null, limitReached: true };
     }
 
-    // Identitas diambil dari sesi aktif, bukan dari prop `userId` — lihat
-    // src/lib/authIdentity.js. Prop bisa berumur beda dari token yang
-    // dilampirkan SDK; kalau melenceng, RLS menolak dengan pesan yang tidak
-    // menyebut identitas sama sekali.
-    const { userId: authUserId, error: authError } = await requireUserId();
+    // Gerbang sesi. Sejak createAccount lewat RPC, identitas baris TIDAK
+    // lagi diambil dari sini — create_wallet membacanya sendiri dari
+    // auth.uid() di server (identitas yang dikirim klien bisa dipalsukan,
+    // jadi fungsi itu memang tidak menerimanya). Yang tersisa dari
+    // requireUserId() di sini adalah gunanya yang satu lagi: menangkap sesi
+    // yang sudah mati LEBIH AWAL, dengan pesan "sesi berakhir" yang bisa
+    // dibaca user — bukan 42501 mentah dari server. Lihat lib/authIdentity.js.
+    const { error: authError } = await requireUserId();
     if (authError) return { error: authError };
 
-    // ── Kolom base schema (selalu ada) ────────────────────────────
-    // AddAccountModal kirim 'institution', schema pakai 'bank'
-    const basePayload = {
-      user_id:    authUserId,
-      name:       a.name        || '',
-      bank:       a.institution || a.bank || '',
-      type:       a.type        || 'bank',
-      balance:    a.balance     || 0,
-      is_primary: a.primary     || false,
-    };
-
-    const { data, error } = await supabase
-      .from('wallets')
-      .insert(basePayload)
-      .select()
-      .single();
+    // ── Lewat RPC create_wallet, BUKAN .from('wallets').insert() ──
+    // Gerbang limit yang sesungguhnya ada di dalam fungsi itu (migrasi
+    // 20260921000000, bug #6): cek kuota + INSERT dalam satu transaksi
+    // Postgres, dengan kunci baris langganan supaya dua klik cepat tidak
+    // lolos berdua. Cek `accounts.length` di atas TIDAK dihapus — dia yang
+    // memberi paywall seketika tanpa round-trip; yang di server adalah
+    // backstop untuk jalur yang tidak lewat sini sama sekali.
+    //
+    // AddAccountModal kirim 'institution', schema pakai 'bank'.
+    const { data: res, error } = await supabase.rpc('create_wallet', {
+      p_name:       a.name        || '',
+      p_bank:       a.institution || a.bank || '',
+      p_type:       a.type        || 'bank',
+      p_balance:    a.balance     || 0,
+      p_is_primary: a.primary     || false,
+    });
 
     if (error) {
       console.error('[useWallets] createAccount FAILED:', error.code, error.message, error.details);
       return { error };
     }
+
+    // Gerbang server menolak. Pesannya dibuat SAMA PERSIS dengan gerbang
+    // klien di atas (paywall "dompet tambahan"), bukan error baru — dari
+    // sudut pandang user ini kejadian yang sama, cuma ketahuannya di lapis
+    // yang berbeda.
+    if (!res?.ok) {
+      if (res?.reason === 'limit_reached') {
+        openPaywall(t('paywall.feature.walletTambahan'));
+        return { error: null, limitReached: true };
+      }
+      // Alasan yang belum dikenal: JANGAN diam-diam dijadikan paywall —
+      // paywall untuk sesuatu yang bukan soal kuota akan menyesatkan.
+      console.error('[useWallets] createAccount DITOLAK server:', res?.reason);
+      return { error: new Error(`create_wallet ditolak: ${res?.reason || 'tidak diketahui'}`) };
+    }
+
+    const data = res.data;
 
     // Simpan color & last4 di local state
     const wallet = {

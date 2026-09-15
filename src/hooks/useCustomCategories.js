@@ -120,18 +120,32 @@ export function useCustomCategories(userId, limits) {
       return { error: null, category: null, limitReached: true };
     }
 
-    // Identitas dari sesi aktif, bukan prop `userId` (lihat lib/authIdentity.js).
+    // Gerbang sesi. Identitas baris TIDAK lagi diambil dari sini: sejak
+    // fungsi ini lewat RPC, create_custom_category membacanya sendiri dari
+    // auth.uid() di server. Yang tersisa adalah gunanya yang satu lagi —
+    // menangkap sesi mati lebih awal (lihat lib/authIdentity.js).
     // Varian ...AsText dipakai di sini karena kontrak hook ini mengembalikan
     // `error` berupa STRING, bukan objek Error — memberi Error ke pemanggilnya
     // akan merender "[object Error]".
-    const { userId: authUserId, error: authError } = await requireUserIdAsText();
+    const { error: authError } = await requireUserIdAsText();
     if (authError) return { error: authError, category: null };
 
-    const { data, error } = await supabase
-      .from('custom_categories')
-      .insert({ user_id: authUserId, name: clean, color: color || 'var(--sage)', type, icon: icon || DEFAULT_CATEGORY_ICON })
-      .select()
-      .single();
+    // ── Lewat RPC create_custom_category, BUKAN .insert() langsung ──
+    // Gerbang limit yang sesungguhnya ada di dalam fungsi itu (migrasi
+    // 20260921000000, bug #6): cek kuota (hanya baris is_deleted=false,
+    // sama seperti hitungan di atas) + INSERT dalam satu transaksi Postgres.
+    // Cek panjang array di atas TETAP ADA sebagai gerbang UX.
+    //
+    // Duplikat nama SENGAJA tidak ditangani fungsi itu: unique_violation
+    // dibiarkan naik apa adanya, dan PostgREST meneruskan SQLSTATE-nya ke
+    // error.code — jadi cabang 23505 di bawah tetap berlaku persis seperti
+    // saat masih .insert() langsung.
+    const { data: res, error } = await supabase.rpc('create_custom_category', {
+      p_name:  clean,
+      p_color: color || 'var(--sage)',
+      p_type:  type,
+      p_icon:  icon || DEFAULT_CATEGORY_ICON,
+    });
 
     // Unique index bisa menolak balapan (kode 23505) → ambil yang sudah ada
     if (error) {
@@ -151,7 +165,18 @@ export function useCustomCategories(userId, limits) {
       return { error: error.message, category: null };
     }
 
-    const cat = toCustomCat(data);
+    // Ditolak gerbang server → pesan SAMA PERSIS dengan gerbang klien di atas.
+    if (!res?.ok) {
+      if (res?.reason === 'limit_reached') {
+        openPaywall(t('paywall.feature.kategoriKustomTambahan'));
+        return { error: null, category: null, limitReached: true };
+      }
+      // Alasan asing jangan dijadikan paywall diam-diam.
+      console.error('[useCustomCategories] addCustomCategory DITOLAK server:', res?.reason);
+      return { error: `create_custom_category ditolak: ${res?.reason || 'tidak diketahui'}`, category: null };
+    }
+
+    const cat = toCustomCat(res.data);
     setCustomCategories(prev => prev.some(c => c.id === cat.id) ? prev : [...prev, cat]);
     return { error: null, category: cat };
   }

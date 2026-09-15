@@ -315,7 +315,11 @@ export function useDebts(userId, limits, ledger = {}) {
     // akan membuatnya terkirim lalu gagal 401 tanpa guna. Sekaligus menjaga
     // createDebt tidak pernah menulis separuh jalan: fungsi ini mengisi dua
     // tabel berurutan (debts lalu transactions).
-    const { userId: authUserId, error: authError } = await requireUserId();
+    //
+    // Yang diambil tinggal `error`-nya: sejak baris debts ditulis lewat RPC
+    // create_debt, identitasnya dibaca server dari auth.uid() dan tidak lagi
+    // dikirim klien.
+    const { error: authError } = await requireUserId();
     if (authError) return { error: authError };
 
     const gate = await checkCreateAllowed();
@@ -346,28 +350,60 @@ export function useDebts(userId, limits, ledger = {}) {
       ? true
       : input.cash_disbursed_at_creation !== false;
 
-    // 1) Insert baris debts
-    const { data: debtRow, error: dErr } = await supabase
-      .from('debts')
-      .insert({
-        user_id:     authUserId,
-        type:        input.type,
-        person_name: input.person_name.trim(),
-        note:        input.note || null,
-        amount:      absAmount,
-        paid:        0,
-        wallet_id:   input.wallet_id || null,
-        date:        input.date || undefined,       // biarkan DB pakai default CURRENT_DATE bila kosong
-        due_date:    input.due_date || null,
-        status:      'active',
-        cash_disbursed_at_creation: cashDisbursedAtCreation,
-      })
-      .select()
-      .single();
+    // 1) Baris debts — lewat RPC create_debt, BUKAN .from('debts').insert().
+    //    Fungsi itu (migrasi 20260921000000, bug #6) menegakkan KEDUA aturan
+    //    yang sama dengan checkCreateAllowed di atas — maks aktif DAN jendela
+    //    rolling 50 hari — lalu meng-INSERT, semuanya dalam satu transaksi
+    //    Postgres. checkCreateAllowed TIDAK dihapus: dia yang memberi paywall
+    //    / tanggal cooldown seketika dan tetap satu-satunya sumber
+    //    `cooldownUntilDate` di jalur normal; RPC-nya backstop untuk jalur
+    //    yang tidak lewat sini, dan penutup celah antara "cek" dan "tulis".
+    //
+    //    `user_id` tidak dikirim — dibaca server dari auth.uid().
+    //    `date` dikirim apa adanya; bila kosong, server memakai tanggal hari
+    //    ini dalam WIB (BUKAN CURRENT_DATE yang ber-zona UTC).
+    const { data: res, error: dErr } = await supabase.rpc('create_debt', {
+      p_type:           input.type,
+      p_person_name:    input.person_name.trim(),
+      p_amount:         absAmount,
+      p_wallet_id:      input.wallet_id || null,
+      p_date:           input.date || null,
+      p_due_date:       input.due_date || null,
+      p_note:           input.note || null,
+      p_cash_disbursed: cashDisbursedAtCreation,
+    });
 
-    if (dErr || !debtRow) {
-      console.error('[useDebts] createDebt insert FAILED:', dErr?.code, dErr?.message);
-      return { error: dErr || new Error(i18n.t('debts.error.createFailed')) };
+    if (dErr) {
+      console.error('[useDebts] createDebt RPC FAILED:', dErr.code, dErr.message);
+      return { error: dErr };
+    }
+
+    // Ditolak gerbang server. Dipetakan ke BENTUK KEMBALIAN YANG SAMA dengan
+    // penolakan checkCreateAllowed di atas, supaya UI tidak perlu tahu lapis
+    // mana yang menolak — `limit_active` ↔ reason 'active', `cooldown` ↔
+    // reason 'cooldown' beserta tanggalnya.
+    if (!res?.ok) {
+      if (res?.reason === 'limit_active') {
+        openPaywall('Catatan Hutang / Piutang tambahan');
+        return { error: null, limitReached: true };
+      }
+      if (res?.reason === 'cooldown') {
+        return {
+          error: null,
+          cooldownBlocked: true,
+          cooldownUntilDate: res?.data?.cooldown_until || null,
+        };
+      }
+      // Alasan asing jangan dipaksakan ke salah satu cabang di atas: pesan
+      // kuota/tanggal untuk sesuatu yang bukan itu akan menyesatkan.
+      console.error('[useDebts] createDebt DITOLAK server:', res?.reason);
+      return { error: new Error(`create_debt ditolak: ${res?.reason || 'tidak diketahui'}`) };
+    }
+
+    const debtRow = res.data;
+    if (!debtRow) {
+      console.error('[useDebts] createDebt: RPC ok tapi tanpa data');
+      return { error: new Error(i18n.t('debts.error.createFailed')) };
     }
 
     // Piutang berupa tagihan yang belum dibayar: TIDAK ada uang yang berpindah
