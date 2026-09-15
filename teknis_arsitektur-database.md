@@ -44,7 +44,8 @@ Hook-hook ini dikomposisi di `app.jsx`. Setiap query RLS-scoped by `user_id` cli
 
 **Business logic** yang tidak terikat UI ada di `src/lib/`:
 - `planLimits.js` — sumber kebenaran semua limit & feature flags
-- `planReconciliation.js` — lock/unlock saat downgrade; kegagalan SELECT/UPDATE (dulu senyap) kini dicatat ke `error_logs` via `logError()`, severity `high`
+- `lockStatus.js` — **sumber kebenaran status terkunci** (soft lock sisa downgrade Pro→Basic) untuk wallets/savings/custom_categories/debts: N item paling lama (`created_at` ASC, `id` sebagai pemecah seri) tetap aktif, sisanya terkunci. Dihitung di klien dari array yang sudah ada di state, tidak pernah dibaca dari kolom DB
+- `planReconciliation.js` — **LEGACY sejak 15 Sep 2026**: masih menulis kolom `is_locked` saat downgrade/upgrade, tapi tidak ada lagi pembacanya (klien memakai `lockStatus.js`; server tidak pernah membacanya). Kegagalan SELECT/UPDATE dicatat ke `error_logs` via `logError()`, severity `high`
 - `recurringHelper.js` — scheduler transaksi berulang (localStorage)
 - `widgetSync.js` — sinkronisasi ke widget Android
 - `strukParser.js` — parser OCR struk belanja → transaksi
@@ -211,7 +212,7 @@ type            text            'bank' | 'ewallet' | 'cash' | 'investment'
 is_primary      boolean         Maksimal satu per user
 color           text            Kode warna hex
 last4           text            4 digit terakhir kartu (default '—')
-is_locked       boolean         true saat Basic user melebihi limit
+is_locked       boolean         LEGACY — tidak dibaca siapa pun (lihat catatan di bawah tabel custom_categories)
 created_at      timestamptz
 ```
 
@@ -249,7 +250,7 @@ deadline_label  text            Label tampilan ("Jan 2026" atau "Tanpa tenggat")
 deadline_date   date            ISO format (YYYY-MM-DD), nullable — added migration 20260701000000
 color           text            Warna preset (8 pilihan)
 icon            text            Ikon (star, emergency, travel, home, vehicle, education, gadget, gift, health, ring)
-is_locked       boolean         true saat Basic melebihi limit
+is_locked       boolean         LEGACY — tidak dibaca siapa pun (lihat catatan di bawah tabel custom_categories)
 created_at      timestamptz
 ```
 
@@ -264,12 +265,14 @@ color           text            Warna hex
 type            text            'income' | 'expense' (default 'expense')
 icon            text            NOT NULL DEFAULT 'other'   — kind icon dari CatIcon (src/icons.jsx), dipilih saat buat/edit (edit tunduk cooldown 30 hari)
 is_deleted      boolean         Soft delete — tidak pernah hard delete
-is_locked       boolean         true saat Basic melebihi limit
+is_locked       boolean         LEGACY — tidak dibaca siapa pun (lihat catatan di bawah)
 created_at      timestamptz
 -- UNIQUE CONSTRAINT: (user_id, lower(name))
 ```
 
 **Soft delete:** Kategori dihapus hanya di-flag `is_deleted = true` agar transaksi lama tetap bisa diresolvasi nama & warna.
+
+**Kolom `is_locked` (keempat tabel) = LEGACY sejak 15 Sep 2026.** Status terkunci sekarang **dihitung** di klien oleh `src/lib/lockStatus.js` (N item paling lama menurut `created_at` ASC tetap aktif, sisanya terkunci) — kolomnya tidak dibaca siapa pun: tidak oleh klien, dan tidak pernah oleh policy/trigger/RPC manapun di server. `planReconciliation.js` masih menulisnya (harmless, sengaja tidak dicabut di tahap ini), jadi isinya bisa saja basi — **jangan dipakai sebagai sumber kebenaran**. Alasan lengkap: `teknis_keputusan-infrastruktur-roadmap.md` §1.17.
 
 **Schema drift `is_locked` (wallets/savings/custom_categories) — ditutup 20 Sep 2026.** Ketiga kolom `is_locked` di atas sudah ada di production sejak lama tapi tidak pernah tercatat di file SQL manapun (kemungkinan dibuat manual via SQL Editor, seperti kasus `user_summary` di atas). `20260920000000_document_is_locked_columns.sql` (executed) menambahkan `ADD COLUMN IF NOT EXISTS` untuk ketiganya — no-op di production, tapi memastikan database yang dibangun ulang dari `migrations/` ikut punya kolomnya.
 
@@ -288,7 +291,7 @@ date            date            Tanggal lokal
 due_date        date            Jatuh tempo, opsional
 status          text            'active' | 'paid'
 is_deleted      boolean         Soft delete (created_at tetap terhitung untuk cooldown 50 hari)
-is_locked       boolean         true saat Basic melebihi limit 5 aktif
+is_locked       boolean         LEGACY — tidak dibaca siapa pun (lihat catatan di bawah tabel custom_categories)
 cash_disbursed_at_creation boolean NOT NULL DEFAULT true   — hanya bermakna untuk type='receivable'; false = belum dibayar (tagihan), true = uang sudah berpindah
 created_at      timestamptz
 updated_at      timestamptz

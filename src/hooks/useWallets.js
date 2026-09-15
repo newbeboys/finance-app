@@ -5,6 +5,7 @@ import { usePaywall } from '../components/PaywallModal';
 import { fetchSharedMemberships, sharedOrFilter } from '../lib/walletAccess';
 import { requireUserId } from '../lib/authIdentity';
 import { subscribeWithHealth, closeChannel } from '../lib/realtimeHealth';
+import { makeIsLocked } from '../lib/lockStatus';
 // `logError` TIDAK ikut diambil dari main: di sana dipakai adjustBalance(),
 // fungsi yang SENGAJA DIHAPUS di lineage ini (Task 4, 11 Sep 2026) — lihat
 // komentar besar di dekat createAccount/deleteAccount di bawah. Mengimpornya
@@ -45,7 +46,9 @@ function toAppWallet(row, userId, roleById) {
     // default catat transaksi — transaksi pribadi tercatat ke dompet orang.
     primary:     !isShared && (row.is_primary || false),
     last4:       row.last4 || '—',
-    is_locked:   row.is_locked || false,
+    // `is_locked` tidak lagi diambil dari row — dihitung di memo visibleAccounts
+    // (lihat catatan di sana). created_at dibawa karena jadi dasar urutannya.
+    created_at:  row.created_at,
     ownerId:     row.user_id,
     isShared,
     role,
@@ -513,9 +516,29 @@ export function useWallets(userId, limits) {
   // memberCount ditempelkan di sini (turunan), bukan di dalam toAppWallet:
   // handler realtime saldo merakit ulang objek dompet dari payload dan akan
   // menghapus field apa pun yang tidak berasal dari baris `wallets`.
+  //
+  // is_locked juga ditempel di sini (DIHITUNG, bukan dibaca kolom DB — lihat
+  // src/lib/lockStatus.js), dengan satu batasan yang disengaja: hanya dompet
+  // MILIK SENDIRI yang bisa dihitung. Status terkunci sebuah dompet bersama
+  // mencerminkan kuota PEMILIKNYA, dan klien ini tidak punya — serta menurut
+  // RLS tidak boleh punya — visibilitas ke daftar dompet lain milik orang itu
+  // maupun ke plan-nya. Jadi dompet bersama SELALU tampil tidak terkunci.
+  // Itu regresi visual yang diterima sadar: is_locked pada `wallets` murni
+  // kosmetik (opacity/badge) — nol gerbang tulis fungsional yang bergantung
+  // padanya, diverifikasi 15 Sep 2026 (investigasi bug #4/#5/#6, Bagian E3).
   const visibleAccounts = React.useMemo(
-    () => allAccounts.map(a => ({ ...a, memberCount: memberCounts[a.id] || 0 })),
-    [allAccounts, memberCounts]
+    () => {
+      const isLocked = makeIsLocked(
+        allAccounts.filter(a => !a.isShared),
+        { limit: limits?.maxWallets ?? Infinity }
+      );
+      return allAccounts.map(a => ({
+        ...a,
+        memberCount: memberCounts[a.id] || 0,
+        is_locked: !a.isShared && isLocked(a),
+      }));
+    },
+    [allAccounts, memberCounts, limits?.maxWallets]
   );
   const accounts         = React.useMemo(() => visibleAccounts.filter(a => !a.isShared), [visibleAccounts]);
   const writableAccounts = React.useMemo(() => visibleAccounts.filter(a => a.canWrite),  [visibleAccounts]);

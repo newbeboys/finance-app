@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { supabase } from '../supabase';
 import { usePaywall } from '../components/PaywallModal';
 import { requireUserId } from '../lib/authIdentity';
+import { makeIsLocked } from '../lib/lockStatus';
 
 const MONTHS_ID = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
 const MONTH_MAP = {
@@ -38,7 +39,12 @@ function toAppGoal(row) {
     current:      Number(row.current) || 0,
     deadline:     row.deadline_label || isoToDeadline(row.deadline),
     deadlineDate: row.deadline_date || null,
-    is_locked:    row.is_locked || false,
+    // Dibawa eksplisit ke bentuk app karena status terkunci dihitung dari sini
+    // (goalsWithLock di bawah). SENGAJA tidak mengandalkan urutan array hasil
+    // fetch: lockStatus menyortir sendiri, jadi invariant-nya tidak diam-diam
+    // rusak kalau suatu saat ada kode yang menyortir ulang `goals` untuk tampilan.
+    created_at:   row.created_at,
+    // `is_locked` tidak lagi diambil dari row — lihat catatan di goalsWithLock.
   };
 }
 
@@ -47,6 +53,15 @@ export function useSavings(userId, limits) {
   const [loading, setLoading] = React.useState(true);
   const { openPaywall } = usePaywall();
   const { t } = useTranslation();
+
+  // ── Status terkunci: DIHITUNG, bukan dibaca kolom is_locked ──────────
+  // Lihat src/lib/lockStatus.js untuk alasannya. Semua baris savings memakan
+  // kuota (tidak ada soft-delete di tabel ini), jadi tidak ada filter apa pun
+  // sebelum dihitung — sama seperti reconcileTable() lama tanpa excludeDeleted.
+  const goalsWithLock = React.useMemo(() => {
+    const isLocked = makeIsLocked(goals, { limit: limits?.maxSavingsGoals ?? Infinity });
+    return goals.map(g => ({ ...g, is_locked: isLocked(g) }));
+  }, [goals, limits?.maxSavingsGoals]);
 
   React.useEffect(() => {
     if (!userId) { setLoading(false); return; }
@@ -150,7 +165,8 @@ export function useSavings(userId, limits) {
   }
 
   async function depositToGoal(id, amount) {
-    const goal = goals.find(g => g.id === id);
+    // goalsWithLock, bukan goals mentah: `is_locked` hanya ada di array turunan.
+    const goal = goalsWithLock.find(g => g.id === id);
     if (!goal) return { error: new Error('Goal not found') };
     if (goal.is_locked) return { error: new Error('Goal is locked'), locked: true };
     const newCurrent = goal.current + amount;
@@ -164,5 +180,6 @@ export function useSavings(userId, limits) {
     return { error };
   }
 
-  return { goals, loading, createGoal, deleteGoal, depositToGoal };
+  // `goals` yang diekspos = versi ber-is_locked (hasil hitung), bukan state mentah.
+  return { goals: goalsWithLock, loading, createGoal, deleteGoal, depositToGoal };
 }

@@ -3,6 +3,7 @@ import { supabase } from '../supabase';
 import { usePaywall } from '../components/PaywallModal';
 import { logError } from '../lib/errorLogger';
 import { canDeleteOwnTransaction } from '../lib/walletAccess';
+import { makeIsLocked } from '../lib/lockStatus';
 import i18n from '../i18n';
 import { requireUserId } from '../lib/authIdentity';
 
@@ -80,7 +81,10 @@ function toAppDebt(row, lastPaymentDate = null) {
     due_date:    row.due_date || null,          // ISO yyyy-mm-dd | null
     status:      row.status || 'active',        // 'active' | 'paid'
     is_deleted:  row.is_deleted || false,
-    is_locked:   row.is_locked || false,        // dikunci saat downgrade Pro→Basic (lihat planReconciliation)
+    // `is_locked` SENGAJA tidak diambil dari row: sejak 15 Sep 2026 statusnya
+    // DIHITUNG dari seluruh array (lihat debtsWithLock di bawah + lib/lockStatus.js),
+    // karena kolom DB-nya bisa basi kalau downgrade terjadi saat app tertutup.
+    // Field-nya tetap ada di bentuk app, cuma diisi belakangan oleh memo itu.
     // Hanya relevan utk type='receivable'. false = piutang berupa tagihan yang
     // belum dibayar — belum ada transaksi pokok/uang berpindah saat dibuat.
     // Kolom DB NOT NULL DEFAULT true, jadi baca apa adanya (bukan `|| false`).
@@ -118,6 +122,27 @@ export function useDebts(userId, limits, ledger = {}) {
   const [loading, setLoading] = React.useState(true);
   const [error, setError]     = React.useState(null);
   const { openPaywall } = usePaywall();
+
+  // ── Status terkunci: DIHITUNG, bukan dibaca kolom is_locked ──────────
+  // Satu titik hitung untuk SEMUA pembaca (UI maupun gerbang tulis di hook
+  // ini), jadi tidak ada jalan untuk dua tempat menyimpulkan hal berbeda.
+  // Ditempel di sini, bukan di dalam toAppDebt(), karena status ini fungsi
+  // dari SELURUH array — toAppDebt cuma melihat satu baris, dan menghitungnya
+  // di sana berarti mengulang perhitungan yang sama di tiap penulis state
+  // (fetch, realtime, create, addPayment, delete) dengan risiko satu di
+  // antaranya kelupaan.
+  //
+  // Yang memakan kuota HANYA catatan aktif (status='active'); baris lunas
+  // tidak pernah terkunci. Baris soft-deleted tidak pernah ada di state ini
+  // (fetch sudah .eq('is_deleted', false)). Sama persis dengan aturan
+  // reconcileDebts() lama di planReconciliation.js.
+  const debtsWithLock = React.useMemo(() => {
+    const isLocked = makeIsLocked(
+      debts.filter(d => d.status === 'active'),
+      { limit: limits?.maxActiveDebts ?? Infinity }
+    );
+    return debts.map(d => ({ ...d, is_locked: isLocked(d) }));
+  }, [debts, limits?.maxActiveDebts]);
 
   // ── Fetch awal + realtime ─────────────────────────────────────────
   React.useEffect(() => {
@@ -200,10 +225,17 @@ export function useDebts(userId, limits, ledger = {}) {
     if (maxActive === Infinity) return { ok: true };   // Pro → bebas
 
     // (1) Maks catatan aktif sekaligus (state lokal sudah exclude is_deleted).
-    //     Catatan terkunci (is_locked, sisa downgrade lama) TIDAK dihitung: kalau
-    //     ikut dihitung, user yang pernah didowngrade tak akan pernah bisa membuat
-    //     catatan baru lagi meski slot aktif sebenarnya masih tersedia.
-    const activeCount = debts.filter(d => d.status === 'active' && !d.is_locked).length;
+    //     Dihitung dari JUMLAH AKTIF apa adanya, di-cap ke maxActive — tidak
+    //     lagi memfilter `!is_locked`. Formula lama bergantung pada kolom
+    //     is_locked SUDAH benar di DB, yang artinya bergantung pada tulisan
+    //     async planReconciliation pernah sukses duluan; kalau lock gagal
+    //     separuh jalan, baris yang seharusnya terkunci ikut tak terhitung dan
+    //     batas 5 bisa terlewat. Bentuk Math.min ini setara secara numerik
+    //     dengan formula lama pada keadaan yang sudah ter-rekonsiliasi benar
+    //     (begitu jumlah aktif ≥ maxActive, keduanya mentok di maxActive),
+    //     tapi tidak bisa salah karena efek samping yang belum/gagal jalan.
+    const activeTotal = debts.filter(d => d.status === 'active').length;
+    const activeCount = Math.min(activeTotal, maxActive);
     if (activeCount >= maxActive) {
       return { ok: false, reason: 'active' };
     }
@@ -382,7 +414,8 @@ export function useDebts(userId, limits, ledger = {}) {
   // Input: { amount, date, note }
   // Output: { error, paymentId, isPaidOff }
   async function addPayment(debtId, payment) {
-    const debt = debts.find(d => d.id === debtId);
+    // debtsWithLock, bukan debts mentah: `is_locked` hanya ada di array turunan.
+    const debt = debtsWithLock.find(d => d.id === debtId);
     if (!debt) return { error: new Error(i18n.t('debts.error.notFound')) };
     if (debt.is_locked) return { error: new Error(i18n.t('debts.error.locked')) };
 
@@ -491,7 +524,7 @@ export function useDebts(userId, limits, ledger = {}) {
 
   // ── Tandai Lunas: buat satu cicilan sebesar sisa ──────────────────
   async function markPaid(debtId) {
-    const debt = debts.find(d => d.id === debtId);
+    const debt = debtsWithLock.find(d => d.id === debtId);   // lihat catatan di addPayment
     if (!debt) return { error: new Error(i18n.t('debts.error.notFound')) };
     if (debt.is_locked) return { error: new Error(i18n.t('debts.error.locked')) };
     const remaining = debt.amount - debt.paid;
@@ -508,7 +541,7 @@ export function useDebts(userId, limits, ledger = {}) {
 
   // ── Hapus (soft delete) + balik semua efek transaksi & saldo ──────
   async function deleteDebt(debtId) {
-    const debt = debts.find(d => d.id === debtId);
+    const debt = debtsWithLock.find(d => d.id === debtId);   // lihat catatan di addPayment
     if (!debt) return { error: new Error(i18n.t('debts.error.notFound')) };
     if (debt.is_locked) return { error: new Error(i18n.t('debts.error.locked')) };
 
@@ -566,5 +599,6 @@ export function useDebts(userId, limits, ledger = {}) {
     return { error: null };
   }
 
-  return { debts, loading, error, createDebt, addPayment, markPaid, deleteDebt, getPayments };
+  // `debts` yang diekspos = versi ber-is_locked (hasil hitung), bukan state mentah.
+  return { debts: debtsWithLock, loading, error, createDebt, addPayment, markPaid, deleteDebt, getPayments };
 }

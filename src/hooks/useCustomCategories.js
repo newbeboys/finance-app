@@ -5,6 +5,7 @@ import { CATEGORIES, INCOME_CATEGORIES } from '../data';
 import { DEFAULT_CATEGORY_ICON } from '../icons';
 import { usePaywall } from '../components/PaywallModal';
 import { requireUserIdAsText } from '../lib/authIdentity';
+import { makeIsLocked } from '../lib/lockStatus';
 
 // Supabase row → bentuk kategori yang dipakai komponen (sama seperti CATEGORIES)
 function toCustomCat(row) {
@@ -15,8 +16,12 @@ function toCustomCat(row) {
     icon:       row.icon,                   // kind CatIcon — kolom NOT NULL DEFAULT 'other', tidak perlu fallback di sini
     type:       row.type || 'expense',     // 'income' | 'expense' — dipakai filter tampilan
     custom:     true,
-    is_locked:  row.is_locked  || false,
     is_deleted: row.is_deleted || false,   // soft delete — tetap ada di state untuk resolve transaksi lama
+    // Dibawa eksplisit ke bentuk app karena status terkunci dihitung dari sini
+    // (categoriesWithLock di bawah), dan lockStatus menyortir sendiri — tidak
+    // menumpang urutan array hasil fetch.
+    created_at: row.created_at,
+    // `is_locked` tidak lagi diambil dari row — lihat catatan di categoriesWithLock.
   };
 }
 
@@ -32,6 +37,20 @@ export function useCustomCategories(userId, limits) {
   const [loading, setLoading] = React.useState(true);
   const { openPaywall } = usePaywall();
   const { t } = useTranslation();
+
+  // ── Status terkunci: DIHITUNG, bukan dibaca kolom is_locked ──────────
+  // Lihat src/lib/lockStatus.js untuk alasannya. Yang memakan kuota hanya
+  // baris yang BELUM di-soft-delete — persis aturan reconcileTable(...,
+  // excludeDeleted=true) yang lama. Baris soft-deleted tetap ikut dipetakan
+  // (dibutuhkan untuk me-resolve nama/warna kategori di transaksi lama) tapi
+  // tidak pernah terkunci.
+  const categoriesWithLock = React.useMemo(() => {
+    const isLocked = makeIsLocked(
+      customCategories.filter(c => !c.is_deleted),
+      { limit: limits?.maxCustomCategories ?? Infinity }
+    );
+    return customCategories.map(c => ({ ...c, is_locked: isLocked(c) }));
+  }, [customCategories, limits?.maxCustomCategories]);
 
   // Load awal + subscribe realtime
   React.useEffect(() => {
@@ -165,5 +184,6 @@ export function useCustomCategories(userId, limits) {
     return { error };
   }
 
-  return { customCategories, loading, addCustomCategory, updateCustomCategory, deleteCustomCategory };
+  // `customCategories` yang diekspos = versi ber-is_locked (hasil hitung).
+  return { customCategories: categoriesWithLock, loading, addCustomCategory, updateCustomCategory, deleteCustomCategory };
 }
