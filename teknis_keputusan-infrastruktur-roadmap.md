@@ -413,9 +413,9 @@ Key i18n baru `analitik.semuaDompet`, `analitik.belumAdaTransaksiDompet`, `anali
 - ✅ **Daftar anggota** — `wallet_members` masuk publication `supabase_realtime`, channel `wallets_lock`/`wallet_members_sheet` hidup lagi.
 - ✅ **Kunci hutang (`is_locked`)** — `debts` masuk publication, channel `debts:<uid>` hidup lagi; kolom `is_locked` diformalkan lewat migration `20260920000000`.
 - ✅ **Penguncian saat downgrade sudah diukur, bukan diasumsikan** — kebocoran praktis nol pada kondisi terukur (1 dompet, akun tes).
+- ✅ **`checkCreateAllowed()` gagal-terbuka (15 Sep 2026)** — kedua query cooldown di `useDebts.js` (COUNT rolling-window + SELECT baris tertua) ditukar dari fail-open/senyap jadi fail-closed + `logError()` ke `error_logs`. Aman diubah ke fail-closed karena Pro tidak pernah menyentuh query ini (`maxActiveDebts = Infinity` return duluan) — risiko fail-closed murni menyentuh user Basic yang masih punya sisa kuota tapi errornya transien, bukan user berbayar. UI (`AddDebtModal.jsx`) dapat cabang pesan baru (`debts.error.quotaCheckFailed`) supaya error transien ini tidak jatuh ke pesan cooldown yang menyesatkan (menyiratkan ada tanggal "boleh lagi").
 
 **Masih terbuka (diketahui, belum diperbaiki):**
-- ⏳ **`checkCreateAllowed()` gagal-terbuka** — bila query rolling-window cooldown hutang/piutang error, fungsi mengembalikan `{ ok: true }` (hanya `console.error`, tidak ke `error_logs`). Cap catatan aktif masih menjaga, tapi jendela 50 hari bisa dilewati saat error transien.
 - ⏳ **Tidak ada gerbang server untuk `is_locked`** — penguncian downgrade sepenuhnya ditegakkan di klien (`planReconciliation.js` + gating UI). Tidak ada policy RLS atau constraint yang menolak tulisan ke baris terkunci, jadi pemanggilan langsung dari console masih bisa menembusnya.
 
 **Launch Blocker — WAJIB selesai sebelum Production:**
@@ -603,6 +603,7 @@ REVOKE EXECUTE ON FUNCTION public.set_plan_for_testing(uuid, text, timestamptz, 
 | 15 Sep | Migration `20260920000000_document_is_locked_columns.sql` — dokumentasi resmi kolom `is_locked` di `wallets`/`savings`/`custom_categories` (sudah ada di production sejak lama, menutup schema drift) | ✅ Executed | Claude Code |
 | 15 Sep | Commit `27acaee`: kegagalan SELECT/UPDATE di `planReconciliation.js` dicatat ke `error_logs` (severity `high`) — sebelumnya gagal senyap total | ✅ Pushed | Claude Code |
 | 15 Sep | Merge `b89e717`: **Task 5 Fase 1** masuk `main` — refetch foreground `useTransactions` (debounce 60 dtk + gerbang PIN/biometrik) + tombol "Segarkan" manual di halaman Transaksi | ✅ Pushed | Claude Code |
+| 15 Sep | Fix bug #5: `checkCreateAllowed()` (`useDebts.js`) fail-open → fail-closed + `logError()` untuk dua query cooldown hutang/piutang; pesan UI baru `debts.error.quotaCheckFailed` (id/en) supaya error transien tidak jatuh ke pesan cooldown yang menyesatkan | ✅ Committed | Claude Code |
 
 ### Versi-Versi Sebelumnya
 - v2.5.6 (1 Juli): Deadline date picker & goal sorting

@@ -223,20 +223,39 @@ export function useDebts(userId, limits, ledger = {}) {
         .gte('created_at', windowStartISO);
 
       if (cErr) {
-        // Fail-open: jangan kunci user karena error transien; cap aktif tetap menjaga.
-        console.error('[useDebts] cooldown count error:', cErr.code, cErr.message);
-        return { ok: true };
+        // Fail-CLOSED (diputuskan 15 Sep 2026, gantikan fail-open lama). Query
+        // ini hanya pernah dijalankan user Basic (Pro sudah return di baris 200
+        // sebelum sampai sini) — jadi risikonya HANYA menyentuh user Basic yang
+        // kebetulan masih punya sisa kuota tapi errornya transien, bukan user
+        // berbayar. Ditukar sengaja karena dulu error yang sama membiarkan
+        // rolling-window 50 hari dilewati tanpa jejak sama sekali. Dicatat ke
+        // error_logs (bukan cuma console) supaya kegagalan NYATA (beda dari
+        // "ditolak sesuai desain") kelihatan dan bisa ditindak.
+        logError('checkCreateAllowed', cErr.message || String(cErr), {
+          op: 'cooldownCount', user_id: userId, code: cErr.code,
+        }, 'medium');
+        return { ok: false, reason: 'query_error' };
       }
 
       if ((count ?? 0) >= maxActive) {
         // Cari pembuatan tertua dalam jendela → +cooldownDays = tanggal bisa lagi.
-        const { data: oldestRows } = await supabase
+        const { data: oldestRows, error: oldestErr } = await supabase
           .from('debts')
           .select('created_at')
           .eq('user_id', userId)
           .gte('created_at', windowStartISO)
           .order('created_at', { ascending: true })
           .limit(1);
+
+        if (oldestErr) {
+          // Sudah fail-closed (return ok:false di bawah tetap jalan tanpa syarat),
+          // tapi dulu kegagalan query INI SENDIRI senyap total — cooldownUntilDate
+          // diam-diam jadi null dan UI kehilangan info "boleh lagi kapan" tanpa
+          // jejak di manapun. Dicatat sama seperti query cooldown di atas.
+          logError('checkCreateAllowed', oldestErr.message || String(oldestErr), {
+            op: 'cooldownOldestRow', user_id: userId, code: oldestErr.code,
+          }, 'medium');
+        }
 
         let cooldownUntilDate = null;
         const oldest = oldestRows?.[0]?.created_at;
@@ -257,7 +276,7 @@ export function useDebts(userId, limits, ledger = {}) {
   //          cash_disbursed_at_creation }
   //   cash_disbursed_at_creation hanya dipakai utk type='receivable' (lihat
   //   komentar di dalam fungsi); diabaikan/dipaksa true utk type='payable'.
-  // Output: { error, debtId, limitReached, cooldownUntilDate }
+  // Output: { error, debtId, limitReached, cooldownBlocked, cooldownUntilDate, queryError }
   async function createDebt(input) {
     // Gerbang identitas PALING DEPAN — checkCreateAllowed() di bawah melakukan
     // query rolling-window ke Supabase untuk akun Basic, dan sesi yang mati
@@ -272,6 +291,13 @@ export function useDebts(userId, limits, ledger = {}) {
       if (gate.reason === 'active') {
         openPaywall('Catatan Hutang / Piutang tambahan');
         return { error: null, limitReached: true };
+      }
+      if (gate.reason === 'query_error') {
+        // Query cooldown gagal (fail-closed, lihat checkCreateAllowed) — BUKAN
+        // penolakan karena kuota, jadi jangan sampai jatuh ke cabang cooldown di
+        // bawah (pesan "boleh lagi tanggal X" akan menyesatkan untuk error
+        // transien yang tidak ada hubungannya dengan tanggal apapun).
+        return { error: null, queryError: true };
       }
       // cooldown: bukan paywall murni — UI menampilkan tanggal + opsi upgrade
       return { error: null, cooldownBlocked: true, cooldownUntilDate: gate.cooldownUntilDate };

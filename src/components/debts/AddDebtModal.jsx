@@ -21,7 +21,7 @@ const fieldLabel = { display: 'block', fontSize: 11, color: 'var(--muted)', lett
 const input = { width: '100%', padding: '11px 12px', background: 'var(--paper)', border: '1px solid var(--line-soft)', borderRadius: 10, color: 'var(--ink)', fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' };
 
 // Form tambah catatan piutang/hutang. onCreate = createDebt(input) dari useDebts,
-// mengembalikan { error, debtId, limitReached, cooldownBlocked, cooldownUntilDate }.
+// mengembalikan { error, debtId, limitReached, cooldownBlocked, cooldownUntilDate, queryError }.
 export default function AddDebtModal({ open, onClose, onCreate, wallets = [] }) {
   const { t } = useTranslation();
   useScrollLock(open);
@@ -78,6 +78,10 @@ export default function AddDebtModal({ open, onClose, onCreate, wallets = [] }) 
     setSubmitting(false);
     if (!res) { setErrorMsg(t('debts.error.saveFailed')); return; }
     if (res.limitReached) { onClose(); return; }        // paywall sudah dibuka oleh hook
+    // Gagal cek kuota (fail-closed) — BUKAN cooldown beneran, jadi jangan pakai
+    // pesan/CTA upgrade cooldown di bawah: itu akan menyesatkan (menyiratkan ada
+    // tanggal spesifik "boleh lagi", padahal ini murni error transien).
+    if (res.queryError) { setErrorMsg(t('debts.error.quotaCheckFailed')); return; }
     if (res.cooldownBlocked) { setCooldown({ date: res.cooldownUntilDate }); return; }
     if (res.error) { setErrorMsg(res.error.message || t('debts.error.saveFailed')); return; }
     onClose();

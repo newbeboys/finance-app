@@ -866,6 +866,7 @@
     "error": {
       "locked": "Catatan ini terkunci. Upgrade ke Pro untuk mengelolanya kembali.",
       "saveFailed": "Gagal menyimpan catatan",
+      "quotaCheckFailed": "Gagal memeriksa kuota, coba lagi",
       "amountRequired": "Jumlah harus lebih dari 0",
       "personNameRequired": "Nama orang wajib diisi",
       "createFailed": "Gagal membuat catatan",

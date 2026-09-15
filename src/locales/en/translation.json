@@ -866,6 +866,7 @@
     "error": {
       "locked": "This record is locked. Upgrade to Pro to manage it again.",
       "saveFailed": "Failed to save record",
+      "quotaCheckFailed": "Failed to check quota, please try again",
       "amountRequired": "Amount must be greater than 0",
       "personNameRequired": "Person's name is required",
       "createFailed": "Failed to create record",
