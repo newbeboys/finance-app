@@ -1,6 +1,6 @@
 # FinanceApp — Arsitektur Sistem & Database Schema
 
-> **Dibuat:** 2026-06-28 | **Terakhir diperbarui:** 2026-09-09 | **Versi App:** 2.6.0  
+> **Dibuat:** 2026-06-28 | **Terakhir diperbarui:** 2026-09-15 | **Versi App:** 2.8.0  
 > **Tujuan:** Dokumentasi teknis struktur project, data flow, dan database schema untuk developer.
 
 ---

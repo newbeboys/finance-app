@@ -1,6 +1,6 @@
 # FinanceApp — Fitur-Fitur Aplikasi & Sistem Tier
 
-> **Dibuat:** 2026-06-28 | **Terakhir diperbarui:** 2026-09-09 | **Versi App:** 2.6.0  
+> **Dibuat:** 2026-06-28 | **Terakhir diperbarui:** 2026-09-15 | **Versi App:** 2.8.0  
 > **Tujuan:** Dokumentasi lengkap semua fitur, tier system, dan gating mechanism.
 
 ---
@@ -84,6 +84,14 @@ PIN aktif?
 - useEffect fallback ke `"all"` kalau dompet yang dipilih sudah dihapus
 - Dropdown muncul hanya jika `accounts.length > 1` (reuse pattern dari AnalyticsPage)
 - Pipeline filter: dompet AND bulan AND type AND kategori AND metode AND search (semua sekaligus)
+
+### Sinkronisasi Foreground — Dompet Bersama Fase 1 (Task 5, 13 Sep 2026)
+
+Transaksi tidak memakai realtime. Sebagai gantinya `useTransactions` melakukan **refetch penuh (REPLACE, bukan merge per baris) saat app kembali ke foreground** — `autoRefetchTransactions()`, menumpang listener `visibilitychange`/`focus` di `app.jsx` — sehingga baris yang dicatat anggota lain akhirnya terlihat tanpa login ulang. Jalur otomatis punya dua rem pembatal: **debounce 60 detik** (`AUTO_REFETCH_MIN_INTERVAL_MS`) dan **gerbang PIN/biometrik** (`isAppLocked()`), keduanya diperiksa ulang setelah antre di belakang tulisan in-flight karena app bisa keburu terkunci selagi menunggu.
+
+Tombol **"Segarkan"** manual di halaman Transaksi (`refreshTransactions()`) sengaja mengabaikan kedua rem itu — aksi eksplisit user tidak pernah di-skip diam-diam.
+
+**Perilaku yang bisa membingungkan tapi benar:** anggota mencatat transaksi di dompet bersama, owner kembali ke foreground dalam <60 detik → baris itu belum muncul. Itu debounce bekerja sesuai desain, bukan bug; tekan "Segarkan" untuk melihatnya seketika.
 
 ---
 

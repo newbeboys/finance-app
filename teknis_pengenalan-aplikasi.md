@@ -1,13 +1,15 @@
 # FinanceApp — Pengenalan & Ikhtisar Aplikasi
 
-> **Dibuat:** 2026-06-28 | **Terakhir diperbarui:** 2026-07-18 | **Versi App:** 2.6.0  
+> **Dibuat:** 2026-06-28 | **Terakhir diperbarui:** 2026-09-15 | **Versi App:** 2.8.0  
 > **Tujuan:** Overview singkat aplikasi, model bisnis, tech stack, dan info dasar infrastruktur.
 
 ---
 
 ## Apa itu FinanceApp?
 
-Aplikasi keuangan personal yang berjalan sebagai **aplikasi Android native** (via Capacitor) dan **web app**. Target user adalah individu yang ingin mencatat pengeluaran/pemasukan sehari-hari, memantau saldo beberapa dompet/rekening, mengelola anggaran, dan mencapai tujuan tabungan.
+Aplikasi keuangan personal yang berjalan sebagai **aplikasi Android native** (via Capacitor) dan **web app**. Target user adalah individu yang ingin mencatat pengeluaran/pemasukan sehari-hari, memantau saldo beberapa dompet/rekening, mengelola anggaran, mencatat hutang/piutang, dan mencapai tujuan tabungan.
+
+Sejak September 2026 ada juga **Dompet Bersama** (fitur Pro): pemilik dompet mengundang orang lain sebagai `editor`/`viewer` lewat kode undangan, dan transaksi di dompet itu terlihat oleh semua anggota aktif. Detail model akses & RLS-nya di `teknis_arsitektur-database.md` bagian "Shared Wallet / Dompet Bersama".
 
 ---
 
@@ -28,7 +30,7 @@ Pembayaran/upgrade dikelola melalui **Google Play Billing** via SDK **RevenueCat
 
 ---
 
-## Tech Stack Lengkap (dari `package.json` v2.6.0)
+## Tech Stack Lengkap (dari `package.json` v2.8.0)
 
 | Teknologi | Versi | Fungsi |
 |---|---|---|
@@ -52,7 +54,7 @@ Pembayaran/upgrade dikelola melalui **Google Play Billing** via SDK **RevenueCat
 | lottie-react | 2.4.1 | Animasi Lottie |
 
 **Dev dependencies:**
-- `playwright` 1.60.0 (testing browser — ada tapi jarang dipakai dari kode)
+- `playwright` 1.60.0 (testing browser — sejak 13-14 Sep 2026 dipakai oleh harness di `tests/*.harness.mjs` yang menjalankan hook asli dengan Supabase distub; dijalankan manual via `node`, belum ada runner/CI)
 - `md-to-pdf` 5.2.5 (konversi Markdown ke PDF)
 - `cross-env` 10.1.0 (environment variable lintas OS saat build)
 

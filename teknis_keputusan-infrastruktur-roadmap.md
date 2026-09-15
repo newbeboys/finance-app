@@ -1,6 +1,6 @@
 # FinanceApp — Keputusan Arsitektur, Infrastruktur, & Roadmap
 
-> **Dibuat:** 2026-06-28 | **Terakhir diperbarui:** 2026-09-09 | **Versi App:** 2.6.0  
+> **Dibuat:** 2026-06-28 | **Terakhir diperbarui:** 2026-09-15 | **Versi App:** 2.8.0  
 > **Tujuan:** Dokumentasi keputusan teknis, infrastruktur, status project, dan roadmap pengembangan.
 
 ---
@@ -214,9 +214,9 @@ Kolom sensitif (`plan`, `expires_at`, RC fields) **hanya bisa diupdate** oleh Ed
 
 Kolom ini ada di database tapi tidak digunakan oleh kode aplikasi. Potensi kebingungan bagi developer baru.
 
-### 2.2 Playwright Ada tapi Tidak Jelas Dipakai
+### 2.2 Playwright Dipakai, tapi Belum Punya Runner
 
-`playwright` ada di `devDependencies` tapi tidak ada konfigurasi test atau file test yang ditemukan. Kemungkinan dipakai untuk testing manual atau belum diimplementasikan sepenuhnya.
+Sejak 13-14 Sep 2026 `playwright` dipakai nyata oleh `tests/*.harness.mjs` (menjalankan hook asli di browser dengan Supabase distub) dan `tests/shared-wallet-sync.spec.mjs` (e2e dua akun). Tiap file dijalankan manual via `node <file>` — belum ada `playwright.config`, npm script, maupun CI.
 
 ### 2.3 Belum Ada Form Edit Goal
 
@@ -408,6 +408,16 @@ Key i18n baru `analitik.semuaDompet`, `analitik.belumAdaTransaksiDompet`, `anali
 
 ### Yang SEDANG/BELUM Selesai ⏳
 
+**Status per 15 Sep 2026 — sudah SELESAI dan live (bukan lagi item terbuka):**
+- ✅ **Bug saldo realtime** — saldo dompet kini ditarik absolut lewat `syncBalances()` setelah tiap RPC tulis, plus channel `wallets` yang sudah hidup kembali. Tidak lagi bergantung pada realtime saja.
+- ✅ **Daftar anggota** — `wallet_members` masuk publication `supabase_realtime`, channel `wallets_lock`/`wallet_members_sheet` hidup lagi.
+- ✅ **Kunci hutang (`is_locked`)** — `debts` masuk publication, channel `debts:<uid>` hidup lagi; kolom `is_locked` diformalkan lewat migration `20260920000000`.
+- ✅ **Penguncian saat downgrade sudah diukur, bukan diasumsikan** — kebocoran praktis nol pada kondisi terukur (1 dompet, akun tes).
+
+**Masih terbuka (diketahui, belum diperbaiki):**
+- ⏳ **`checkCreateAllowed()` gagal-terbuka** — bila query rolling-window cooldown hutang/piutang error, fungsi mengembalikan `{ ok: true }` (hanya `console.error`, tidak ke `error_logs`). Cap catatan aktif masih menjaga, tapi jendela 50 hari bisa dilewati saat error transien.
+- ⏳ **Tidak ada gerbang server untuk `is_locked`** — penguncian downgrade sepenuhnya ditegakkan di klien (`planReconciliation.js` + gating UI). Tidak ada policy RLS atau constraint yang menolak tulisan ke baris terkunci, jadi pemanggilan langsung dari console masih bisa menembusnya.
+
 **Launch Blocker — WAJIB selesai sebelum Production:**
 
 **✅ CRITICAL SECURITY (RESOLVED 11 Sep 2026) — REVOKE EXECUTE ON FUNCTION set_plan_for_testing SUDAH DIEKSEKUSI**
@@ -506,7 +516,7 @@ REVOKE EXECUTE ON FUNCTION public.set_plan_for_testing(uuid, text, timestamptz, 
    - ✅ `20260723000000` (document_user_summary_view) — EXECUTED (diverifikasi 15/20 Sep 2026)
    - ✅ `20260723010000` (harden_functions_search_path_and_grants) — EXECUTED (diverifikasi 11 Sep 2026). **Berisi fix blocker kritis `set_plan_for_testing` (lihat item 0 di atas, closed)**
    - ✅ `20260723020000` (revoke_rls_auto_enable_execute) — EXECUTED (diverifikasi 11 Sep 2026)
-   - ✅ `20260920000000` (document_is_locked_columns) — EXECUTED (20 Sep 2026)
+   - ✅ `20260920000000` (document_is_locked_columns) — EXECUTED (15 Sep 2026)
 
 2. **Mulai Closed Testing 14 hari**
    - Rekrut/konfirmasi minimal 12 tester aktif berkelanjutan
@@ -531,7 +541,7 @@ REVOKE EXECUTE ON FUNCTION public.set_plan_for_testing(uuid, text, timestamptz, 
 - **Task 4 WAJIB — blokir/guard hapus dompet bersama yang masih punya anggota aktif.** `transactions.wallet_id` punya FK `ON DELETE CASCADE` ke `wallets`, jadi owner yang menghapus dompet bersama saat ini akan ikut menghapus transaksi member **tanpa persetujuan mereka**. Bertabrakan dengan keputusan produk "transaksi member tetap ada setelah dia keluar". Perlu guard di UI, atau ubah FK jadi `RESTRICT`.
 
 **Kategori: Peningkatan Kualitas**
-- **Playwright test suite** — `playwright` ada di devDeps tapi tidak dikonfigurasi
+- **Playwright test suite** — harness manual sudah ada (`tests/*.harness.mjs`), tapi belum ada config/npm script/CI yang menjalankannya otomatis
 - **CI/CD untuk SQL migrations** — automated testing sebelum production push
 - **Multi-device sync notifikasi** — saat ini localStorage tidak sinkron antar device
 - **Optimize bundle size** — app sekarang agak besar untuk build Vite
@@ -540,7 +550,7 @@ REVOKE EXECUTE ON FUNCTION public.set_plan_for_testing(uuid, text, timestamptz, 
 
 ## 📝 Changelog Teknis
 
-### Versi 2.6.0 (12 Juli – 17 Juli 2026)
+### Versi 2.6.0 → 2.8.0 (12 Juli – 15 September 2026)
 
 | Tanggal | Perubahan | Status | Verified |
 |---------|-----------|--------|----------|
@@ -587,9 +597,12 @@ REVOKE EXECUTE ON FUNCTION public.set_plan_for_testing(uuid, text, timestamptz, 
 | 9 Sep | Verifikasi Excel: workbook ID & EN dibuka di Microsoft Excel (COM), `CalculateFullRebuild` + edit baris data → SUMIFS lintas-sheet tetap benar, 0 sel error di kedua bahasa | ✅ Verified | Claude Code |
 | 2 Sep | Migration `20260902000000_add_cash_disbursed_flag_to_debts.sql` → kolom `debts.cash_disbursed_at_creation` (boolean, DEFAULT true), hanya bermakna type='receivable'. false = tagihan belum dibayar (skip transaksi pokok sampai pembayaran pertama). | ✅ Executed | Boss Ali |
 | 3 Sep | Migration `20260903000000_add_icon_to_custom_categories.sql` → kolom `custom_categories.icon` (text, DEFAULT 'other'), icon picker di CategoryField/EditCategoryModal (cooldown 30 hari sama nama/warna). | ✅ Executed | Boss Ali |
+| 14–15 Sep | Hotfix realtime dompet (4 commit, merge `e71dc41`): channel `wallets` & `wallet_members` dipisah + suffix topic unik, callback status + pendengar `system` di channel dompet, saldo ditarik **absolut** setelah RPC tulis (tidak lagi mengandalkan realtime saja), kegagalan channel dicatat ke `error_logs` dengan rem per sesi | ✅ Pushed | Claude Code |
 | 15 Sep | `ALTER PUBLICATION supabase_realtime ADD TABLE wallet_members` — fix channel `wallets_lock`/`wallet_members_sheet` yang mati; RLS diverifikasi tetap berlaku (akun-B non-anggota tidak menerima frame) | ✅ Executed | Claude Code |
-| 15 Sep | `ALTER PUBLICATION supabase_realtime ADD TABLE debts` — fix channel `debts:<uid>` yang mati | ✅ Executed | Claude Code |
-| 20 Sep | Migration `20260920000000_document_is_locked_columns.sql` — dokumentasi resmi kolom `is_locked` di `wallets`/`savings`/`custom_categories` (sudah ada di production sejak lama, menutup schema drift) | ✅ Executed | Claude Code |
+| 15 Sep | `ALTER PUBLICATION supabase_realtime ADD TABLE debts` — fix channel `debts:<uid>` yang mati. Publication `supabase_realtime` kini berisi **8 tabel** | ✅ Executed | Claude Code |
+| 15 Sep | Migration `20260920000000_document_is_locked_columns.sql` — dokumentasi resmi kolom `is_locked` di `wallets`/`savings`/`custom_categories` (sudah ada di production sejak lama, menutup schema drift) | ✅ Executed | Claude Code |
+| 15 Sep | Commit `27acaee`: kegagalan SELECT/UPDATE di `planReconciliation.js` dicatat ke `error_logs` (severity `high`) — sebelumnya gagal senyap total | ✅ Pushed | Claude Code |
+| 15 Sep | Merge `b89e717`: **Task 5 Fase 1** masuk `main` — refetch foreground `useTransactions` (debounce 60 dtk + gerbang PIN/biometrik) + tombol "Segarkan" manual di halaman Transaksi | ✅ Pushed | Claude Code |
 
 ### Versi-Versi Sebelumnya
 - v2.5.6 (1 Juli): Deadline date picker & goal sorting
