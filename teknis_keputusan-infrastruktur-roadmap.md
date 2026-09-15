@@ -224,6 +224,32 @@ Kolom sensitif (`plan`, `expires_at`, RC fields) **hanya bisa diupdate** oleh Ed
 
 ---
 
+### 1.18 Gerbang Tier Dua Lapis: Klien untuk UX, Server untuk Penegakan (16 September 2026)
+
+**Keputusan ini MENUTUP "SATU KELUARGA" bug #4/#5/#6 sebagai satu keputusan arsitektur, bukan tiga perbaikan terpisah.** Ketiganya ditemukan dalam satu investigasi (`docs/investigasi-bug-4-5-6-2026-09-15.md`) dan punya akar yang sama: **status tier disimpan/dievaluasi di tempat yang tidak otoritatif.**
+
+| Bug | Gejalanya | Akar yang sama |
+|---|---|---|
+| #5 | `checkCreateAllowed()` fail-open saat query cooldown gagal | keputusan tier diambil dari data yang mungkin **tidak pernah sampai** |
+| #4 | `is_locked` basi karena hanya terisi kalau ada tab yang menyaksikan transisi plan | keputusan tier dibaca dari kolom yang **mungkin tidak pernah ditulis** |
+| #6 | Limit Basic hanya hidup di klien — PostgREST langsung melewatinya | keputusan tier diambil di tempat yang **bisa dilewati pemanggil** |
+
+**Aturan yang dihasilkan, berlaku untuk limit tier apa pun ke depan:**
+
+> Sebuah limit tier harus dievaluasi di tempat yang **tidak bisa dilewati** (server) dan dari data yang **tidak bisa basi** (dihitung saat itu juga, bukan kolom status). Klien tetap mengevaluasinya juga — tapi perannya UX, bukan penegakan.
+
+Konkretnya sekarang: **lapis 1 UI** (LockBadge/paywall), **lapis 2 hook klien** (precheck, `{limitReached:true}`), **lapis 3 RPC `SECURITY DEFINER`** (`create_wallet`, `create_savings_goal`, `create_custom_category`, `create_debt` — migrasi `20260921000000`). Lapis 2 **tidak boleh dihapus** karena lapis 3 ada: round-trip untuk memberi tahu "kuota habis" adalah UX yang lebih buruk, dan untuk hutang lapis 2 juga satu-satunya sumber `cooldownUntilDate` di jalur normal. Penolakan lapis 3 dipetakan ke pesan UI yang sama persis dengan lapis 2.
+
+**Konsekuensi yang diterima sadar:**
+- **Ambang limit sekarang ada di dua tempat** (`planLimits.js` dan konstanta di migrasi), disinkronkan manual. Alternatifnya — tabel limit di server yang dibaca klien — menukar duplikasi dengan satu query lagi di jalur start-up dan satu sumber kegagalan baru; ditolak untuk sekarang. Tiap konstanta di SQL diberi komentar pengingat, dan kalau limit berubah, **ubah di dua tempat**.
+- **Ambang TIDAK BOLEH jadi parameter RPC.** `check_chat_rate_limit` menerima ambangnya sebagai argumen dan itu aman di sana (dipanggil edge function); keempat RPC ini dipanggil klien langsung, jadi ambang yang bisa dikirim pemanggil sama saja dengan tidak ada gerbang.
+- **Limit transaksi/bulan sengaja TIDAK ikut** ke lapis 3 — sifatnya per-bulan-kalender dan butuh aritmetika tanggal WIB, bukan hitungan kardinalitas. Tetap klien-saja untuk sekarang; ini TODO terbuka, bukan keputusan bahwa itu tidak perlu.
+- **Policy INSERT keempat tabel tidak dipersempit.** Build klien lama masih `.insert()` langsung (alasan varian B `20260917000000`), jadi lapis 3 baru menggerbangi jalur resmi. Menutup jalur langsung adalah migrasi terpisah setelah build lama habis.
+
+Detail teknis (kenapa bukan RLS, kenapa yang dikunci baris `user_subscriptions`): `teknis_arsitektur-database.md` → "RPC Gerbang Limit Tier".
+
+---
+
 ## 2. Hal yang Diketahui Belum Sempurna / TODO
 
 ### 2.1 Kolom `spent` dan `enabled` di Tabel `budgets` Tidak Dipakai
@@ -622,6 +648,7 @@ REVOKE EXECUTE ON FUNCTION public.set_plan_for_testing(uuid, text, timestamptz, 
 | 15 Sep | Merge `b89e717`: **Task 5 Fase 1** masuk `main` — refetch foreground `useTransactions` (debounce 60 dtk + gerbang PIN/biometrik) + tombol "Segarkan" manual di halaman Transaksi | ✅ Pushed | Claude Code |
 | 15 Sep | Fix bug #5: `checkCreateAllowed()` (`useDebts.js`) fail-open → fail-closed + `logError()` untuk dua query cooldown hutang/piutang; pesan UI baru `debts.error.quotaCheckFailed` (id/en) supaya error transien tidak jatuh ke pesan cooldown yang menyesatkan | ✅ Committed | Claude Code |
 | 15 Sep | Fix bug #4 (§1.17): status terkunci DIHITUNG lewat `src/lib/lockStatus.js` (+ harness `tests/lockStatus.harness.mjs`, 20/20), bukan dibaca kolom `is_locked`. 4 hook disentuh (`useDebts`/`useSavings`/`useCustomCategories`/`useWallets`); konsumen UI 0 perubahan; kolom DB & `planReconciliation.js` dibiarkan sebagai legacy | ✅ Committed | Claude Code |
+| 16 Sep | Fix bug #6 (§1.18) — **SELESAI**, menutup keluarga #4/#5/#6: migrasi `20260921000000_add_tier_limit_rpcs.sql` (4 RPC `SECURITY DEFINER` cek-kuota+INSERT atomik) + dry-run `tests/dryrun_20260921_tier_limit_rpc.sql` (28 uji) + 4 hook create dialihkan ke `.rpc()`. Precheck klien dipertahankan (gerbang jadi dua lapis: klien UX, server penegakan) | ⏳ Belum di-push / belum dijalankan | Claude Code |
 
 ### Versi-Versi Sebelumnya
 - v2.5.6 (1 Juli): Deadline date picker & goal sorting
