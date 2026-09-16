@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { supabase } from '../supabase';
 import { usePaywall } from '../components/PaywallModal';
 import { requireUserId } from '../lib/authIdentity';
+import { makeIsLocked } from '../lib/lockStatus';
 
 const MONTHS_ID = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
 const MONTH_MAP = {
@@ -38,7 +39,12 @@ function toAppGoal(row) {
     current:      Number(row.current) || 0,
     deadline:     row.deadline_label || isoToDeadline(row.deadline),
     deadlineDate: row.deadline_date || null,
-    is_locked:    row.is_locked || false,
+    // Dibawa eksplisit ke bentuk app karena status terkunci dihitung dari sini
+    // (goalsWithLock di bawah). SENGAJA tidak mengandalkan urutan array hasil
+    // fetch: lockStatus menyortir sendiri, jadi invariant-nya tidak diam-diam
+    // rusak kalau suatu saat ada kode yang menyortir ulang `goals` untuk tampilan.
+    created_at:   row.created_at,
+    // `is_locked` tidak lagi diambil dari row — lihat catatan di goalsWithLock.
   };
 }
 
@@ -47,6 +53,15 @@ export function useSavings(userId, limits) {
   const [loading, setLoading] = React.useState(true);
   const { openPaywall } = usePaywall();
   const { t } = useTranslation();
+
+  // ── Status terkunci: DIHITUNG, bukan dibaca kolom is_locked ──────────
+  // Lihat src/lib/lockStatus.js untuk alasannya. Semua baris savings memakan
+  // kuota (tidak ada soft-delete di tabel ini), jadi tidak ada filter apa pun
+  // sebelum dihitung — sama seperti reconcileTable() lama tanpa excludeDeleted.
+  const goalsWithLock = React.useMemo(() => {
+    const isLocked = makeIsLocked(goals, { limit: limits?.maxSavingsGoals ?? Infinity });
+    return goals.map(g => ({ ...g, is_locked: isLocked(g) }));
+  }, [goals, limits?.maxSavingsGoals]);
 
   React.useEffect(() => {
     if (!userId) { setLoading(false); return; }
@@ -95,31 +110,45 @@ export function useSavings(userId, limits) {
       return { error: null, limitReached: true };
     }
 
-    // Identitas dari sesi aktif, bukan prop `userId` (lihat lib/authIdentity.js).
-    const { userId: authUserId, error: authError } = await requireUserId();
+    // Gerbang sesi. Identitas baris TIDAK lagi diambil dari sini: sejak
+    // createGoal lewat RPC, create_savings_goal membacanya sendiri dari
+    // auth.uid() di server. Yang tersisa adalah gunanya yang satu lagi —
+    // menangkap sesi mati lebih awal dengan pesan yang bisa dibaca user
+    // (lihat lib/authIdentity.js).
+    const { error: authError } = await requireUserId();
     if (authError) return { error: authError };
 
-    // ── Kolom base schema (selalu ada) ────────────────────────────
-    const basePayload = {
-      user_id:  authUserId,
-      name:     g.label   || '',
-      icon:     g.icon    || 'star',
-      color:    g.color   || '#5C6B4C',
-      target:   g.target  || 0,
-      current:  g.current || 0,
-      deadline: deadlineToISO(g.deadline),
-    };
-
-    const { data, error } = await supabase
-      .from('savings')
-      .insert(basePayload)
-      .select()
-      .single();
+    // ── Lewat RPC create_savings_goal, BUKAN .from('savings').insert() ──
+    // Gerbang limit yang sesungguhnya ada di dalam fungsi itu (migrasi
+    // 20260921000000, bug #6): cek kuota + INSERT dalam satu transaksi
+    // Postgres. Cek `goals.length` di atas TETAP ADA — dia yang memberi
+    // paywall seketika tanpa round-trip; yang di server backstop.
+    const { data: res, error } = await supabase.rpc('create_savings_goal', {
+      p_name:     g.label   || '',
+      p_icon:     g.icon    || 'star',
+      p_color:    g.color   || '#5C6B4C',
+      p_target:   g.target  || 0,
+      p_current:  g.current || 0,
+      p_deadline: deadlineToISO(g.deadline),
+    });
 
     if (error) {
       console.error('[useSavings] createGoal FAILED:', error.code, error.message, error.details);
       return { error };
     }
+
+    // Ditolak server → pesan SAMA PERSIS dengan gerbang klien di atas.
+    if (!res?.ok) {
+      if (res?.reason === 'limit_reached') {
+        openPaywall(t('paywall.feature.goalsTambahan'));
+        return { error: null, limitReached: true };
+      }
+      // Alasan asing jangan dijadikan paywall diam-diam.
+      console.error('[useSavings] createGoal DITOLAK server:', res?.reason);
+      return { error: new Error(`create_savings_goal ditolak: ${res?.reason || 'tidak diketahui'}`) };
+    }
+
+    const data = res.data;
 
     const newGoal = { ...toAppGoal(data), deadline: g.deadline || 'Tanpa tenggat', deadlineDate: g.deadlineISO || null };
     setGoals(prev => [...prev, newGoal]);
@@ -150,7 +179,8 @@ export function useSavings(userId, limits) {
   }
 
   async function depositToGoal(id, amount) {
-    const goal = goals.find(g => g.id === id);
+    // goalsWithLock, bukan goals mentah: `is_locked` hanya ada di array turunan.
+    const goal = goalsWithLock.find(g => g.id === id);
     if (!goal) return { error: new Error('Goal not found') };
     if (goal.is_locked) return { error: new Error('Goal is locked'), locked: true };
     const newCurrent = goal.current + amount;
@@ -164,5 +194,6 @@ export function useSavings(userId, limits) {
     return { error };
   }
 
-  return { goals, loading, createGoal, deleteGoal, depositToGoal };
+  // `goals` yang diekspos = versi ber-is_locked (hasil hitung), bukan state mentah.
+  return { goals: goalsWithLock, loading, createGoal, deleteGoal, depositToGoal };
 }

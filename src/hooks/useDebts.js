@@ -3,6 +3,7 @@ import { supabase } from '../supabase';
 import { usePaywall } from '../components/PaywallModal';
 import { logError } from '../lib/errorLogger';
 import { canDeleteOwnTransaction } from '../lib/walletAccess';
+import { makeIsLocked } from '../lib/lockStatus';
 import i18n from '../i18n';
 import { requireUserId } from '../lib/authIdentity';
 
@@ -80,7 +81,10 @@ function toAppDebt(row, lastPaymentDate = null) {
     due_date:    row.due_date || null,          // ISO yyyy-mm-dd | null
     status:      row.status || 'active',        // 'active' | 'paid'
     is_deleted:  row.is_deleted || false,
-    is_locked:   row.is_locked || false,        // dikunci saat downgrade Pro→Basic (lihat planReconciliation)
+    // `is_locked` SENGAJA tidak diambil dari row: sejak 15 Sep 2026 statusnya
+    // DIHITUNG dari seluruh array (lihat debtsWithLock di bawah + lib/lockStatus.js),
+    // karena kolom DB-nya bisa basi kalau downgrade terjadi saat app tertutup.
+    // Field-nya tetap ada di bentuk app, cuma diisi belakangan oleh memo itu.
     // Hanya relevan utk type='receivable'. false = piutang berupa tagihan yang
     // belum dibayar — belum ada transaksi pokok/uang berpindah saat dibuat.
     // Kolom DB NOT NULL DEFAULT true, jadi baca apa adanya (bukan `|| false`).
@@ -118,6 +122,27 @@ export function useDebts(userId, limits, ledger = {}) {
   const [loading, setLoading] = React.useState(true);
   const [error, setError]     = React.useState(null);
   const { openPaywall } = usePaywall();
+
+  // ── Status terkunci: DIHITUNG, bukan dibaca kolom is_locked ──────────
+  // Satu titik hitung untuk SEMUA pembaca (UI maupun gerbang tulis di hook
+  // ini), jadi tidak ada jalan untuk dua tempat menyimpulkan hal berbeda.
+  // Ditempel di sini, bukan di dalam toAppDebt(), karena status ini fungsi
+  // dari SELURUH array — toAppDebt cuma melihat satu baris, dan menghitungnya
+  // di sana berarti mengulang perhitungan yang sama di tiap penulis state
+  // (fetch, realtime, create, addPayment, delete) dengan risiko satu di
+  // antaranya kelupaan.
+  //
+  // Yang memakan kuota HANYA catatan aktif (status='active'); baris lunas
+  // tidak pernah terkunci. Baris soft-deleted tidak pernah ada di state ini
+  // (fetch sudah .eq('is_deleted', false)). Sama persis dengan aturan
+  // reconcileDebts() lama di planReconciliation.js.
+  const debtsWithLock = React.useMemo(() => {
+    const isLocked = makeIsLocked(
+      debts.filter(d => d.status === 'active'),
+      { limit: limits?.maxActiveDebts ?? Infinity }
+    );
+    return debts.map(d => ({ ...d, is_locked: isLocked(d) }));
+  }, [debts, limits?.maxActiveDebts]);
 
   // ── Fetch awal + realtime ─────────────────────────────────────────
   React.useEffect(() => {
@@ -200,10 +225,17 @@ export function useDebts(userId, limits, ledger = {}) {
     if (maxActive === Infinity) return { ok: true };   // Pro → bebas
 
     // (1) Maks catatan aktif sekaligus (state lokal sudah exclude is_deleted).
-    //     Catatan terkunci (is_locked, sisa downgrade lama) TIDAK dihitung: kalau
-    //     ikut dihitung, user yang pernah didowngrade tak akan pernah bisa membuat
-    //     catatan baru lagi meski slot aktif sebenarnya masih tersedia.
-    const activeCount = debts.filter(d => d.status === 'active' && !d.is_locked).length;
+    //     Dihitung dari JUMLAH AKTIF apa adanya, di-cap ke maxActive — tidak
+    //     lagi memfilter `!is_locked`. Formula lama bergantung pada kolom
+    //     is_locked SUDAH benar di DB, yang artinya bergantung pada tulisan
+    //     async planReconciliation pernah sukses duluan; kalau lock gagal
+    //     separuh jalan, baris yang seharusnya terkunci ikut tak terhitung dan
+    //     batas 5 bisa terlewat. Bentuk Math.min ini setara secara numerik
+    //     dengan formula lama pada keadaan yang sudah ter-rekonsiliasi benar
+    //     (begitu jumlah aktif ≥ maxActive, keduanya mentok di maxActive),
+    //     tapi tidak bisa salah karena efek samping yang belum/gagal jalan.
+    const activeTotal = debts.filter(d => d.status === 'active').length;
+    const activeCount = Math.min(activeTotal, maxActive);
     if (activeCount >= maxActive) {
       return { ok: false, reason: 'active' };
     }
@@ -223,20 +255,39 @@ export function useDebts(userId, limits, ledger = {}) {
         .gte('created_at', windowStartISO);
 
       if (cErr) {
-        // Fail-open: jangan kunci user karena error transien; cap aktif tetap menjaga.
-        console.error('[useDebts] cooldown count error:', cErr.code, cErr.message);
-        return { ok: true };
+        // Fail-CLOSED (diputuskan 15 Sep 2026, gantikan fail-open lama). Query
+        // ini hanya pernah dijalankan user Basic (Pro sudah return di baris 200
+        // sebelum sampai sini) — jadi risikonya HANYA menyentuh user Basic yang
+        // kebetulan masih punya sisa kuota tapi errornya transien, bukan user
+        // berbayar. Ditukar sengaja karena dulu error yang sama membiarkan
+        // rolling-window 50 hari dilewati tanpa jejak sama sekali. Dicatat ke
+        // error_logs (bukan cuma console) supaya kegagalan NYATA (beda dari
+        // "ditolak sesuai desain") kelihatan dan bisa ditindak.
+        logError('checkCreateAllowed', cErr.message || String(cErr), {
+          op: 'cooldownCount', user_id: userId, code: cErr.code,
+        }, 'medium');
+        return { ok: false, reason: 'query_error' };
       }
 
       if ((count ?? 0) >= maxActive) {
         // Cari pembuatan tertua dalam jendela → +cooldownDays = tanggal bisa lagi.
-        const { data: oldestRows } = await supabase
+        const { data: oldestRows, error: oldestErr } = await supabase
           .from('debts')
           .select('created_at')
           .eq('user_id', userId)
           .gte('created_at', windowStartISO)
           .order('created_at', { ascending: true })
           .limit(1);
+
+        if (oldestErr) {
+          // Sudah fail-closed (return ok:false di bawah tetap jalan tanpa syarat),
+          // tapi dulu kegagalan query INI SENDIRI senyap total — cooldownUntilDate
+          // diam-diam jadi null dan UI kehilangan info "boleh lagi kapan" tanpa
+          // jejak di manapun. Dicatat sama seperti query cooldown di atas.
+          logError('checkCreateAllowed', oldestErr.message || String(oldestErr), {
+            op: 'cooldownOldestRow', user_id: userId, code: oldestErr.code,
+          }, 'medium');
+        }
 
         let cooldownUntilDate = null;
         const oldest = oldestRows?.[0]?.created_at;
@@ -257,14 +308,18 @@ export function useDebts(userId, limits, ledger = {}) {
   //          cash_disbursed_at_creation }
   //   cash_disbursed_at_creation hanya dipakai utk type='receivable' (lihat
   //   komentar di dalam fungsi); diabaikan/dipaksa true utk type='payable'.
-  // Output: { error, debtId, limitReached, cooldownUntilDate }
+  // Output: { error, debtId, limitReached, cooldownBlocked, cooldownUntilDate, queryError }
   async function createDebt(input) {
     // Gerbang identitas PALING DEPAN — checkCreateAllowed() di bawah melakukan
     // query rolling-window ke Supabase untuk akun Basic, dan sesi yang mati
     // akan membuatnya terkirim lalu gagal 401 tanpa guna. Sekaligus menjaga
     // createDebt tidak pernah menulis separuh jalan: fungsi ini mengisi dua
     // tabel berurutan (debts lalu transactions).
-    const { userId: authUserId, error: authError } = await requireUserId();
+    //
+    // Yang diambil tinggal `error`-nya: sejak baris debts ditulis lewat RPC
+    // create_debt, identitasnya dibaca server dari auth.uid() dan tidak lagi
+    // dikirim klien.
+    const { error: authError } = await requireUserId();
     if (authError) return { error: authError };
 
     const gate = await checkCreateAllowed();
@@ -272,6 +327,13 @@ export function useDebts(userId, limits, ledger = {}) {
       if (gate.reason === 'active') {
         openPaywall('Catatan Hutang / Piutang tambahan');
         return { error: null, limitReached: true };
+      }
+      if (gate.reason === 'query_error') {
+        // Query cooldown gagal (fail-closed, lihat checkCreateAllowed) — BUKAN
+        // penolakan karena kuota, jadi jangan sampai jatuh ke cabang cooldown di
+        // bawah (pesan "boleh lagi tanggal X" akan menyesatkan untuk error
+        // transien yang tidak ada hubungannya dengan tanggal apapun).
+        return { error: null, queryError: true };
       }
       // cooldown: bukan paywall murni — UI menampilkan tanggal + opsi upgrade
       return { error: null, cooldownBlocked: true, cooldownUntilDate: gate.cooldownUntilDate };
@@ -288,28 +350,60 @@ export function useDebts(userId, limits, ledger = {}) {
       ? true
       : input.cash_disbursed_at_creation !== false;
 
-    // 1) Insert baris debts
-    const { data: debtRow, error: dErr } = await supabase
-      .from('debts')
-      .insert({
-        user_id:     authUserId,
-        type:        input.type,
-        person_name: input.person_name.trim(),
-        note:        input.note || null,
-        amount:      absAmount,
-        paid:        0,
-        wallet_id:   input.wallet_id || null,
-        date:        input.date || undefined,       // biarkan DB pakai default CURRENT_DATE bila kosong
-        due_date:    input.due_date || null,
-        status:      'active',
-        cash_disbursed_at_creation: cashDisbursedAtCreation,
-      })
-      .select()
-      .single();
+    // 1) Baris debts — lewat RPC create_debt, BUKAN .from('debts').insert().
+    //    Fungsi itu (migrasi 20260921000000, bug #6) menegakkan KEDUA aturan
+    //    yang sama dengan checkCreateAllowed di atas — maks aktif DAN jendela
+    //    rolling 50 hari — lalu meng-INSERT, semuanya dalam satu transaksi
+    //    Postgres. checkCreateAllowed TIDAK dihapus: dia yang memberi paywall
+    //    / tanggal cooldown seketika dan tetap satu-satunya sumber
+    //    `cooldownUntilDate` di jalur normal; RPC-nya backstop untuk jalur
+    //    yang tidak lewat sini, dan penutup celah antara "cek" dan "tulis".
+    //
+    //    `user_id` tidak dikirim — dibaca server dari auth.uid().
+    //    `date` dikirim apa adanya; bila kosong, server memakai tanggal hari
+    //    ini dalam WIB (BUKAN CURRENT_DATE yang ber-zona UTC).
+    const { data: res, error: dErr } = await supabase.rpc('create_debt', {
+      p_type:           input.type,
+      p_person_name:    input.person_name.trim(),
+      p_amount:         absAmount,
+      p_wallet_id:      input.wallet_id || null,
+      p_date:           input.date || null,
+      p_due_date:       input.due_date || null,
+      p_note:           input.note || null,
+      p_cash_disbursed: cashDisbursedAtCreation,
+    });
 
-    if (dErr || !debtRow) {
-      console.error('[useDebts] createDebt insert FAILED:', dErr?.code, dErr?.message);
-      return { error: dErr || new Error(i18n.t('debts.error.createFailed')) };
+    if (dErr) {
+      console.error('[useDebts] createDebt RPC FAILED:', dErr.code, dErr.message);
+      return { error: dErr };
+    }
+
+    // Ditolak gerbang server. Dipetakan ke BENTUK KEMBALIAN YANG SAMA dengan
+    // penolakan checkCreateAllowed di atas, supaya UI tidak perlu tahu lapis
+    // mana yang menolak — `limit_active` ↔ reason 'active', `cooldown` ↔
+    // reason 'cooldown' beserta tanggalnya.
+    if (!res?.ok) {
+      if (res?.reason === 'limit_active') {
+        openPaywall('Catatan Hutang / Piutang tambahan');
+        return { error: null, limitReached: true };
+      }
+      if (res?.reason === 'cooldown') {
+        return {
+          error: null,
+          cooldownBlocked: true,
+          cooldownUntilDate: res?.data?.cooldown_until || null,
+        };
+      }
+      // Alasan asing jangan dipaksakan ke salah satu cabang di atas: pesan
+      // kuota/tanggal untuk sesuatu yang bukan itu akan menyesatkan.
+      console.error('[useDebts] createDebt DITOLAK server:', res?.reason);
+      return { error: new Error(`create_debt ditolak: ${res?.reason || 'tidak diketahui'}`) };
+    }
+
+    const debtRow = res.data;
+    if (!debtRow) {
+      console.error('[useDebts] createDebt: RPC ok tapi tanpa data');
+      return { error: new Error(i18n.t('debts.error.createFailed')) };
     }
 
     // Piutang berupa tagihan yang belum dibayar: TIDAK ada uang yang berpindah
@@ -356,7 +450,8 @@ export function useDebts(userId, limits, ledger = {}) {
   // Input: { amount, date, note }
   // Output: { error, paymentId, isPaidOff }
   async function addPayment(debtId, payment) {
-    const debt = debts.find(d => d.id === debtId);
+    // debtsWithLock, bukan debts mentah: `is_locked` hanya ada di array turunan.
+    const debt = debtsWithLock.find(d => d.id === debtId);
     if (!debt) return { error: new Error(i18n.t('debts.error.notFound')) };
     if (debt.is_locked) return { error: new Error(i18n.t('debts.error.locked')) };
 
@@ -465,7 +560,7 @@ export function useDebts(userId, limits, ledger = {}) {
 
   // ── Tandai Lunas: buat satu cicilan sebesar sisa ──────────────────
   async function markPaid(debtId) {
-    const debt = debts.find(d => d.id === debtId);
+    const debt = debtsWithLock.find(d => d.id === debtId);   // lihat catatan di addPayment
     if (!debt) return { error: new Error(i18n.t('debts.error.notFound')) };
     if (debt.is_locked) return { error: new Error(i18n.t('debts.error.locked')) };
     const remaining = debt.amount - debt.paid;
@@ -482,7 +577,7 @@ export function useDebts(userId, limits, ledger = {}) {
 
   // ── Hapus (soft delete) + balik semua efek transaksi & saldo ──────
   async function deleteDebt(debtId) {
-    const debt = debts.find(d => d.id === debtId);
+    const debt = debtsWithLock.find(d => d.id === debtId);   // lihat catatan di addPayment
     if (!debt) return { error: new Error(i18n.t('debts.error.notFound')) };
     if (debt.is_locked) return { error: new Error(i18n.t('debts.error.locked')) };
 
@@ -540,5 +635,6 @@ export function useDebts(userId, limits, ledger = {}) {
     return { error: null };
   }
 
-  return { debts, loading, error, createDebt, addPayment, markPaid, deleteDebt, getPayments };
+  // `debts` yang diekspos = versi ber-is_locked (hasil hitung), bukan state mentah.
+  return { debts: debtsWithLock, loading, error, createDebt, addPayment, markPaid, deleteDebt, getPayments };
 }

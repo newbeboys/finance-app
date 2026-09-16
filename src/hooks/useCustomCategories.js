@@ -5,6 +5,7 @@ import { CATEGORIES, INCOME_CATEGORIES } from '../data';
 import { DEFAULT_CATEGORY_ICON } from '../icons';
 import { usePaywall } from '../components/PaywallModal';
 import { requireUserIdAsText } from '../lib/authIdentity';
+import { makeIsLocked } from '../lib/lockStatus';
 
 // Supabase row → bentuk kategori yang dipakai komponen (sama seperti CATEGORIES)
 function toCustomCat(row) {
@@ -15,8 +16,12 @@ function toCustomCat(row) {
     icon:       row.icon,                   // kind CatIcon — kolom NOT NULL DEFAULT 'other', tidak perlu fallback di sini
     type:       row.type || 'expense',     // 'income' | 'expense' — dipakai filter tampilan
     custom:     true,
-    is_locked:  row.is_locked  || false,
     is_deleted: row.is_deleted || false,   // soft delete — tetap ada di state untuk resolve transaksi lama
+    // Dibawa eksplisit ke bentuk app karena status terkunci dihitung dari sini
+    // (categoriesWithLock di bawah), dan lockStatus menyortir sendiri — tidak
+    // menumpang urutan array hasil fetch.
+    created_at: row.created_at,
+    // `is_locked` tidak lagi diambil dari row — lihat catatan di categoriesWithLock.
   };
 }
 
@@ -32,6 +37,20 @@ export function useCustomCategories(userId, limits) {
   const [loading, setLoading] = React.useState(true);
   const { openPaywall } = usePaywall();
   const { t } = useTranslation();
+
+  // ── Status terkunci: DIHITUNG, bukan dibaca kolom is_locked ──────────
+  // Lihat src/lib/lockStatus.js untuk alasannya. Yang memakan kuota hanya
+  // baris yang BELUM di-soft-delete — persis aturan reconcileTable(...,
+  // excludeDeleted=true) yang lama. Baris soft-deleted tetap ikut dipetakan
+  // (dibutuhkan untuk me-resolve nama/warna kategori di transaksi lama) tapi
+  // tidak pernah terkunci.
+  const categoriesWithLock = React.useMemo(() => {
+    const isLocked = makeIsLocked(
+      customCategories.filter(c => !c.is_deleted),
+      { limit: limits?.maxCustomCategories ?? Infinity }
+    );
+    return customCategories.map(c => ({ ...c, is_locked: isLocked(c) }));
+  }, [customCategories, limits?.maxCustomCategories]);
 
   // Load awal + subscribe realtime
   React.useEffect(() => {
@@ -101,18 +120,32 @@ export function useCustomCategories(userId, limits) {
       return { error: null, category: null, limitReached: true };
     }
 
-    // Identitas dari sesi aktif, bukan prop `userId` (lihat lib/authIdentity.js).
+    // Gerbang sesi. Identitas baris TIDAK lagi diambil dari sini: sejak
+    // fungsi ini lewat RPC, create_custom_category membacanya sendiri dari
+    // auth.uid() di server. Yang tersisa adalah gunanya yang satu lagi —
+    // menangkap sesi mati lebih awal (lihat lib/authIdentity.js).
     // Varian ...AsText dipakai di sini karena kontrak hook ini mengembalikan
     // `error` berupa STRING, bukan objek Error — memberi Error ke pemanggilnya
     // akan merender "[object Error]".
-    const { userId: authUserId, error: authError } = await requireUserIdAsText();
+    const { error: authError } = await requireUserIdAsText();
     if (authError) return { error: authError, category: null };
 
-    const { data, error } = await supabase
-      .from('custom_categories')
-      .insert({ user_id: authUserId, name: clean, color: color || 'var(--sage)', type, icon: icon || DEFAULT_CATEGORY_ICON })
-      .select()
-      .single();
+    // ── Lewat RPC create_custom_category, BUKAN .insert() langsung ──
+    // Gerbang limit yang sesungguhnya ada di dalam fungsi itu (migrasi
+    // 20260921000000, bug #6): cek kuota (hanya baris is_deleted=false,
+    // sama seperti hitungan di atas) + INSERT dalam satu transaksi Postgres.
+    // Cek panjang array di atas TETAP ADA sebagai gerbang UX.
+    //
+    // Duplikat nama SENGAJA tidak ditangani fungsi itu: unique_violation
+    // dibiarkan naik apa adanya, dan PostgREST meneruskan SQLSTATE-nya ke
+    // error.code — jadi cabang 23505 di bawah tetap berlaku persis seperti
+    // saat masih .insert() langsung.
+    const { data: res, error } = await supabase.rpc('create_custom_category', {
+      p_name:  clean,
+      p_color: color || 'var(--sage)',
+      p_type:  type,
+      p_icon:  icon || DEFAULT_CATEGORY_ICON,
+    });
 
     // Unique index bisa menolak balapan (kode 23505) → ambil yang sudah ada
     if (error) {
@@ -132,7 +165,18 @@ export function useCustomCategories(userId, limits) {
       return { error: error.message, category: null };
     }
 
-    const cat = toCustomCat(data);
+    // Ditolak gerbang server → pesan SAMA PERSIS dengan gerbang klien di atas.
+    if (!res?.ok) {
+      if (res?.reason === 'limit_reached') {
+        openPaywall(t('paywall.feature.kategoriKustomTambahan'));
+        return { error: null, category: null, limitReached: true };
+      }
+      // Alasan asing jangan dijadikan paywall diam-diam.
+      console.error('[useCustomCategories] addCustomCategory DITOLAK server:', res?.reason);
+      return { error: `create_custom_category ditolak: ${res?.reason || 'tidak diketahui'}`, category: null };
+    }
+
+    const cat = toCustomCat(res.data);
     setCustomCategories(prev => prev.some(c => c.id === cat.id) ? prev : [...prev, cat]);
     return { error: null, category: cat };
   }
@@ -165,5 +209,6 @@ export function useCustomCategories(userId, limits) {
     return { error };
   }
 
-  return { customCategories, loading, addCustomCategory, updateCustomCategory, deleteCustomCategory };
+  // `customCategories` yang diekspos = versi ber-is_locked (hasil hitung).
+  return { customCategories: categoriesWithLock, loading, addCustomCategory, updateCustomCategory, deleteCustomCategory };
 }

@@ -688,16 +688,35 @@ File `src/lib/planLimits.js` adalah satu-satunya sumber kebenaran untuk semua li
 
 ### Mekanisme Gating
 
-Setiap fitur berbayar dijaga di 2 tempat:
-1. **Hook** — CRUD return `{ limitReached: true }` jika melebihi
-2. **UI** — tombol tampilkan `LockBadge` atau trigger `PaywallModal`
+Setiap fitur berbayar dijaga di 3 tempat (lapis 3 sejak 16 Sep 2026, bug #6):
+1. **UI** — tombol tampilkan `LockBadge` atau trigger `PaywallModal`
+2. **Hook (klien)** — CRUD return `{ limitReached: true }` jika melebihi
+3. **Server (SQL)** — RPC `SECURITY DEFINER` yang menolak INSERT-nya
+
+**Lapis 1-2 untuk UX, lapis 3 untuk penegakan.** Sampai sebelum bug #6, limit tier HANYA hidup di klien: policy RLS keempat tabel cuma `auth.uid() = user_id` dan tidak pernah menghitung apa pun, jadi satu panggilan PostgREST langsung (`supabase.from('wallets').insert(...)` dari console, atau build klien lama) melewati seluruh gerbang tier. Kuota Basic praktis sukarela.
+
+Sejak migrasi `20260921000000`, empat pembuatan sumber daya berjalan lewat RPC yang menggabungkan cek kuota + INSERT dalam satu transaksi Postgres:
+
+| Hook | RPC | Limit Basic yang ditegakkan server |
+|---|---|---|
+| `useWallets.createAccount` | `create_wallet` | 1 — **hanya dompet milik sendiri**; dompet bersama tempat user jadi anggota tidak dihitung |
+| `useSavings.createGoal` | `create_savings_goal` | 2 — semua baris (tidak ada soft-delete) |
+| `useCustomCategories.addCustomCategory` | `create_custom_category` | 3 — hanya `is_deleted = false` |
+| `useDebts.createDebt` | `create_debt` | 5 aktif **dan** 5 pembuatan/50 hari rolling |
+
+Precheck klien **tidak dihapus** dan tidak boleh dihapus: itu yang memberi paywall seketika tanpa round-trip, dan (untuk hutang) satu-satunya sumber `cooldownUntilDate` di jalur normal. Penolakan server dipetakan ke **pesan UI yang sama persis** dengan gerbang klien — user tidak pernah melihat error baru.
+
+Ambang di SQL adalah konstanta yang **sinkron manual** dengan `PLAN_LIMITS.basic`; `planLimits.js` tetap sumber kebenaran untuk klien. Kalau sebuah limit diubah, ubah di **dua** tempat (tiap konstanta di migrasi itu diberi komentar pengingatnya). Detail teknis (kenapa bukan RLS, cara kuncinya bekerja): `teknis_arsitektur-database.md` → "RPC Gerbang Limit Tier".
+
+**Limit transaksi/bulan TIDAK termasuk** — masih klien-saja (`useTransactions`), karena sifatnya per-bulan-kalender dan butuh aritmetika tanggal WIB, bukan hitungan kardinalitas sederhana.
 
 ### Saat Downgrade Pro → Basic
 
-Fungsi `lockExcessOnDowngrade()` (`src/lib/planReconciliation.js`):
-- Dompet, goals, kategori kustom yang melebihi limit didapat `is_locked = true`
+- Dompet, goals, kategori kustom yang melebihi limit **terkunci**
 - Urutan: yang paling baru (`created_at` DESC) dikunci dulu; paling lama tetap aktif
 - Data **tidak dihapus** — hanya dikunci. Upgrade kembali ke Pro → semua otomatis unlock
+
+⚠️ **Sejak 15 Sep 2026 (bug #4) status terkunci DIHITUNG, bukan disimpan.** Sumbernya `src/lib/lockStatus.js`, dipanggil dari memo di tiap hook (`visibleAccounts`, `goalsWithLock`, `categoriesWithLock`, `debtsWithLock`); kolom `is_locked` di keempat tabel jadi legacy dan tidak dibaca siapa pun. `lockExcessOnDowngrade()` (`src/lib/planReconciliation.js`) masih menulis kolom itu — harmless, sengaja belum dicabut — jadi **isinya bisa basi dan jangan dipakai sebagai sumber kebenaran**. Alasan lengkap: `teknis_keputusan-infrastruktur-roadmap.md` §1.17.
 
 ### Filter Dompet di Analitik
 

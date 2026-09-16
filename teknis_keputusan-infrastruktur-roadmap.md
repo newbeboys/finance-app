@@ -208,6 +208,48 @@ Kolom sensitif (`plan`, `expires_at`, RC fields) **hanya bisa diupdate** oleh Ed
 
 ---
 
+### 1.17 Status Terkunci Selalu Dihitung, Tidak Disimpan (15 September 2026)
+
+**Keputusan:** Kolom `is_locked` di `wallets`/`savings`/`custom_categories`/`debts` **tidak lagi dibaca siapa pun**. Status terkunci (soft lock sisa downgrade Pro→Basic) dihitung di klien oleh `src/lib/lockStatus.js`: N item paling lama (`created_at` ASC, `id` sebagai pemecah seri) tetap aktif, sisanya terkunci, dengan N dari `PLAN_LIMITS`. Pola yang sama dengan §1.2 (`budgets.spent` sengaja tidak dipakai, progress dihitung ulang dari transaksi).
+
+**Alasan:** Kolom itu hanya pernah ditulis `planReconciliation.js`, dan itu pun hanya kalau ada tab terbuka yang kebetulan menyaksikan transisi plan Pro→Basic (`useSubscription.js:79-83`; cold start dilewati karena `prevIsProRef` masih `null`). Downgrade yang terjadi saat app tertutup tidak pernah memperbarui kolomnya — UI lalu memakai status basi tanpa jejak apa pun. Hasil hitungan tidak bisa basi: dia fungsi murni dari (isi array, limit saat ini), dan tidak bergantung pada tulisan async mana pun sukses duluan.
+
+**Kolom TIDAK dihapus dari DB dan `planReconciliation.js` TIDAK dicabut** — dia boleh terus menulis kolom yatim itu (harmless: tidak ada policy/trigger/RPC yang membacanya di server, diverifikasi 15 Sep 2026). Yang berubah cuma sumber kebenaran di klien.
+
+**Aturan turunan:**
+- Hitungannya ditempel di **satu memo turunan per hook** (`debtsWithLock`, `goalsWithLock`, `categoriesWithLock`, dan di dalam `visibleAccounts` untuk wallets), bukan di dalam `toAppX()` per baris — status ini fungsi dari SELURUH array, dan menghitungnya per baris berarti mengulang logika yang sama di tiap penulis state (fetch, realtime, create, delete) dengan risiko satu di antaranya kelupaan. Gerbang tulis di dalam hook (`addPayment`/`markPaid`/`deleteDebt`/`depositToGoal`) ikut membaca array turunan itu, bukan state mentah.
+- **Dompet bersama selalu tampil TIDAK terkunci.** Status terkunci dompet orang lain mencerminkan kuota pemiliknya, dan klien ini tidak punya (serta menurut RLS tidak boleh punya) visibilitas ke daftar dompet lain milik orang itu maupun ke plan-nya. Regresi visual ini diterima sadar karena `is_locked` pada `wallets` murni kosmetik — nol gerbang tulis fungsional yang bergantung padanya (diverifikasi, `docs/investigasi-bug-4-5-6-2026-09-15.md` Bagian E3).
+- Tiebreaker `id` saat `created_at` kembar itu **wajib, bukan kosmetik**: tanpa itu dua baris berwaktu identik bisa bertukar posisi antar-render dan yang tampil terkunci berganti sendiri tanpa ada data yang berubah.
+- `checkCreateAllowed()` tidak lagi memfilter `!is_locked` untuk menghitung kuota aktif — memakai `Math.min(jumlah aktif, maxActiveDebts)`. Formula lama diam-diam bergantung pada kolom `is_locked` sudah benar di DB, artinya bergantung pada rekonsiliasi async pernah sukses duluan.
+
+---
+
+### 1.18 Gerbang Tier Dua Lapis: Klien untuk UX, Server untuk Penegakan (16 September 2026)
+
+**Keputusan ini MENUTUP "SATU KELUARGA" bug #4/#5/#6 sebagai satu keputusan arsitektur, bukan tiga perbaikan terpisah.** Ketiganya ditemukan dalam satu investigasi (`docs/investigasi-bug-4-5-6-2026-09-15.md`) dan punya akar yang sama: **status tier disimpan/dievaluasi di tempat yang tidak otoritatif.**
+
+| Bug | Gejalanya | Akar yang sama |
+|---|---|---|
+| #5 | `checkCreateAllowed()` fail-open saat query cooldown gagal | keputusan tier diambil dari data yang mungkin **tidak pernah sampai** |
+| #4 | `is_locked` basi karena hanya terisi kalau ada tab yang menyaksikan transisi plan | keputusan tier dibaca dari kolom yang **mungkin tidak pernah ditulis** |
+| #6 | Limit Basic hanya hidup di klien — PostgREST langsung melewatinya | keputusan tier diambil di tempat yang **bisa dilewati pemanggil** |
+
+**Aturan yang dihasilkan, berlaku untuk limit tier apa pun ke depan:**
+
+> Sebuah limit tier harus dievaluasi di tempat yang **tidak bisa dilewati** (server) dan dari data yang **tidak bisa basi** (dihitung saat itu juga, bukan kolom status). Klien tetap mengevaluasinya juga — tapi perannya UX, bukan penegakan.
+
+Konkretnya sekarang: **lapis 1 UI** (LockBadge/paywall), **lapis 2 hook klien** (precheck, `{limitReached:true}`), **lapis 3 RPC `SECURITY DEFINER`** (`create_wallet`, `create_savings_goal`, `create_custom_category`, `create_debt` — migrasi `20260921000000`). Lapis 2 **tidak boleh dihapus** karena lapis 3 ada: round-trip untuk memberi tahu "kuota habis" adalah UX yang lebih buruk, dan untuk hutang lapis 2 juga satu-satunya sumber `cooldownUntilDate` di jalur normal. Penolakan lapis 3 dipetakan ke pesan UI yang sama persis dengan lapis 2.
+
+**Konsekuensi yang diterima sadar:**
+- **Ambang limit sekarang ada di dua tempat** (`planLimits.js` dan konstanta di migrasi), disinkronkan manual. Alternatifnya — tabel limit di server yang dibaca klien — menukar duplikasi dengan satu query lagi di jalur start-up dan satu sumber kegagalan baru; ditolak untuk sekarang. Tiap konstanta di SQL diberi komentar pengingat, dan kalau limit berubah, **ubah di dua tempat**.
+- **Ambang TIDAK BOLEH jadi parameter RPC.** `check_chat_rate_limit` menerima ambangnya sebagai argumen dan itu aman di sana (dipanggil edge function); keempat RPC ini dipanggil klien langsung, jadi ambang yang bisa dikirim pemanggil sama saja dengan tidak ada gerbang.
+- **Limit transaksi/bulan sengaja TIDAK ikut** ke lapis 3 — sifatnya per-bulan-kalender dan butuh aritmetika tanggal WIB, bukan hitungan kardinalitas. Tetap klien-saja untuk sekarang; ini TODO terbuka, bukan keputusan bahwa itu tidak perlu.
+- **Policy INSERT keempat tabel tidak dipersempit.** Build klien lama masih `.insert()` langsung (alasan varian B `20260917000000`), jadi lapis 3 baru menggerbangi jalur resmi. Menutup jalur langsung adalah migrasi terpisah setelah build lama habis.
+
+Detail teknis (kenapa bukan RLS, kenapa yang dikunci baris `user_subscriptions`): `teknis_arsitektur-database.md` → "RPC Gerbang Limit Tier".
+
+---
+
 ## 2. Hal yang Diketahui Belum Sempurna / TODO
 
 ### 2.1 Kolom `spent` dan `enabled` di Tabel `budgets` Tidak Dipakai
@@ -413,9 +455,10 @@ Key i18n baru `analitik.semuaDompet`, `analitik.belumAdaTransaksiDompet`, `anali
 - ✅ **Daftar anggota** — `wallet_members` masuk publication `supabase_realtime`, channel `wallets_lock`/`wallet_members_sheet` hidup lagi.
 - ✅ **Kunci hutang (`is_locked`)** — `debts` masuk publication, channel `debts:<uid>` hidup lagi; kolom `is_locked` diformalkan lewat migration `20260920000000`.
 - ✅ **Penguncian saat downgrade sudah diukur, bukan diasumsikan** — kebocoran praktis nol pada kondisi terukur (1 dompet, akun tes).
+- ✅ **Penguncian downgrade tidak pernah jalan (15 Sep 2026)** — akar masalahnya (kolom `is_locked` hanya terisi kalau ada tab yang kebetulan menyaksikan transisi plan) ditutup dengan memindahkan sumber kebenaran ke hasil hitung di klien, `src/lib/lockStatus.js`. Kolom DB dibiarkan apa adanya sebagai legacy. Detail & aturan turunannya di §1.17.
+- ✅ **`checkCreateAllowed()` gagal-terbuka (15 Sep 2026)** — kedua query cooldown di `useDebts.js` (COUNT rolling-window + SELECT baris tertua) ditukar dari fail-open/senyap jadi fail-closed + `logError()` ke `error_logs`. Aman diubah ke fail-closed karena Pro tidak pernah menyentuh query ini (`maxActiveDebts = Infinity` return duluan) — risiko fail-closed murni menyentuh user Basic yang masih punya sisa kuota tapi errornya transien, bukan user berbayar. UI (`AddDebtModal.jsx`) dapat cabang pesan baru (`debts.error.quotaCheckFailed`) supaya error transien ini tidak jatuh ke pesan cooldown yang menyesatkan (menyiratkan ada tanggal "boleh lagi").
 
 **Masih terbuka (diketahui, belum diperbaiki):**
-- ⏳ **`checkCreateAllowed()` gagal-terbuka** — bila query rolling-window cooldown hutang/piutang error, fungsi mengembalikan `{ ok: true }` (hanya `console.error`, tidak ke `error_logs`). Cap catatan aktif masih menjaga, tapi jendela 50 hari bisa dilewati saat error transien.
 - ⏳ **Tidak ada gerbang server untuk `is_locked`** — penguncian downgrade sepenuhnya ditegakkan di klien (`planReconciliation.js` + gating UI). Tidak ada policy RLS atau constraint yang menolak tulisan ke baris terkunci, jadi pemanggilan langsung dari console masih bisa menembusnya.
 
 **Launch Blocker — WAJIB selesai sebelum Production:**
@@ -603,6 +646,9 @@ REVOKE EXECUTE ON FUNCTION public.set_plan_for_testing(uuid, text, timestamptz, 
 | 15 Sep | Migration `20260920000000_document_is_locked_columns.sql` — dokumentasi resmi kolom `is_locked` di `wallets`/`savings`/`custom_categories` (sudah ada di production sejak lama, menutup schema drift) | ✅ Executed | Claude Code |
 | 15 Sep | Commit `27acaee`: kegagalan SELECT/UPDATE di `planReconciliation.js` dicatat ke `error_logs` (severity `high`) — sebelumnya gagal senyap total | ✅ Pushed | Claude Code |
 | 15 Sep | Merge `b89e717`: **Task 5 Fase 1** masuk `main` — refetch foreground `useTransactions` (debounce 60 dtk + gerbang PIN/biometrik) + tombol "Segarkan" manual di halaman Transaksi | ✅ Pushed | Claude Code |
+| 15 Sep | Fix bug #5: `checkCreateAllowed()` (`useDebts.js`) fail-open → fail-closed + `logError()` untuk dua query cooldown hutang/piutang; pesan UI baru `debts.error.quotaCheckFailed` (id/en) supaya error transien tidak jatuh ke pesan cooldown yang menyesatkan | ✅ Committed | Claude Code |
+| 15 Sep | Fix bug #4 (§1.17): status terkunci DIHITUNG lewat `src/lib/lockStatus.js` (+ harness `tests/lockStatus.harness.mjs`, 20/20), bukan dibaca kolom `is_locked`. 4 hook disentuh (`useDebts`/`useSavings`/`useCustomCategories`/`useWallets`); konsumen UI 0 perubahan; kolom DB & `planReconciliation.js` dibiarkan sebagai legacy | ✅ Committed | Claude Code |
+| 16 Sep | Fix bug #6 (§1.18) — **SELESAI**, menutup keluarga #4/#5/#6: migrasi `20260921000000_add_tier_limit_rpcs.sql` (4 RPC `SECURITY DEFINER` cek-kuota+INSERT atomik) + dry-run `tests/dryrun_20260921_tier_limit_rpc.sql` (28 uji) + 4 hook create dialihkan ke `.rpc()`. Precheck klien dipertahankan (gerbang jadi dua lapis: klien UX, server penegakan) | ⏳ Belum di-push / belum dijalankan | Claude Code |
 
 ### Versi-Versi Sebelumnya
 - v2.5.6 (1 Juli): Deadline date picker & goal sorting

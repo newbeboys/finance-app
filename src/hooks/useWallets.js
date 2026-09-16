@@ -5,6 +5,7 @@ import { usePaywall } from '../components/PaywallModal';
 import { fetchSharedMemberships, sharedOrFilter } from '../lib/walletAccess';
 import { requireUserId } from '../lib/authIdentity';
 import { subscribeWithHealth, closeChannel } from '../lib/realtimeHealth';
+import { makeIsLocked } from '../lib/lockStatus';
 // `logError` TIDAK ikut diambil dari main: di sana dipakai adjustBalance(),
 // fungsi yang SENGAJA DIHAPUS di lineage ini (Task 4, 11 Sep 2026) — lihat
 // komentar besar di dekat createAccount/deleteAccount di bawah. Mengimpornya
@@ -45,7 +46,9 @@ function toAppWallet(row, userId, roleById) {
     // default catat transaksi — transaksi pribadi tercatat ke dompet orang.
     primary:     !isShared && (row.is_primary || false),
     last4:       row.last4 || '—',
-    is_locked:   row.is_locked || false,
+    // `is_locked` tidak lagi diambil dari row — dihitung di memo visibleAccounts
+    // (lihat catatan di sana). created_at dibawa karena jadi dasar urutannya.
+    created_at:  row.created_at,
     ownerId:     row.user_id,
     isShared,
     role,
@@ -336,34 +339,54 @@ export function useWallets(userId, limits) {
       return { error: null, limitReached: true };
     }
 
-    // Identitas diambil dari sesi aktif, bukan dari prop `userId` — lihat
-    // src/lib/authIdentity.js. Prop bisa berumur beda dari token yang
-    // dilampirkan SDK; kalau melenceng, RLS menolak dengan pesan yang tidak
-    // menyebut identitas sama sekali.
-    const { userId: authUserId, error: authError } = await requireUserId();
+    // Gerbang sesi. Sejak createAccount lewat RPC, identitas baris TIDAK
+    // lagi diambil dari sini — create_wallet membacanya sendiri dari
+    // auth.uid() di server (identitas yang dikirim klien bisa dipalsukan,
+    // jadi fungsi itu memang tidak menerimanya). Yang tersisa dari
+    // requireUserId() di sini adalah gunanya yang satu lagi: menangkap sesi
+    // yang sudah mati LEBIH AWAL, dengan pesan "sesi berakhir" yang bisa
+    // dibaca user — bukan 42501 mentah dari server. Lihat lib/authIdentity.js.
+    const { error: authError } = await requireUserId();
     if (authError) return { error: authError };
 
-    // ── Kolom base schema (selalu ada) ────────────────────────────
-    // AddAccountModal kirim 'institution', schema pakai 'bank'
-    const basePayload = {
-      user_id:    authUserId,
-      name:       a.name        || '',
-      bank:       a.institution || a.bank || '',
-      type:       a.type        || 'bank',
-      balance:    a.balance     || 0,
-      is_primary: a.primary     || false,
-    };
-
-    const { data, error } = await supabase
-      .from('wallets')
-      .insert(basePayload)
-      .select()
-      .single();
+    // ── Lewat RPC create_wallet, BUKAN .from('wallets').insert() ──
+    // Gerbang limit yang sesungguhnya ada di dalam fungsi itu (migrasi
+    // 20260921000000, bug #6): cek kuota + INSERT dalam satu transaksi
+    // Postgres, dengan kunci baris langganan supaya dua klik cepat tidak
+    // lolos berdua. Cek `accounts.length` di atas TIDAK dihapus — dia yang
+    // memberi paywall seketika tanpa round-trip; yang di server adalah
+    // backstop untuk jalur yang tidak lewat sini sama sekali.
+    //
+    // AddAccountModal kirim 'institution', schema pakai 'bank'.
+    const { data: res, error } = await supabase.rpc('create_wallet', {
+      p_name:       a.name        || '',
+      p_bank:       a.institution || a.bank || '',
+      p_type:       a.type        || 'bank',
+      p_balance:    a.balance     || 0,
+      p_is_primary: a.primary     || false,
+    });
 
     if (error) {
       console.error('[useWallets] createAccount FAILED:', error.code, error.message, error.details);
       return { error };
     }
+
+    // Gerbang server menolak. Pesannya dibuat SAMA PERSIS dengan gerbang
+    // klien di atas (paywall "dompet tambahan"), bukan error baru — dari
+    // sudut pandang user ini kejadian yang sama, cuma ketahuannya di lapis
+    // yang berbeda.
+    if (!res?.ok) {
+      if (res?.reason === 'limit_reached') {
+        openPaywall(t('paywall.feature.walletTambahan'));
+        return { error: null, limitReached: true };
+      }
+      // Alasan yang belum dikenal: JANGAN diam-diam dijadikan paywall —
+      // paywall untuk sesuatu yang bukan soal kuota akan menyesatkan.
+      console.error('[useWallets] createAccount DITOLAK server:', res?.reason);
+      return { error: new Error(`create_wallet ditolak: ${res?.reason || 'tidak diketahui'}`) };
+    }
+
+    const data = res.data;
 
     // Simpan color & last4 di local state
     const wallet = {
@@ -513,9 +536,29 @@ export function useWallets(userId, limits) {
   // memberCount ditempelkan di sini (turunan), bukan di dalam toAppWallet:
   // handler realtime saldo merakit ulang objek dompet dari payload dan akan
   // menghapus field apa pun yang tidak berasal dari baris `wallets`.
+  //
+  // is_locked juga ditempel di sini (DIHITUNG, bukan dibaca kolom DB — lihat
+  // src/lib/lockStatus.js), dengan satu batasan yang disengaja: hanya dompet
+  // MILIK SENDIRI yang bisa dihitung. Status terkunci sebuah dompet bersama
+  // mencerminkan kuota PEMILIKNYA, dan klien ini tidak punya — serta menurut
+  // RLS tidak boleh punya — visibilitas ke daftar dompet lain milik orang itu
+  // maupun ke plan-nya. Jadi dompet bersama SELALU tampil tidak terkunci.
+  // Itu regresi visual yang diterima sadar: is_locked pada `wallets` murni
+  // kosmetik (opacity/badge) — nol gerbang tulis fungsional yang bergantung
+  // padanya, diverifikasi 15 Sep 2026 (investigasi bug #4/#5/#6, Bagian E3).
   const visibleAccounts = React.useMemo(
-    () => allAccounts.map(a => ({ ...a, memberCount: memberCounts[a.id] || 0 })),
-    [allAccounts, memberCounts]
+    () => {
+      const isLocked = makeIsLocked(
+        allAccounts.filter(a => !a.isShared),
+        { limit: limits?.maxWallets ?? Infinity }
+      );
+      return allAccounts.map(a => ({
+        ...a,
+        memberCount: memberCounts[a.id] || 0,
+        is_locked: !a.isShared && isLocked(a),
+      }));
+    },
+    [allAccounts, memberCounts, limits?.maxWallets]
   );
   const accounts         = React.useMemo(() => visibleAccounts.filter(a => !a.isShared), [visibleAccounts]);
   const writableAccounts = React.useMemo(() => visibleAccounts.filter(a => a.canWrite),  [visibleAccounts]);

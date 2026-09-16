@@ -8,6 +8,7 @@ function logReconcileError(table, userId, action, err, count = null) {
   logError('planReconciliation', err.message, { table, userId, action, count }, 'high');
 }
 
+// LEGACY sejak 15 Sep 2026: kolom `is_locked` yang ditulis di bawah sudah TIDAK DIBACA siapa pun — klien menghitung sendiri lewat src/lib/lockStatus.js, dan tidak ada policy/trigger/RPC yang membacanya di server.
 // Kunci item berlebih (index >= maxAllowed) dan buka kunci item dalam kuota (index < maxAllowed).
 // Urutan berdasarkan created_at ASC: yang paling lama tetap aktif.
 // excludeDeleted: true untuk custom_categories agar soft-deleted rows tidak ikut dihitung kuota.
@@ -35,6 +36,7 @@ async function reconcileTable(supabase, table, userId, maxAllowed, excludeDelete
   }
 }
 
+// LEGACY sejak 15 Sep 2026: sama seperti reconcileTable — kolom `is_locked` yang ditulis di sini tidak punya pembaca lagi (lihat src/lib/lockStatus.js).
 // Sama seperti reconcileTable, khusus tabel debts: kuota hanya dihitung dari
 // catatan yang AKTIF (status='active') dan belum di-soft-delete (is_deleted=false).
 // Catatan lunas/terhapus tidak menghabiskan kuota, jadi tidak ikut dikunci.

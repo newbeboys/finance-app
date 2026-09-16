@@ -44,7 +44,8 @@ Hook-hook ini dikomposisi di `app.jsx`. Setiap query RLS-scoped by `user_id` cli
 
 **Business logic** yang tidak terikat UI ada di `src/lib/`:
 - `planLimits.js` — sumber kebenaran semua limit & feature flags
-- `planReconciliation.js` — lock/unlock saat downgrade; kegagalan SELECT/UPDATE (dulu senyap) kini dicatat ke `error_logs` via `logError()`, severity `high`
+- `lockStatus.js` — **sumber kebenaran status terkunci** (soft lock sisa downgrade Pro→Basic) untuk wallets/savings/custom_categories/debts: N item paling lama (`created_at` ASC, `id` sebagai pemecah seri) tetap aktif, sisanya terkunci. Dihitung di klien dari array yang sudah ada di state, tidak pernah dibaca dari kolom DB
+- `planReconciliation.js` — **LEGACY sejak 15 Sep 2026**: masih menulis kolom `is_locked` saat downgrade/upgrade, tapi tidak ada lagi pembacanya (klien memakai `lockStatus.js`; server tidak pernah membacanya). Kegagalan SELECT/UPDATE dicatat ke `error_logs` via `logError()`, severity `high`
 - `recurringHelper.js` — scheduler transaksi berulang (localStorage)
 - `widgetSync.js` — sinkronisasi ke widget Android
 - `strukParser.js` — parser OCR struk belanja → transaksi
@@ -211,7 +212,7 @@ type            text            'bank' | 'ewallet' | 'cash' | 'investment'
 is_primary      boolean         Maksimal satu per user
 color           text            Kode warna hex
 last4           text            4 digit terakhir kartu (default '—')
-is_locked       boolean         true saat Basic user melebihi limit
+is_locked       boolean         LEGACY — tidak dibaca siapa pun (lihat catatan di bawah tabel custom_categories)
 created_at      timestamptz
 ```
 
@@ -249,7 +250,7 @@ deadline_label  text            Label tampilan ("Jan 2026" atau "Tanpa tenggat")
 deadline_date   date            ISO format (YYYY-MM-DD), nullable — added migration 20260701000000
 color           text            Warna preset (8 pilihan)
 icon            text            Ikon (star, emergency, travel, home, vehicle, education, gadget, gift, health, ring)
-is_locked       boolean         true saat Basic melebihi limit
+is_locked       boolean         LEGACY — tidak dibaca siapa pun (lihat catatan di bawah tabel custom_categories)
 created_at      timestamptz
 ```
 
@@ -264,12 +265,14 @@ color           text            Warna hex
 type            text            'income' | 'expense' (default 'expense')
 icon            text            NOT NULL DEFAULT 'other'   — kind icon dari CatIcon (src/icons.jsx), dipilih saat buat/edit (edit tunduk cooldown 30 hari)
 is_deleted      boolean         Soft delete — tidak pernah hard delete
-is_locked       boolean         true saat Basic melebihi limit
+is_locked       boolean         LEGACY — tidak dibaca siapa pun (lihat catatan di bawah)
 created_at      timestamptz
 -- UNIQUE CONSTRAINT: (user_id, lower(name))
 ```
 
 **Soft delete:** Kategori dihapus hanya di-flag `is_deleted = true` agar transaksi lama tetap bisa diresolvasi nama & warna.
+
+**Kolom `is_locked` (keempat tabel) = LEGACY sejak 15 Sep 2026.** Status terkunci sekarang **dihitung** di klien oleh `src/lib/lockStatus.js` (N item paling lama menurut `created_at` ASC tetap aktif, sisanya terkunci) — kolomnya tidak dibaca siapa pun: tidak oleh klien, dan tidak pernah oleh policy/trigger/RPC manapun di server. `planReconciliation.js` masih menulisnya (harmless, sengaja tidak dicabut di tahap ini), jadi isinya bisa saja basi — **jangan dipakai sebagai sumber kebenaran**. Alasan lengkap: `teknis_keputusan-infrastruktur-roadmap.md` §1.17.
 
 **Schema drift `is_locked` (wallets/savings/custom_categories) — ditutup 20 Sep 2026.** Ketiga kolom `is_locked` di atas sudah ada di production sejak lama tapi tidak pernah tercatat di file SQL manapun (kemungkinan dibuat manual via SQL Editor, seperti kasus `user_summary` di atas). `20260920000000_document_is_locked_columns.sql` (executed) menambahkan `ADD COLUMN IF NOT EXISTS` untuk ketiganya — no-op di production, tapi memastikan database yang dibangun ulang dari `migrations/` ikut punya kolomnya.
 
@@ -288,7 +291,7 @@ date            date            Tanggal lokal
 due_date        date            Jatuh tempo, opsional
 status          text            'active' | 'paid'
 is_deleted      boolean         Soft delete (created_at tetap terhitung untuk cooldown 50 hari)
-is_locked       boolean         true saat Basic melebihi limit 5 aktif
+is_locked       boolean         LEGACY — tidak dibaca siapa pun (lihat catatan di bawah tabel custom_categories)
 cash_disbursed_at_creation boolean NOT NULL DEFAULT true   — hanya bermakna untuk type='receivable'; false = belum dibayar (tagihan), true = uang sudah berpindah
 created_at      timestamptz
 updated_at      timestamptz
@@ -442,12 +445,39 @@ INSERT baris `transactions` + UPDATE saldo dompet dalam **satu transaksi Postgre
 
 Catatan penting:
 - Identitas selalu dari `auth.uid()`, tidak pernah dari argumen (tidak ada `p_user_id` — IDOR).
-- **Kuota plan Basic TIDAK dicek di dalam RPC.** Gating tetap di `useTransactions.createTransaction()` dengan `planLimits.js` sebagai sumber tunggal; jangan duplikasi ambangnya ke SQL.
+- **Kuota plan Basic TIDAK dicek di dalam RPC ini.** Gating transaksi/bulan tetap di `useTransactions.createTransaction()` dengan `planLimits.js` sebagai sumber tunggal. ⚠️ **Berlaku khusus `record_transaction`, bukan aturan umum lagi** — sejak `20260921000000` (bug #6) empat sumber daya lain (dompet, target tabungan, kategori kustom, hutang/piutang) justru DIGERBANGI di SQL; lihat "RPC Gerbang Limit Tier" di bawah. Yang membedakan: limit transaksi bersifat per-bulan-kalender dan butuh aritmetika tanggal WIB, sedangkan empat yang lain limit kardinalitas sederhana.
 - `amount` sudah bertanda (negatif = pengeluaran), jadi saldo cukup `balance + amount` **tanpa** `CASE WHEN type='income'`. Kolom `type` diturunkan dari tanda `amount` di dalam fungsi, supaya baris tidak bisa menyimpan `type` yang bertentangan dengan `amount`.
 - `p_date` bertipe `date` dan **wajib** dikirim klien — sengaja tidak ada fallback `CURRENT_DATE`, karena `CURRENT_DATE` di server adalah UTC dan akan salah satu hari untuk WIB (lihat bagian 2).
 - Setelah `record_transaction` / `update_transaction` / `delete_transaction`, klien **tidak boleh** menyesuaikan saldo lagi (dobel) — RPC sudah mengurus saldo di server.
 
 **`patchLocalBalance()` DIHAPUS.** Sebelumnya dipakai untuk menulis delta saldo langsung ke state React sebagai optimistic update, sejajar dengan realtime subscription yang menulis nilai absolut. Dua penulis saldo itu race — urutan datang tidak terjamin, dan kalau realtime menang duluan lalu delta menyusul, saldo di layar dobel. Bug ini sudah diverifikasi manual (reproducible) dan fix-nya (menghapus patch delta, murni andalkan realtime) sudah divalidasi termasuk skenario 2x cicilan berturut-turut cepat. ~~**Trade-off:** saldo di UI sekarang 100% bergantung koneksi realtime~~ — **DISUPERSEDE 14 Sep 2026.** Ketergantungan tunggal itu ternyata sudah rusak total di produksi: channel `wallets_lock` ditolak server karena satu channel dengan binding `wallet_members` (tabel di luar publication), jadi saldo di layar tidak pernah bergerak setelah mencatat transaksi sampai app dibuka ulang. Sekarang ada **dua penulis saldo, keduanya ABSOLUT** (larangan penulis delta tetap berlaku): (1) `useWallets.syncBalances()`, dipanggil `useTransactions` setelah setiap RPC tulis yang berhasil — `record_transaction` & `update_transaction` → `SELECT id, balance` dompet yang tersentuh (lama + baru untuk update); `delete_transaction` → pakai `{wallet_id, balance}` dari RPC-nya langsung; (2) realtime `wallets_lock` untuk perubahan dari device/anggota lain. Urutan dijaga nomor permintaan per dompet (`balanceReqRef`); event realtime ikut menaikkannya. Jendela sisa yang diterima: SELECT yang dieksekusi sebelum commit penulis lain tapi tiba setelah event realtime-nya.
+
+---
+
+### RPC Gerbang Limit Tier (16 Sep 2026 — bug #6, **belum di-push**)
+
+Migrasi `20260921000000_add_tier_limit_rpcs.sql`. Empat RPC `SECURITY DEFINER` (`search_path = public, pg_temp`, execute di-revoke dari `public, anon`, grant hanya `authenticated` — pola `20260723010000`) yang menggabungkan **cek kuota + INSERT dalam satu transaksi Postgres**:
+
+| RPC | Limit Basic | Aturan hitung |
+|---|---|---|
+| `create_wallet` | 1 | `WHERE user_id = auth.uid()` — **dompet bersama tidak dihitung** |
+| `create_savings_goal` | 2 | semua baris (tidak ada soft-delete di `savings`) |
+| `create_custom_category` | 3 | hanya `is_deleted = false` |
+| `create_debt` | 5 aktif **dan** 5 pembuatan/50 hari | aktif = `status='active' AND is_deleted=false`; jendela = SEMUA baris `created_at` dalam 50 hari, termasuk lunas & soft-deleted |
+
+Semua mengembalikan `jsonb {ok, reason, data}` — `data` pada sukses berisi baris hasil `RETURNING` supaya hook bisa menambal state tanpa query susulan. `reason`: `limit_reached` (tiga pertama), `limit_active` / `cooldown` (+ `data.cooldown_until`, tanggal kalender WIB) untuk `create_debt`.
+
+**Kenapa RPC, bukan subquery COUNT di policy RLS** (sudah diinvestigasi, ditolak): (1) policy tidak bisa mengunci — Postgres melarang `FOR UPDATE` di dalamnya, dan `SELECT count(*) … FOR UPDATE` memang ilegal, jadi dua INSERT paralel dari user yang sama akan lolos berdua; (2) policy yang gagal selalu memberi satu pesan yang sama, sehingga klien tidak bisa membedakan "kuota habis" (→ paywall) dari "cooldown 50 hari" (→ tanggal boleh-lagi). Sama alasannya dengan `generate_wallet_invite`.
+
+**Yang dikunci adalah baris `user_subscriptions` milik pemanggil**, bukan baris di tabel sumber daya — sesuatu yang belum ada tidak bisa dikunci, dan mengunci baris yang sudah ada tidak mencegah INSERT baru menyelinap (tidak ada predicate lock di READ COMMITTED). Baris langganan itu pasti ada, pasti satu per user, dan memang sudah harus dibaca untuk tahu Pro/Basic — jadi satu `SELECT … FOR UPDATE` menyerialisasi semua `create_*` user itu **dan** membaca plannya. Pola `INSERT … ON CONFLICT DO NOTHING` sebelum mengunci diambil dari `check_chat_rate_limit`.
+
+**Ambang limit adalah `constant` di dalam body, BUKAN parameter.** Beda dari `check_chat_rate_limit` yang menerima `p_max_requests` — fungsi itu dipanggil edge function, keempat ini dipanggil klien langsung, jadi ambang yang bisa dikirim pemanggil = gerbang yang mematikan dirinya sendiri. Nilainya **sinkron manual** dengan `PLAN_LIMITS.basic` di `src/lib/planLimits.js` (ditandai komentar di tiap konstanta); `planLimits.js` tetap sumber kebenaran untuk klien.
+
+**Gating jadi dua lapis, bukan pindah lapis.** Precheck klien (`accounts.length >= limit`, `checkCreateAllowed`) SEMUA dipertahankan — itu yang memberi paywall seketika tanpa round-trip. RPC adalah backstop, dan penolakannya dipetakan ke pesan UI yang **sama persis** dengan gerbang klien (`limit_reached` → paywall yang sama; `cooldown` → `cooldownUntilDate` yang sama), jadi user tidak pernah melihat error baru yang tidak dikenal UI.
+
+Yang sengaja **tidak** ikut: policy INSERT keempat tabel tidak dipersempit (alasan varian B `20260917000000` — build klien lama masih `.insert()` langsung; TODO terpisah), dan `debts.wallet_id` tidak divalidasi kepemilikannya (celah yang sudah ada sebelumnya di INSERT langsung, di luar cakupan bug #6).
+
+Verifikasi: `tests/dryrun_20260921_tier_limit_rpc.sql` (28 uji). **Belum dijalankan per 16 Sep 2026** — belum dianggap terbukti sampai hasilnya 28/28. Catatan jujur soal uji race di file itu: dua panggilan beruntun dari satu koneksi membuktikan cek+INSERT atomik (panggilan kedua melihat baris pertama), **bukan** bahwa `FOR UPDATE` memblokir sesi lain — itu butuh dua koneksi dan resepnya ada di kepala file.
 
 ---
 
