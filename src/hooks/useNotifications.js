@@ -3,6 +3,7 @@ import { formatNominal } from '../data';
 import { playSound } from '../lib/sound';
 import { getBudgetSpent } from '../lib/budgetSpent';
 import notifSound from '../assets/sound/notification-sound.mp3';
+import { dateToISO } from '../utils/dateLocal';
 
 const NOTIF_KEY    = 'notif_data';
 const PREFS_KEY    = 'notif_prefs';
@@ -26,8 +27,9 @@ function save(key, value) {
 // Wajib lokal supaya cocok dgn tx.dateRaw yang juga disimpan lokal
 // (useTransactions) — di zona WIB toISOString menggeser tanggal 1 hari.
 // Pola sama dgn WeeklySummaryCard di widgets.jsx.
-const pad2 = (n) => String(n).padStart(2, '0');
-const localISO = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+// Alias ke utils/dateLocal — implementasinya identik; nama lokal `localISO`
+// dipertahankan supaya seluruh pemanggil di file ini tidak berubah.
+const localISO = dateToISO;
 
 // Senin minggu ini → "2026-06-22"
 function thisWeekKey() {

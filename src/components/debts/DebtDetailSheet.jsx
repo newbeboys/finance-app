@@ -5,12 +5,9 @@ import { IconClose, IconCalendar, IconCheck, IconReport } from '../../icons';
 import { DatePickerPopup } from '../../transactions';
 import { useScrollLock } from '../../hooks/useScrollLock';
 import { generateDebtProof } from '../../lib/debtProof';
+import { todayISO } from '../../utils/dateLocal';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-const todayISO = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
 const fmtDateLabel = (iso) => {
   if (!iso) return '';
   const d = new Date(iso + 'T00:00:00');
