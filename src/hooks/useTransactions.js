@@ -4,6 +4,7 @@ import { supabase } from '../supabase';
 import { usePaywall } from '../components/PaywallModal';
 import { fetchSharedWalletIds, fetchOwnedWalletIds, sharedOrFilter } from '../lib/walletAccess';
 import { isAppLocked } from './useAutoLock';
+import { todayISO } from '../utils/dateLocal';
 
 const MONTHS = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
 
@@ -249,10 +250,8 @@ export function useTransactions(userId, limits, opts = {}) {
     // apa pun, jadi tidak ada "prop basi vs JWT" yang bisa melenceng untuk
     // dicegat di sini. Menambahkan requireUserId() di titik ini hanya akan
     // menduplikasi apa yang sudah dijamin RPC-nya sendiri.
-    const now = new Date();
-    const todayISO = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
     // Tanggal pilihan user (ISO yyyy-mm-dd); fallback ke hari ini
-    const isoDate = tx.dateRaw || todayISO;
+    const isoDate = tx.dateRaw || todayISO();
 
     // ── Batas plan: maks N transaksi per BULAN KALENDER ────────────────
     // Bulan ditentukan dari tanggal transaksi yang dipilih user (isoDate),

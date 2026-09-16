@@ -4,6 +4,7 @@
 // checkRecurringTransactions() yang dipanggil App.jsx saat aplikasi dibuka.
 
 import { logError } from './errorLogger';
+import { todayISO } from '../utils/dateLocal';
 
 const KEY = 'recurringTransactions';
 
@@ -14,7 +15,8 @@ const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Se
 const pad = (n) => String(n).padStart(2, '0');
 export const toISO    = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 export const fromISO  = (iso) => new Date(iso + 'T00:00:00');
-export const todayISO = () => toISO(new Date());
+// todayISO di-import dari utils/dateLocal (sumber tunggal konsolidasi)
+export { todayISO } from '../utils/dateLocal';
 
 // ── Penyimpanan ────────────────────────────────────────────────────
 export function loadRecurring() {
