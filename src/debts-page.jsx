@@ -5,17 +5,15 @@ import { IconPlus } from './icons';
 import { useIsMobile } from './use-mobile';
 import AddDebtModal from './components/debts/AddDebtModal';
 import DebtDetailSheet from './components/debts/DebtDetailSheet';
+import { dateToISO, todayISO } from './utils/dateLocal';
 
 // Status jatuh tempo untuk badge. Bandingkan langsung sebagai string ISO
 // (YYYY-MM-DD) — sama seperti pola tanggal lain di app, aman dari timezone.
-function todayISO() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
+// todayISO di-import dari utils/dateLocal (sumber tunggal).
 function plusDaysISO(n) {
   const d = new Date();
   d.setDate(d.getDate() + n);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return dateToISO(d);
 }
 function daysBetween(fromISO, toISOstr) {
   return Math.round((new Date(toISOstr + 'T00:00:00') - new Date(fromISO + 'T00:00:00')) / 86400000);

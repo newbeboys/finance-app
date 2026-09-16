@@ -6,6 +6,7 @@ import { canDeleteOwnTransaction } from '../lib/walletAccess';
 import { makeIsLocked } from '../lib/lockStatus';
 import i18n from '../i18n';
 import { requireUserId } from '../lib/authIdentity';
+import { dateToISO, todayISO } from '../utils/dateLocal';
 
 // ════════════════════════════════════════════════════════════════════
 //  useDebts — logic layer fitur Catatan Hutang & Piutang
@@ -294,7 +295,7 @@ export function useDebts(userId, limits, ledger = {}) {
         if (oldest) {
           const d = new Date(oldest);
           d.setDate(d.getDate() + cooldownDays);
-          cooldownUntilDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          cooldownUntilDate = dateToISO(d);
         }
         return { ok: false, reason: 'cooldown', cooldownUntilDate };
       }
@@ -570,9 +571,7 @@ export function useDebts(userId, limits, ledger = {}) {
       setDebts(prev => prev.map(d => d.id === debtId ? { ...d, status: 'paid', remaining: 0 } : d));
       return { error: null, isPaidOff: true };
     }
-    const today = new Date();
-    const todayISO = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-    return addPayment(debtId, { amount: remaining, date: todayISO, note: i18n.t('debts.payment.payoffNote') });
+    return addPayment(debtId, { amount: remaining, date: todayISO(), note: i18n.t('debts.payment.payoffNote') });
   }
 
   // ── Hapus (soft delete) + balik semua efek transaksi & saldo ──────

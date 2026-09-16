@@ -12,6 +12,7 @@ import { CategoryField, CUSTOM_ID, CUSTOM_COLORS, resolveCategory, categoryLabel
 import { playSound } from './lib/sound';
 import incomeSound from './assets/sound/incom-sound.wav';
 import { formatRupiahInput } from './utils/numberFormat';
+import { dateToISO, todayISO } from './utils/dateLocal';
 
 export function TransactionsCard({ onAdd, onScan, scanLocked = false, limit, onSeeAll, transactions: txProp, loading = false, customCategories = [] }) {
   const { t: tr } = useTranslation();
@@ -166,9 +167,8 @@ const MONTH_NAMES = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Ju
 const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
 const WEEKDAYS    = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"]; // mulai Senin
 
-const dateToISO  = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+// dateToISO/todayISO di-import dari utils/dateLocal (sumber tunggal).
 const isoToDate  = iso => new Date(iso + "T00:00:00");
-const todayISO   = () => dateToISO(new Date());
 const formatLong = iso => {
   const d = isoToDate(iso);
   return `${DAY_NAMES[d.getDay()]}, ${d.getDate()} ${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;

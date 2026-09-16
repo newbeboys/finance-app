@@ -9,6 +9,7 @@ import { usePaywall } from './components/PaywallModal';
 import { useMoneyIQ } from './components/MoneyIQChat';
 import { MonthYearPicker } from './components/MonthYearPicker';
 import { getBudgetSpent } from './lib/budgetSpent';
+import { dateToISO, todayISO } from './utils/dateLocal';
 
 // Nama bulan singkat terlokalisasi (mengikuti bahasa aktif)
 const monthShort = (locale, mo) => new Date(2024, mo, 1).toLocaleDateString(locale, { month: 'short' });
@@ -571,11 +572,10 @@ export function DebtsCard({ debts = [], onManage }) {
 
   // Item terdekat jatuh tempo
   const nearest = active.filter(d => d.due_date).sort((a, b) => (a.due_date < b.due_date ? -1 : 1))[0] || null;
-  const now = new Date();
-  const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const todayIso = todayISO();
   let dueLabel = null, dueColor = 'var(--muted)';
   if (nearest) {
-    const days = Math.round((new Date(nearest.due_date + 'T00:00:00') - new Date(todayISO + 'T00:00:00')) / 86400000);
+    const days = Math.round((new Date(nearest.due_date + 'T00:00:00') - new Date(todayIso + 'T00:00:00')) / 86400000);
     if (days < 0)       { dueLabel = `${nearest.person_name} telat ${Math.abs(days)} hari`; dueColor = 'var(--terra)'; }
     else if (days === 0){ dueLabel = `${nearest.person_name} jatuh tempo hari ini`;         dueColor = 'var(--terra)'; }
     else                { dueLabel = `${nearest.person_name} jatuh tempo ${days} hari lagi`; dueColor = days <= 3 ? 'var(--gold)' : 'var(--muted)'; }
@@ -616,8 +616,6 @@ export function DebtsCard({ debts = [], onManage }) {
 // ── Ringkasan Mingguan ─────────────────────────────────────────────
 // Tanggal LOKAL (bukan toISOString) supaya cocok dgn dateRaw transaksi
 // yang disimpan lokal di useTransactions, dan dgn zona WIB.
-const pad2 = (n) => String(n).padStart(2, '0');
-const localISO = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 
 // Range minggu lalu (Senin–Minggu penuh) + Senin minggu berjalan.
 function lastWeekRange(now = new Date()) {
@@ -627,7 +625,7 @@ function lastWeekRange(now = new Date()) {
   mon.setDate(mon.getDate() - day + 1);   // Senin minggu ini
   const lastMon = new Date(mon); lastMon.setDate(mon.getDate() - 7);
   const lastSun = new Date(mon); lastSun.setDate(mon.getDate() - 1);
-  return { thisMon: localISO(mon), from: localISO(lastMon), to: localISO(lastSun), lastMon, lastSun };
+  return { thisMon: dateToISO(mon), from: dateToISO(lastMon), to: dateToISO(lastSun), lastMon, lastSun };
 }
 
 const WEEKLY_DISMISS_PREFIX = 'weeklyKpiDismissed_';

@@ -6,7 +6,8 @@ import { DatePickerPopup } from '../transactions';
 import { IconChev } from '../icons';
 import { WalletGlyph } from '../wallets';
 import { useScrollLock } from '../hooks/useScrollLock';
-import { todayISO, fromISO } from '../lib/recurringHelper';
+import { fromISO } from '../lib/recurringHelper';
+import { todayISO } from '../utils/dateLocal';
 
 // Day/month names kept in Indonesian — stored as values in recurring transaction data
 const DAY_OPTIONS   = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
