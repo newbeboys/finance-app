@@ -35,6 +35,13 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # Default packages input ("tools platform-tools") pulls the legacy
+          # `tools` package, yang sudah dihapus Google dari SDK repository —
+          # bikin SEMUA build gagal (exit 1) sejak 14 Sep 2026 ~20:50 WIB,
+          # sebelum sempat menyentuh kode aplikasi sama sekali. `tools` tidak
+          # dipakai gradlew bundleRelease; cukup platform-tools.
+          packages: 'platform-tools'
 
       - name: Sync Capacitor
         run: npx cap sync android
