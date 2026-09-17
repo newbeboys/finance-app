@@ -110,6 +110,13 @@ export async function generateDebtProof(debt, payments = [], opts = {}) {
     const jsPDF = jspdfMod.jsPDF ?? jspdfMod.default?.jsPDF ?? jspdfMod.default;
     const autoTable = autoTableMod.default ?? autoTableMod;
 
+    // Tanggal LOKAL (bukan toISOString yang UTC) — pola sama dgn dateToISO()
+    // di transactions.jsx / localISO() di useNotifications.js. toISOString()
+    // di sini akan mencetak tanggal mundur 1 hari untuk generate jam 00:00-
+    // 06:59 WIB.
+    const now = new Date();
+    const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
     // Semua label statis di-resolve sekali di sini, bukan inline berulang.
     const T = {
       docTitle:      i18n.t('debts.proof.docTitle'),
@@ -130,7 +137,7 @@ export async function generateDebtProof(debt, payments = [], opts = {}) {
       colAmount:     i18n.t('debts.proof.colAmount'),
       closing:       i18n.t('debts.proof.closing'),
       disclaimer:    i18n.t('debts.proof.disclaimer'),
-      generatedOn:   i18n.t('debts.proof.generatedOn', { tanggal: fmtDateLong(new Date().toISOString().slice(0, 10)) }),
+      generatedOn:   i18n.t('debts.proof.generatedOn', { tanggal: fmtDateLong(todayISO) }),
       // Reuse key laporan.doc.tagline — SAMA persis dgn header laporan bulanan/
       // tahunan (reports.jsx), bukan key baru, biar tidak duplikasi terjemahan.
       tagline:       i18n.t('laporan.doc.tagline'),

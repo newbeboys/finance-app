@@ -250,6 +250,14 @@ Detail teknis (kenapa bukan RLS, kenapa yang dikunci baris `user_subscriptions`)
 
 ---
 
+### 1.19 Hotfix: Timestamp "Dibuat pada" di Bukti Hutang Pakai UTC, Bukan WIB (16 September 2026)
+
+**Bug:** `debtProof.js` memakai `new Date().toISOString().slice(0, 10)` untuk label "Dibuat pada" di PDF bukti hutang — satu-satunya titik di `src/` yang memakai UTC alih-alih pola lokal-WIB yang dipakai konsisten di tempat lain (`dateToISO()` di `transactions.jsx`, `localISO()` di `useNotifications.js`). Generate PDF jam 00:00-06:59 WIB mencetak tanggal mundur 1 hari.
+
+**Fix:** ganti ke ekspresi getter lokal inline (pola yang sama, tidak ada helper baru diimpor/dibuat).
+
+---
+
 ## 2. Hal yang Diketahui Belum Sempurna / TODO
 
 ### 2.1 Kolom `spent` dan `enabled` di Tabel `budgets` Tidak Dipakai
