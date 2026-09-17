@@ -316,6 +316,7 @@ started_at                      timestamptz
 expires_at                      timestamptz  null = tidak ada kadaluarsa
 updated_at                      timestamptz
 last_custom_category_edit_at    timestamptz  Cooldown 30 hari edit kategori kustom (Basic only)
+timezone                        text         Default 'Asia/Jakarta' (migration 20260922000000) — infrastruktur, BELUM dipakai kode manapun
 -- RevenueCat fields (migration 20260629000000):
 revenuecat_app_user_id          text         RC App User ID
 product_id                      text         Produk yang dibeli
@@ -326,6 +327,8 @@ raw_event                       jsonb        Payload webhook mentah
 ```
 
 **Trigger otomatis:** Setiap user baru auto-dapat row dengan `plan='basic'`. `updated_at` auto-set via trigger.
+
+**Kolom `timezone` (migration 20260922000000):** disiapkan sebagai sumber preferensi timezone per-user untuk proyek dukungan timezone selain WIB (lihat `docs/investigasi-timezone-2026-09-16.md`). Status saat ini: belum dipakai kode manapun (client/edge function/RPC) — murni infrastruktur, tidak ada perubahan perilaku.
 
 **Keamanan (migration 20260630000001):** Policy UPDATE generik dihapus. Sensitif fields (`plan`, `expires_at`, RC fields) **hanya bisa diupdate** oleh:
 - Edge Function `revenuecat-webhook` (service_role)
