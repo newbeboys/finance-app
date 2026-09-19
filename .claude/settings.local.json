@@ -18,7 +18,9 @@
       "Bash(echo \"exit=$?\")",
       "Bash(git check-ignore *)",
       "Bash(git hash-object *)",
-      "Bash(git reflog *)"
+      "Bash(git reflog *)",
+      "Read(//tmp/**)",
+      "Bash(cat /tmp/timezone-infra.diff)"
     ]
   }
 }

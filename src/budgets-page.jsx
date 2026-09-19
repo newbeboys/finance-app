@@ -9,7 +9,7 @@ import { useScrollLock } from './hooks/useScrollLock';
 import { formatRupiahInput } from './utils/numberFormat';
 import { getBudgetSpent, resolveBudgetCategoryId } from './lib/budgetSpent';
 
-export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, onDelete, customCategories = [], onCreateCustom, onDeleteCustom, isPro = false, isBasicAtMax = false, userId, accounts = [] }) {
+export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, onDelete, customCategories = [], onCreateCustom, onDeleteCustom, isPro = false, isBasicAtMax = false, userId, accounts = [], timezone = 'Asia/Jakarta' }) {
   const { t: tr, i18n: i18nObj } = useTranslation();
   // Ruang konten, bukan lebar layar (lihat useContainerWidth). <750px: identik mobile.
   const isMobile = useIsCompact();
@@ -98,7 +98,7 @@ export function BudgetsPage({ transactions = [], budgets = [], onAdd, onUpdate, 
   }, [visibleRows, filterWalletId, getSpent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const locale = i18nObj.language === 'en' ? 'en-US' : 'id-ID';
-  const monthLabel = new Date().toLocaleDateString(locale, { month: 'long', year: 'numeric' }).toUpperCase();
+  const monthLabel = new Date().toLocaleDateString(locale, { month: 'long', year: 'numeric', timeZone: timezone }).toUpperCase();
   const isBulanan = period === "monthly";
 
   return (

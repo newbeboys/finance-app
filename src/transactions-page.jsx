@@ -9,7 +9,7 @@ import { resolveCategory, categoryLabel } from './category-field';
 import { MonthYearPicker } from './components/MonthYearPicker';
 import { canEditTransaction, canDeleteTransaction } from './lib/walletAccess';
 
-export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, transactions: txProp, loading = false, onRefresh, refreshing = false, onDelete, onUpdate, customCategories = [], onCreateCustom, onDeleteCustom, isPro = false, isBasicAtMax = false, userId }) {
+export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, transactions: txProp, loading = false, onRefresh, refreshing = false, onDelete, onUpdate, customCategories = [], onCreateCustom, onDeleteCustom, isPro = false, isBasicAtMax = false, userId, timezone = 'Asia/Jakarta' }) {
   const { t: tr, i18n } = useTranslation();
   const locale = i18n.language === 'en' ? 'en-US' : 'id-ID';
   const transactions = txProp ?? TRANSACTIONS;
@@ -82,7 +82,7 @@ export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, 
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 20 }}>
         <div>
           <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>
-            {tr('transaksi.transaksiBulan', { bulan: new Date().toLocaleDateString(locale, { month: 'long', year: 'numeric' }).toUpperCase() })}
+            {tr('transaksi.transaksiBulan', { bulan: new Date().toLocaleDateString(locale, { month: 'long', year: 'numeric', timeZone: timezone }).toUpperCase() })}
           </div>
           <h2 className="serif" style={{ fontSize: isMobile ? 26 : 34, margin: "4px 0 0", letterSpacing: "-0.015em" }}>{tr('transaksi.riwayatTransaksi')}</h2>
           {!isMobile && (

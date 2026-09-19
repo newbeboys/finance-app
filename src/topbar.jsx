@@ -4,15 +4,16 @@ import { IconSearch, IconBell, IconSun, IconMoon, IconPlus, IconClose } from './
 import { AccountSwitcher } from './wallets';
 import { useIsCompact, TOPBAR_COMPACT_MAX } from './hooks/useContainerWidth';
 import { useScrollLock } from './hooks/useScrollLock';
+import { hourInTimezone } from './utils/userTimezone';
 
-// Pilih sapaan berdasarkan jam perangkat: pagi (<11) · siang (<18) · malam
+// Pilih sapaan berdasarkan jam di timezone tersimpan user: pagi (<11) · siang (<18) · malam
 function greetingKey(hour) {
   if (hour < 11) return 'sapaan.pagi';
   if (hour < 18) return 'sapaan.siang';
   return 'sapaan.malam';
 }
 
-export function TopBar({ theme, onTheme, onAdd, accounts, totalBalance = null, selectedAcct, onSelectAcct, onAddAcct, addAcctLocked = false, notifEnabled, user, notifications = [], unreadCount = 0, onMarkAllRead, onMarkRead, onOpenNotif }) {
+export function TopBar({ theme, onTheme, onAdd, accounts, totalBalance = null, selectedAcct, onSelectAcct, onAddAcct, addAcctLocked = false, notifEnabled, user, timezone = 'Asia/Jakarta', notifications = [], unreadCount = 0, onMarkAllRead, onMarkRead, onOpenNotif }) {
   const { t, i18n } = useTranslation();
   const [q, setQ] = React.useState("");
   const [bell, setBell] = React.useState(false);
@@ -25,10 +26,10 @@ export function TopBar({ theme, onTheme, onAdd, accounts, totalBalance = null, s
 
   const locale = i18n.language === 'en' ? 'en-US' : 'id-ID';
   const tanggal = new Date().toLocaleDateString(locale, {
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: timezone,
   }).toUpperCase();
 
-  const salam = `${t(greetingKey(new Date().getHours()))}, ${displayName}.`;
+  const salam = `${t(greetingKey(hourInTimezone(timezone)))}, ${displayName}.`;
 
   const bellBtn = (size, style) => (
     <button onClick={() => setBell(b => !b)} aria-label={t('topbar.notifikasi')} style={{ ...style, position: "relative" }}>
