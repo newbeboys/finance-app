@@ -7,6 +7,7 @@ import { AddTransactionModal } from './transactions';
 import { LockBadge } from './components/PaywallModal';
 import { resolveCategory, categoryLabel } from './category-field';
 import { MonthYearPicker } from './components/MonthYearPicker';
+import { todayPartsInTimezone } from './utils/userTimezone';
 import { canEditTransaction, canDeleteTransaction } from './lib/walletAccess';
 
 export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, transactions: txProp, loading = false, onRefresh, refreshing = false, onDelete, onUpdate, customCategories = [], onCreateCustom, onDeleteCustom, isPro = false, isBasicAtMax = false, userId, timezone = 'Asia/Jakarta' }) {
@@ -23,8 +24,9 @@ export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, 
   const [cat, setCat] = React.useState("all");
   const [method, setMethod] = React.useState("all");
   const [hover, setHover] = React.useState(null);
-  const now = new Date();
-  const [selectedMonth, setSelectedMonth] = React.useState({ year: now.getFullYear(), month: now.getMonth() });
+  // Bulan awal = bulan berjalan menurut timezone TERSIMPAN user, bukan jam perangkat.
+  const today = todayPartsInTimezone(timezone);
+  const [selectedMonth, setSelectedMonth] = React.useState({ year: today.year, month: today.month });
   const [pickerOpen, setPickerOpen] = React.useState(false);
   // Filter dompet — pola sama seperti AnalyticsPage: default "all", state lokal.
   const [selectedWalletId, setSelectedWalletId] = React.useState("all");
@@ -347,6 +349,7 @@ export function TransactionsPage({ accounts, onAdd, onScan, scanLocked = false, 
         locale={locale}
         initialMonth={selectedMonth.month}
         initialYear={selectedMonth.year}
+        timezone={timezone}
       />
     </div>
   );

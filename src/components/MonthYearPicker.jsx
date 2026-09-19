@@ -1,14 +1,17 @@
 import React from 'react';
 import { useScrollLock } from '../hooks/useScrollLock';
+import { todayPartsInTimezone } from '../utils/userTimezone';
 
 const monthShort = (locale, mo) =>
   new Date(2024, mo, 1).toLocaleDateString(locale, { month: 'short' });
 
-export function MonthYearPicker({ isOpen, onClose, onConfirm, locale = 'id-ID', initialMonth, initialYear, availableMonthsByYear = {} }) {
-  const now = new Date();
-  const [selectedMonth, setSelectedMonth] = React.useState(initialMonth ?? now.getMonth());
-  const [selectedYear, setSelectedYear] = React.useState(initialYear ?? now.getFullYear());
-  const [navYear, setNavYear] = React.useState(initialYear ?? now.getFullYear());
+export function MonthYearPicker({ isOpen, onClose, onConfirm, locale = 'id-ID', initialMonth, initialYear, availableMonthsByYear = {}, timezone = 'Asia/Jakarta' }) {
+  // Fallback saat pemanggil tak mengirim initialMonth/initialYear: "hari ini"
+  // menurut timezone TERSIMPAN user, bukan jam perangkat.
+  const today = todayPartsInTimezone(timezone);
+  const [selectedMonth, setSelectedMonth] = React.useState(initialMonth ?? today.month);
+  const [selectedYear, setSelectedYear] = React.useState(initialYear ?? today.year);
+  const [navYear, setNavYear] = React.useState(initialYear ?? today.year);
 
   useScrollLock(isOpen);
 

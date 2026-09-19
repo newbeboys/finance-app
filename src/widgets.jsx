@@ -8,6 +8,7 @@ import { categoryLabel, resolveCategory } from './category-field';
 import { usePaywall } from './components/PaywallModal';
 import { useMoneyIQ } from './components/MoneyIQChat';
 import { MonthYearPicker } from './components/MonthYearPicker';
+import { todayPartsInTimezone } from './utils/userTimezone';
 import { getBudgetSpent } from './lib/budgetSpent';
 import { dateToISO, todayISO, monthPrefixISO } from './utils/dateLocal';
 
@@ -135,7 +136,7 @@ function computeCashflow(transactions, range, pickedMonth, locale = 'id-ID') {
   });
 }
 
-export function CashflowCard({ transactions = [] }) {
+export function CashflowCard({ transactions = [], timezone = 'Asia/Jakarta' }) {
   const { t: tr, i18n } = useTranslation();
   const locale = localeOf(i18n);
   const [range, setRange] = React.useState("6M");
@@ -208,18 +209,21 @@ export function CashflowCard({ transactions = [] }) {
         locale={locale}
         initialMonth={pickedMonth?.month}
         initialYear={pickedMonth?.year}
+        timezone={timezone}
       />
     </>
   );
 }
 
-export function SpendingCard({ transactions = [] }) {
+export function SpendingCard({ transactions = [], timezone = 'Asia/Jakarta' }) {
   const { t: tr, i18n } = useTranslation();
   const locale = localeOf(i18n);
   const [hover, setHover] = React.useState(null);
   const [sheetOpen, setSheetOpen] = React.useState(false);
-  const now = new Date();
-  const [sel, setSel] = React.useState({ year: now.getFullYear(), month: now.getMonth() });
+  // "Hari ini" menurut timezone TERSIMPAN user, bukan jam perangkat — dipakai
+  // sebagai bulan awal DAN sebagai pembanding tahun di selLabel.
+  const today = todayPartsInTimezone(timezone);
+  const [sel, setSel] = React.useState({ year: today.year, month: today.month });
 
   const pfx = `${sel.year}-${String(sel.month + 1).padStart(2, '0')}`;
 
@@ -259,7 +263,7 @@ export function SpendingCard({ transactions = [] }) {
   }
 
   const total = monthCats.reduce((s, c) => s + c.amount, 0);
-  const selLabel = `${monthShort(locale, sel.month)} ${sel.year !== now.getFullYear() ? sel.year : ""}`.trim();
+  const selLabel = `${monthShort(locale, sel.month)} ${sel.year !== today.year ? sel.year : ""}`.trim();
 
   return (
     <>
@@ -300,6 +304,7 @@ export function SpendingCard({ transactions = [] }) {
         initialMonth={sel.month}
         initialYear={sel.year}
         availableMonthsByYear={availableMonthsByYear}
+        timezone={timezone}
       />
     </>
   );

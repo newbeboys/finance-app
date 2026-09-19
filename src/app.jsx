@@ -823,8 +823,8 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
               <KpiCards balanceVisible={balanceVisible} onToggleVisible={() => setBalanceVisible(v => !v)} totalBalance={totalBalance} accountCount={accounts.length} transactions={transactions} timezone={subscription.timezone} />
             </div>
 
-            <CashflowCard transactions={transactions} />
-            <SpendingCard transactions={transactions} />
+            <CashflowCard transactions={transactions} timezone={subscription.timezone} />
+            <SpendingCard transactions={transactions} timezone={subscription.timezone} />
 
             {t.showAI && <InsightsCard transactions={transactions} customCategories={customCategories} limits={limits} timezone={subscription.timezone} />}
 
@@ -847,7 +847,7 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
 
         {active === "reports" && <ReportsPage transactions={transactions} customCategories={customCategories} canExport={limits.reportsExportEnabled} accounts={visibleAccounts} />}
 
-        {active === "analytics" && <AnalyticsPage transactions={transactions} customCategories={customCategories} accounts={visibleAccounts} limits={limits} />}
+        {active === "analytics" && <AnalyticsPage transactions={transactions} customCategories={customCategories} accounts={visibleAccounts} limits={limits} timezone={subscription.timezone} />}
 
         {active === "savings" && (
           <SavingsPage goals={goals} onAdd={handleAddGoal} onDeposit={setDepositGoal} onDelete={deleteGoal} />
