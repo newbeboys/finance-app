@@ -131,6 +131,9 @@ export function useSubscription(userId) {
     plan: isPro ? 'pro' : 'basic',
     isPro,
     billingCycle: row?.billing_cycle || null,
+    // Zona waktu TERSIMPAN milik user (kolom user_subscriptions.timezone, ada
+    // sejak PR #11). Dipakai label kosmetik supaya tidak ikut jam perangkat.
+    timezone: row?.timezone || 'Asia/Jakarta',
     expiresAt,
     loading,
     limits,

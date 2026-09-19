@@ -15,7 +15,7 @@ import { dateToISO, todayISO, monthPrefixISO } from './utils/dateLocal';
 const monthShort = (locale, mo) => new Date(2024, mo, 1).toLocaleDateString(locale, { month: 'short' });
 const localeOf = (i18n) => (i18n.language === 'en' ? 'en-US' : 'id-ID');
 
-export function KpiCards({ balanceVisible, onToggleVisible, totalBalance, accountCount, transactions = [] }) {
+export function KpiCards({ balanceVisible, onToggleVisible, totalBalance, accountCount, transactions = [], timezone = 'Asia/Jakarta' }) {
   const { t: tr, i18n } = useTranslation();
   const isMobile = useIsMobile();
 
@@ -48,7 +48,7 @@ export function KpiCards({ balanceVisible, onToggleVisible, totalBalance, accoun
   }, [transactions]);
 
   const savings  = Math.max(income - expenses, 0);
-  const monthName = new Date().toLocaleDateString(localeOf(i18n), { month: 'long' });
+  const monthName = new Date().toLocaleDateString(localeOf(i18n), { month: 'long', timeZone: timezone });
 
   const cards = [
     { label: tr('beranda.totalSaldo'), value: totalBalance ?? 0, delta: 0, hero: true, spark: sparks.balance, color: "var(--ink)", sub: tr('beranda.dariAkun', { count: accountCount ?? 0 }) },
@@ -305,10 +305,10 @@ export function SpendingCard({ transactions = [] }) {
   );
 }
 
-function buildInsights(transactions, customCategories, tr, locale) {
+function buildInsights(transactions, customCategories, tr, locale, timezone) {
   const now = new Date();
   const pfx = monthPrefixISO(now);
-  const monthName = now.toLocaleDateString(locale, { month: 'long' });
+  const monthName = now.toLocaleDateString(locale, { month: 'long', timeZone: timezone });
 
   const expTx = transactions.filter(t => t.amount < 0 && t.dateRaw && t.dateRaw.startsWith(pfx));
   if (expTx.length === 0) return [];
@@ -369,13 +369,13 @@ function buildInsights(transactions, customCategories, tr, locale) {
   return insights;
 }
 
-export function InsightsCard({ transactions = [], customCategories = [], limits = null }) {
+export function InsightsCard({ transactions = [], customCategories = [], limits = null, timezone = 'Asia/Jakarta' }) {
   const { t: tr, i18n } = useTranslation();
   const { openPaywall } = usePaywall();
   const { openMoneyIQ } = useMoneyIQ();
   const locale = localeOf(i18n);
   const [idx, setIdx] = React.useState(0);
-  const insights = React.useMemo(() => buildInsights(transactions, customCategories, tr, locale), [transactions, customCategories, tr, locale]);
+  const insights = React.useMemo(() => buildInsights(transactions, customCategories, tr, locale, timezone), [transactions, customCategories, tr, locale, timezone]);
   React.useEffect(() => { setIdx(0); }, [insights.length]);
 
   // Fitur Pro: basic user melihat placeholder terkunci
@@ -503,7 +503,7 @@ export function SavingsCard({ goals = GOALS, onManage }) {
   );
 }
 
-export function BudgetsCard({ onManage, transactions = [], budgets: allBudgets = [], customCategories = [], accounts = [] }) {
+export function BudgetsCard({ onManage, transactions = [], budgets: allBudgets = [], customCategories = [], accounts = [], timezone = 'Asia/Jakarta' }) {
   const { t: tr, i18n } = useTranslation();
   const locale = localeOf(i18n);
   const budgets = allBudgets.filter(b => b.enabled);
@@ -513,7 +513,7 @@ export function BudgetsCard({ onManage, transactions = [], budgets: allBudgets =
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 16 }}>
         <div>
           <div style={{ fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>
-            {tr('beranda.anggaranBulan', { bulan: new Date().toLocaleDateString(locale, { month: 'long' }) })}
+            {tr('beranda.anggaranBulan', { bulan: new Date().toLocaleDateString(locale, { month: 'long', timeZone: timezone }) })}
           </div>
           <div className="serif" style={{ fontSize: 22, marginTop: 2, letterSpacing: "-0.01em" }}>{tr('beranda.posisiSekarang')}</div>
         </div>

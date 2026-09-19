@@ -808,6 +808,7 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
             addAcctLocked={walletAddLocked}
             notifEnabled={t.notifications}
             user={session.user}
+            timezone={subscription.timezone}
             notifications={notifications}
             unreadCount={unreadCount}
             onMarkAllRead={markAllRead}
@@ -819,23 +820,23 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
         {active === "dashboard" && (
           <div className="dash-grid">
             <div className="span-4">
-              <KpiCards balanceVisible={balanceVisible} onToggleVisible={() => setBalanceVisible(v => !v)} totalBalance={totalBalance} accountCount={accounts.length} transactions={transactions} />
+              <KpiCards balanceVisible={balanceVisible} onToggleVisible={() => setBalanceVisible(v => !v)} totalBalance={totalBalance} accountCount={accounts.length} transactions={transactions} timezone={subscription.timezone} />
             </div>
 
             <CashflowCard transactions={transactions} />
             <SpendingCard transactions={transactions} />
 
-            {t.showAI && <InsightsCard transactions={transactions} customCategories={customCategories} limits={limits} />}
+            {t.showAI && <InsightsCard transactions={transactions} customCategories={customCategories} limits={limits} timezone={subscription.timezone} />}
 
             <TransactionsCard onAdd={() => setModal(true)} onScan={handleScan} scanLocked={!limits.receiptScanEnabled} limit={8} onSeeAll={() => setActive("transactions")} transactions={transactions} loading={txLoading} customCategories={customCategories} />
             <SavingsCard goals={goals} onManage={() => setActive("savings")} />
-            <BudgetsCard onManage={() => setActive("budgets")} transactions={transactions} budgets={budgets} customCategories={customCategories} accounts={visibleAccounts} />
+            <BudgetsCard onManage={() => setActive("budgets")} transactions={transactions} budgets={budgets} customCategories={customCategories} accounts={visibleAccounts} timezone={subscription.timezone} />
             <DebtsCard debts={debts} onManage={() => setActive("debts")} />
             <WeeklySummaryCard transactions={transactions} />
           </div>
         )}
 
-        {active === "budgets" && <BudgetsPage transactions={transactions} budgets={budgets} onAdd={createBudget} onUpdate={updateBudget} onDelete={deleteBudget} customCategories={customCategories} onCreateCustom={addCustomCategory} onDeleteCustom={handleDeleteCustomCategory} isPro={subscription.isPro} isBasicAtMax={isBasicAtMax} userId={session.user.id} accounts={visibleAccounts} />}
+        {active === "budgets" && <BudgetsPage transactions={transactions} budgets={budgets} onAdd={createBudget} onUpdate={updateBudget} onDelete={deleteBudget} customCategories={customCategories} onCreateCustom={addCustomCategory} onDeleteCustom={handleDeleteCustomCategory} isPro={subscription.isPro} isBasicAtMax={isBasicAtMax} userId={session.user.id} accounts={visibleAccounts} timezone={subscription.timezone} />}
 
         {active === "wallets" && (
           <WalletsPage accounts={visibleAccounts} onAdd={handleAddAcct} onSetPrimary={setPrimary} onDelete={deleteAccount} transactions={transactions} addLocked={walletAddLocked} customCategories={customCategories}
@@ -853,7 +854,7 @@ function AuthenticatedApp({ session, onboardingJustCompleted = false }) {
         )}
 
         {active === "transactions" && (
-          <TransactionsPage accounts={visibleAccounts} onAdd={() => setModal(true)} onScan={handleScan} scanLocked={!limits.receiptScanEnabled} transactions={transactions} loading={txLoading} onRefresh={refreshTransactions} refreshing={txRefreshing} onDelete={handleDeleteTransaction} onUpdate={handleUpdateTransaction} customCategories={customCategories} onCreateCustom={addCustomCategory} onDeleteCustom={handleDeleteCustomCategory} isPro={subscription.isPro} isBasicAtMax={isBasicAtMax} userId={session.user.id} />
+          <TransactionsPage accounts={visibleAccounts} onAdd={() => setModal(true)} onScan={handleScan} scanLocked={!limits.receiptScanEnabled} transactions={transactions} loading={txLoading} onRefresh={refreshTransactions} refreshing={txRefreshing} onDelete={handleDeleteTransaction} onUpdate={handleUpdateTransaction} customCategories={customCategories} onCreateCustom={addCustomCategory} onDeleteCustom={handleDeleteCustomCategory} isPro={subscription.isPro} isBasicAtMax={isBasicAtMax} userId={session.user.id} timezone={subscription.timezone} />
         )}
 
         {active === "settings" && <SettingsPage t={t} setTweak={setTweak} user={session.user} notifSubs={notifSubs} onToggleNotifSub={toggleNotifSub} subscription={subscription} revenueCat={revenueCat} accounts={writableAccounts} />}
