@@ -1,4 +1,5 @@
 import { CATEGORIES } from '../data';
+import { monthPrefixISO } from '../utils/dateLocal';
 
 // Sumber tunggal perhitungan "sudah kepakai berapa" untuk sebuah anggaran.
 // Dipakai di budgets-page.jsx, widgets.jsx (BudgetsCard), dan
@@ -30,7 +31,7 @@ export function getBudgetSpent(budget, transactions = [], accounts = []) {
   const scopedWalletId  = budget?.walletId ?? null;
 
   const now = new Date();
-  const pfx = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const pfx = monthPrefixISO(now);
 
   let total = 0;
   transactions.forEach(tx => {

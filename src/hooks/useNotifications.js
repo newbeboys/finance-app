@@ -3,7 +3,7 @@ import { formatNominal } from '../data';
 import { playSound } from '../lib/sound';
 import { getBudgetSpent } from '../lib/budgetSpent';
 import notifSound from '../assets/sound/notification-sound.mp3';
-import { dateToISO } from '../utils/dateLocal';
+import { dateToISO, monthPrefixISO } from '../utils/dateLocal';
 
 const NOTIF_KEY    = 'notif_data';
 const PREFS_KEY    = 'notif_prefs';
@@ -43,7 +43,7 @@ function thisWeekKey() {
 // ── Generate: Peringatan Anggaran ──────────────────────────────────
 function budgetNotifs(transactions, budgets, accounts) {
   const now = new Date();
-  const pfx = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const pfx = monthPrefixISO(now);
 
   const activeBudgets = (budgets || []).filter(b => b.enabled && b.limit > 0);
   if (!activeBudgets.length) return [];
@@ -135,9 +135,9 @@ function weeklyNotif(transactions) {
 // ── Generate: Pengingat Tagihan ───────────────────────────────────
 function billsNotif(transactions) {
   const now     = new Date();
-  const curPfx  = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const curPfx  = monthPrefixISO(now);
   const lastMo  = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const lastPfx = `${lastMo.getFullYear()}-${String(lastMo.getMonth() + 1).padStart(2, '0')}`;
+  const lastPfx = monthPrefixISO(lastMo);
 
   const curBills  = transactions.filter(t => t.amount < 0 && t.category === 'bills' && t.dateRaw?.startsWith(curPfx));
   const lastBills = transactions.filter(t => t.amount < 0 && t.category === 'bills' && t.dateRaw?.startsWith(lastPfx));

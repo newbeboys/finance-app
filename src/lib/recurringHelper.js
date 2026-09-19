@@ -4,7 +4,7 @@
 // checkRecurringTransactions() yang dipanggil App.jsx saat aplikasi dibuka.
 
 import { logError } from './errorLogger';
-import { todayISO } from '../utils/dateLocal';
+import { dateToISO as toISO, todayISO } from '../utils/dateLocal';
 
 const KEY = 'recurringTransactions';
 
@@ -12,10 +12,11 @@ const KEY = 'recurringTransactions';
 const DAY_NAMES   = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 
-const pad = (n) => String(n).padStart(2, '0');
-export const toISO    = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 export const fromISO  = (iso) => new Date(iso + 'T00:00:00');
-// todayISO di-import dari utils/dateLocal (sumber tunggal konsolidasi)
+// toISO (alias dateToISO) & todayISO di-import dari utils/dateLocal (sumber
+// tunggal konsolidasi). toISO di-import sbg binding LOKAL (dipakai di modul ini)
+// lalu di-export ulang — `export { x as y } from` saja TIDAK membuat binding lokal.
+export { toISO };
 export { todayISO } from '../utils/dateLocal';
 
 // ── Penyimpanan ────────────────────────────────────────────────────

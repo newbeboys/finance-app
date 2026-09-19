@@ -9,7 +9,7 @@ import { usePaywall } from './components/PaywallModal';
 import { useMoneyIQ } from './components/MoneyIQChat';
 import { MonthYearPicker } from './components/MonthYearPicker';
 import { getBudgetSpent } from './lib/budgetSpent';
-import { dateToISO, todayISO } from './utils/dateLocal';
+import { dateToISO, todayISO, monthPrefixISO } from './utils/dateLocal';
 
 // Nama bulan singkat terlokalisasi (mengikuti bahasa aktif)
 const monthShort = (locale, mo) => new Date(2024, mo, 1).toLocaleDateString(locale, { month: 'short' });
@@ -22,7 +22,7 @@ export function KpiCards({ balanceVisible, onToggleVisible, totalBalance, accoun
   // Hitung income & expense bulan ini dari transaksi Supabase
   const { income, expenses, catCount } = React.useMemo(() => {
     const now = new Date();
-    const pfx = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const pfx = monthPrefixISO(now);
     const month = transactions.filter(t => t.dateRaw && t.dateRaw.startsWith(pfx));
     const income   = month.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
     const expenses = month.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
@@ -38,7 +38,7 @@ export function KpiCards({ balanceVisible, onToggleVisible, totalBalance, accoun
     let runBal = 0;
     for (let i = n - 1; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const pfx = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const pfx = monthPrefixISO(d);
       const m = transactions.filter(t => t.dateRaw && t.dateRaw.startsWith(pfx));
       const i_ = m.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
       const e_ = m.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
@@ -307,7 +307,7 @@ export function SpendingCard({ transactions = [] }) {
 
 function buildInsights(transactions, customCategories, tr, locale) {
   const now = new Date();
-  const pfx = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const pfx = monthPrefixISO(now);
   const monthName = now.toLocaleDateString(locale, { month: 'long' });
 
   const expTx = transactions.filter(t => t.amount < 0 && t.dateRaw && t.dateRaw.startsWith(pfx));

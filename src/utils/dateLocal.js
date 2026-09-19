@@ -19,10 +19,11 @@
 //  Fungsi murni, TANPA import apa pun — aman dipakai dari hook,
 //  komponen, maupun modul lib biasa.
 //
-//  BELUM semua titik ikut ke sini: src/lib/recurringHelper.js masih
-//  punya `toISO`/`todayISO` sendiri (sengaja, dikonsolidasi di batch
-//  terpisah), begitu juga beberapa inline di useTransactions.js dan
-//  lib/widgetSync.js.
+//  useTransactions.js dan recurringHelper.js SUDAH ikut konsolidasi
+//  (PR #8; `toISO` di recurringHelper.js kini alias `dateToISO`, batch 0
+//  timezone), begitu juga lib/debtProof.js. BELUM ikut: inline di
+//  lib/widgetSync.js dan pola "YYYY-MM" yang bukan `X.getFullYear()`/
+//  `X.getMonth()` (mis. `${yr}-${...mo + 1...}` di analytics.jsx/widgets.jsx).
 // ════════════════════════════════════════════════════════════════════
 
 const pad2 = (n) => String(n).padStart(2, '0');
@@ -42,4 +43,14 @@ export function dateToISO(d) {
  */
 export function todayISO() {
   return dateToISO(new Date());
+}
+
+/**
+ * Date object → prefix bulan "YYYY-MM" menurut kalender LOKAL device.
+ * Dipakai untuk `dateRaw.startsWith(prefix)` / perbandingan string bulan.
+ * @param {Date} d
+ * @returns {string}
+ */
+export function monthPrefixISO(d) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
 }

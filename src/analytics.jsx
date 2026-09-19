@@ -7,6 +7,7 @@ import { SpendingDonut } from './charts';
 import { useScrollLock } from './hooks/useScrollLock';
 import { InsightsCard, WeeklySummaryCard } from './widgets';
 import { MonthYearPicker } from './components/MonthYearPicker';
+import { monthPrefixISO } from './utils/dateLocal';
 
 const MONTHS_ID = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
 const MONTHS_EN = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -54,7 +55,7 @@ function computeCatData(transactions, scope, pickedMonth) {
     txs = transactions.filter(t => t.amount < 0 && t.dateRaw && t.dateRaw.startsWith(pfx));
   } else {
     const oldest = new Date(now.getFullYear(), now.getMonth() - 11, 1);
-    const cutoff = `${oldest.getFullYear()}-${String(oldest.getMonth() + 1).padStart(2, '0')}`;
+    const cutoff = monthPrefixISO(oldest);
     txs = transactions.filter(t => t.amount < 0 && t.dateRaw && t.dateRaw.slice(0, 7) >= cutoff);
   }
 
@@ -76,7 +77,7 @@ function computeIncomeData(transactions, scope, pickedMonth, customCategories = 
     txs = transactions.filter(t => t.amount > 0 && t.dateRaw && t.dateRaw.startsWith(pfx));
   } else {
     const oldest = new Date(now.getFullYear(), now.getMonth() - 11, 1);
-    const cutoff = `${oldest.getFullYear()}-${String(oldest.getMonth() + 1).padStart(2, '0')}`;
+    const cutoff = monthPrefixISO(oldest);
     txs = transactions.filter(t => t.amount > 0 && t.dateRaw && t.dateRaw.slice(0, 7) >= cutoff);
   }
   // Lookup dari semua kategori (bawaan + kustom) agar nama/warna terbaca;
@@ -201,7 +202,7 @@ export function AnalyticsPage({ transactions = [], customCategories = [], accoun
       return filteredByWallet.filter(t => t.dateRaw && t.dateRaw.startsWith(pfx));
     }
     const oldest = new Date(now.getFullYear(), now.getMonth() - 11, 1);
-    const cutoff = `${oldest.getFullYear()}-${String(oldest.getMonth() + 1).padStart(2, '0')}`;
+    const cutoff = monthPrefixISO(oldest);
     return filteredByWallet.filter(t => t.dateRaw && t.dateRaw.slice(0, 7) >= cutoff);
   }, [filteredByWallet, scope, activePicked]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -237,7 +238,7 @@ export function AnalyticsPage({ transactions = [], customCategories = [], accoun
     if (set.size === 0) {
       for (let i = 0; i < 24; i++) {
         const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        set.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+        set.add(monthPrefixISO(d));
       }
     }
     return Array.from(set).sort().reverse().map(s => {
