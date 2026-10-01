@@ -7,6 +7,7 @@ import { SpendingDonut } from './charts';
 import { useScrollLock } from './hooks/useScrollLock';
 import { InsightsCard, WeeklySummaryCard } from './widgets';
 import { MonthYearPicker } from './components/MonthYearPicker';
+import { todayPartsInTimezone } from './utils/userTimezone';
 import { monthPrefixISO } from './utils/dateLocal';
 
 const MONTHS_ID = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
@@ -164,7 +165,7 @@ function BarChart({ data }) {
 
 // ── Analytics Page ────────────────────────────────────────────────────
 
-export function AnalyticsPage({ transactions = [], customCategories = [], accounts = [], limits = null }) {
+export function AnalyticsPage({ transactions = [], customCategories = [], accounts = [], limits = null, timezone = 'Asia/Jakarta' }) {
   const { t, i18n } = useTranslation();
   const monthsArr = i18n.language === 'en' ? MONTHS_EN : MONTHS_ID;
   const locale = i18n.language === 'en' ? 'en-US' : 'id-ID';
@@ -183,7 +184,11 @@ export function AnalyticsPage({ transactions = [], customCategories = [], accoun
   }, [accounts, selectedWalletId]);
 
   const now = new Date();
-  const activePicked = pickedMonth || { year: now.getFullYear(), month: now.getMonth() };
+  // Bulan aktif saat user belum memilih = bulan berjalan menurut timezone
+  // TERSIMPAN user, bukan jam perangkat. (`now` di atas masih dipakai window
+  // data/agregasi — domain Batch 3, sengaja belum disentuh.)
+  const todayTz = todayPartsInTimezone(timezone);
+  const activePicked = pickedMonth || { year: todayTz.year, month: todayTz.month };
 
   // ── useMemo: subset transaksi berdasarkan filter dompet aktif ──────────
   // Semua kalkulasi grafik dan Money IQ dijalankan pada subset ini.
@@ -542,6 +547,7 @@ export function AnalyticsPage({ transactions = [], customCategories = [], accoun
           setSheetOpen(false);
         }}
         locale={locale}
+        timezone={timezone}
       />
     </>
   );
